@@ -80,6 +80,7 @@ function App() {
   const [playheadTime, setPlayheadTime] = useState<number>(0);
   const [windowSeconds, setWindowSeconds] = useState<number>(10);
   const [windowStart, setWindowStart] = useState<number>(0);
+  const [dockHeight, setDockHeight] = useState<number>(240);
   const [captions, setCaptions] = useState<Caption[]>([]);
   const [arrastrando, setArrastrando] = useState<boolean>(false);
   const [reproduciendo, setReproduciendo] = useState<boolean>(false);
@@ -2728,7 +2729,60 @@ function App() {
               {t("app.editor.newFragment")}
             </button>
           </div>
+        </div>
 
+        <div className="rightCol">
+          <SpeakersPanel
+            hablantes={hablantes}
+            panelAbierto={panelHablantesAbierto}
+            onTogglePanel={togglePanelHablantes}
+            onAgregar={agregarHablante}
+            onActualizar={actualizarHablante}
+            onCambiarColor={cambiarColorHablante}
+            onEliminar={eliminarHablante}
+            onCommit={pushHistorial}
+          />
+
+          <div className="rightColHeader">
+            <span className="rightColTitle">{t("app.rightCol.title")}</span>
+            {captions.length > 0 && (
+              <span className="captionCount">{t("app.rightCol.lines", { count: captions.length })}</span>
+            )}
+          </div>
+          <CaptionList
+            captions={captions}
+            currentCaptionIdx={currentCaptionIdx}
+            selectedCaptionIds={selectedCaptionIds}
+            onSelectCaption={handleSelectCaption}
+            onEliminarCaption={eliminarCaption}
+            rowRefs={rowRefs}
+            speakerMap={speakerMap}
+          />
+        </div>
+      </div>
+
+      <div
+        className="resizebar"
+        onMouseDown={(e) => {
+          if (e.button !== 0) return;
+          const startY = e.clientY;
+          const startH = dockHeight;
+          const move = (ev: MouseEvent) => {
+            setDockHeight(
+              Math.min(420, Math.max(120, startH + (startY - ev.clientY)))
+            );
+          };
+          const up = () => {
+            window.removeEventListener("mousemove", move);
+            window.removeEventListener("mouseup", up);
+          };
+          window.addEventListener("mousemove", move);
+          window.addEventListener("mouseup", up);
+          e.preventDefault();
+        }}
+        title={t("app.timeline.dragHandleTitle")}
+      />
+      <div className="dock" style={{ height: dockHeight }}>
           <div
             className="timelineWrap"
             ref={timelineRef}
@@ -2809,7 +2863,8 @@ function App() {
                           style={{
                             left: `${left}%`,
                             width: `${width}%`,
-                            background: row.color,
+                            background: `color-mix(in srgb, ${row.color} 18%, transparent)`,
+                            border: `1px solid ${row.color}`,
                           }}
                           onMouseDown={(ev) => handleClipMouseDown(ev, cap, null)}
                           onClick={(ev) => handleClipClick(ev, cap)}
@@ -2926,6 +2981,7 @@ function App() {
               {autoFollowing ? t("app.timeline.follow") : t("app.timeline.manual")}
             </button>
           </div>
+      </div>
 
           <div className="statusBar">
             {rutaProyecto ? (
@@ -2964,37 +3020,6 @@ function App() {
               </button>
             </div>
           </div>
-        </div>
-
-        <div className="rightCol">
-          <SpeakersPanel
-            hablantes={hablantes}
-            panelAbierto={panelHablantesAbierto}
-            onTogglePanel={togglePanelHablantes}
-            onAgregar={agregarHablante}
-            onActualizar={actualizarHablante}
-            onCambiarColor={cambiarColorHablante}
-            onEliminar={eliminarHablante}
-            onCommit={pushHistorial}
-          />
-
-          <div className="rightColHeader">
-            <span className="rightColTitle">{t("app.rightCol.title")}</span>
-            {captions.length > 0 && (
-              <span className="captionCount">{t("app.rightCol.lines", { count: captions.length })}</span>
-            )}
-          </div>
-          <CaptionList
-            captions={captions}
-            currentCaptionIdx={currentCaptionIdx}
-            selectedCaptionIds={selectedCaptionIds}
-            onSelectCaption={handleSelectCaption}
-            onEliminarCaption={eliminarCaption}
-            rowRefs={rowRefs}
-            speakerMap={speakerMap}
-          />
-        </div>
-      </div>
 
       {showHelp && (
         <div className="helpOverlay" onClick={() => setShowHelp(false)}>

@@ -48,16 +48,16 @@
      Sin esto WebKitGTK los pinta claros y los popups cantan en blanco. */
   color-scheme: dark;
 
-  /* neutros (carbón cálido) */
-  --bg: #121114;
-  --surface: #1b1a20;
-  --surface2: #24232b;
-  --surface3: #2c2b34;
-  --border: #2e2d37;
-  --borderStrong: #3b3946;
-  --text: #ecebf0;
-  --textDim: #a9a7b4;
-  --textFaint: #706e7b;
+  /* neutros (precisión fría) */
+  --bg: #0e0f11;
+  --surface: #131416;
+  --surface2: #16181b;
+  --surface3: #1a1c1f;
+  --border: #1e2024;
+  --borderStrong: #2c2f36;
+  --text: #e8eaed;
+  --textDim: #9a9ea6;
+  --textFaint: #55585e;
 
   /* acentos: 1 acción + 2 semánticos + 1 aviso */
   --accent: #e85d4e;
@@ -67,11 +67,11 @@
   --warn: #e8c34e;
   --danger: #f87171;
 
-  /* radios */
-  --r-sm: 6px;
-  --r-md: 8px;
-  --r-lg: 10px;
-  --r-xl: 12px;
+  /* radios (precisión fría: aristas contenidas) */
+  --r-sm: 5px;
+  --r-md: 6px;
+  --r-lg: 6px;
+  --r-xl: 8px;
 
   /* tipos */
   --font-display: "Space Grotesk", "Inter", "Segoe UI", sans-serif;
@@ -125,9 +125,43 @@ body {
   display: grid;
   grid-template-columns: 1.3fr 1fr;
   gap: 16px;
-  height: 100%;
-  padding: 12px 16px 16px;
+  flex: 1;
+  min-height: 0;
+  padding: 12px 16px 0;
   overflow: hidden;
+}
+
+/* ===== DOCK INFERIOR (layout D: timeline full-width redimensionable) ===== */
+.resizebar {
+  height: 9px;
+  flex-shrink: 0;
+  cursor: ns-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-top: 1px solid var(--border);
+  margin-top: 10px;
+  user-select: none;
+}
+
+.resizebar::after {
+  content: "";
+  width: 56px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--borderStrong);
+}
+
+.resizebar:hover::after {
+  background: var(--accent);
+}
+
+.dock {
+  padding: 2px 16px 0;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ===== COLUMNA IZQUIERDA ===== */
@@ -141,11 +175,12 @@ body {
   padding-right: 4px;
 }
 
-/* ===== COLUMNA DERECHA ===== */
+/* ===== COLUMNA DERECHA (panel hairline, sin tarjeta) ===== */
 .rightCol {
-  background: var(--surface);
-  border-radius: var(--r-lg);
-  padding: 14px;
+  background: transparent;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  padding: 0 0 0 14px;
   overflow-y: auto;
   height: 100%;
   display: flex;
@@ -177,7 +212,10 @@ body {
 
 .rightColTitle {
   font-family: var(--font-display);
-  font-size: 12.5px;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--textFaint);
   font-weight: 600;
   color: var(--text);
   letter-spacing: 0.03em;
@@ -299,6 +337,7 @@ body {
   font-size: 18px;
   padding: 8px 20px;
   border-color: var(--accent);
+  box-shadow: 0 0 10px rgba(232, 93, 78, 0.35);
 }
 
 .playBtn svg {
@@ -410,7 +449,7 @@ body {
   padding-left: 5px;
   font-size: 9px;
   font-weight: 500;
-  color: #121114;
+  color: var(--text);
   cursor: grab;
   overflow: hidden;
   white-space: nowrap;
@@ -698,9 +737,9 @@ body {
   position: absolute;
   top: 0;
   bottom: 16px;
-  width: 1.6px;
+  width: 1px;
   background: var(--accent);
-  box-shadow: 0 0 7px 3px rgba(232, 93, 78, 0.25);
+  box-shadow: 0 0 8px rgba(232, 93, 78, 0.8);
   pointer-events: none;
   z-index: 5;
   display: none;
@@ -716,11 +755,12 @@ body {
 }
 
 .captionRow {
-  border-radius: var(--r-sm);
-  padding: 8px 10px;
+  border-radius: 0;
+  padding: 6px 2px;
   cursor: pointer;
-  border-left: 3px solid transparent;
-  margin-bottom: 4px;
+  border-left: 2px solid transparent;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
   transition: background-color 0.12s;
   user-select: none;
   -webkit-user-select: none;
@@ -985,9 +1025,10 @@ button.primary:hover {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 12px;
-  color: var(--textDim);
-  padding: 4px 2px;
+  font-size: 11.5px;
+  color: var(--textFaint);
+  padding: 7px 16px;
+  border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
 
