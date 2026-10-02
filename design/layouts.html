@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ColorDubber — opciones de reordenamiento</title>
+<style>
+  :root {
+    --bg: #121114; --surface: #1b1a20; --surface2: #24232b;
+    --border: #2e2d37; --borderStrong: #3b3946;
+    --text: #ecebf0; --muted: #a9a7b4; --faint: #706e7b;
+    --accent: #e85d4e; --info: #4ea8e8; --success: #7ed957; --warn: #e8c34e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    padding: 24px; max-width: 1100px; margin: 0 auto;
+  }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+  .tabs button {
+    background: var(--surface); color: var(--muted);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 14px; font-size: 13px; cursor: pointer;
+  }
+  .tabs button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .wire {
+    background: var(--surface); border: 1px solid var(--borderStrong);
+    border-radius: 12px; padding: 12px; margin-bottom: 14px;
+  }
+  .zone {
+    border: 1.5px dashed var(--faint); border-radius: 8px;
+    padding: 10px; font-size: 12px; color: var(--muted);
+    display: flex; flex-direction: column; gap: 4px;
+    min-height: 44px;
+  }
+  .zone b { color: var(--text); font-size: 12.5px; font-weight: 600; }
+  .zone code { color: var(--faint); font-size: 11px; font-family: Consolas, monospace; }
+  .zone.video { border-color: var(--info); }
+  .zone.timeline { border-color: var(--accent); }
+  .zone.editor { border-color: var(--warn); }
+  .zone.list { border-color: var(--success); }
+  .grid-actual { display: grid; grid-template-columns: 1.3fr 1fr; gap: 10px; }
+  .grid-a-top { display: grid; grid-template-columns: 1.2fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .grid-b-top { display: grid; grid-template-columns: 0.8fr 1.2fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .dock { border: 1.5px solid var(--accent); border-radius: 8px; padding: 10px; }
+  .dock > b { font-size: 12px; color: var(--accent); display: block; margin-bottom: 8px; }
+  .dock .row { display: grid; gap: 8px; }
+  .col { display: flex; flex-direction: column; gap: 8px; }
+  .verdict { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .verdict div { background: var(--surface2); border-radius: 8px; padding: 10px 12px; font-size: 12.5px; }
+  .verdict h3 { font-size: 12px; margin-bottom: 6px; }
+  .pro h3 { color: var(--success); } .contra h3 { color: var(--danger, #f87171); }
+  .verdict ul { padding-left: 18px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+  .moves { font-size: 12.5px; color: var(--muted); background: var(--surface2); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; }
+  .moves b { color: var(--text); }
+</style>
+</head>
+<body>
+  <h1>Reordenamiento — wireframes estructurales</h1>
+  <p class="sub">Cajas con guiones = zonas reales de App.tsx (el <code>code</code> es su className). No es diseño final, solo estructura.</p>
+
+  <div class="tabs">
+    <button class="active" data-p="p0">Actual (referencia)</button>
+    <button data-p="pA">A · Dock inferior</button>
+    <button data-p="pB">B · Tres arriba + dock</button>
+    <button data-p="pC">C · Cambio mínimo</button>
+    <button data-p="pD">D · Timeline full-width</button>
+  </div>
+
+  <!-- ACTUAL -->
+  <section class="panel active" id="p0">
+    <div class="wire grid-actual">
+      <div class="col">
+        <div class="zone video"><b>Video + transporte</b><code>.videoPlayer · .playbackControls</code></div>
+        <div class="zone editor"><b>Editor de texto</b><code>.captionEditorBox</code></div>
+        <div class="zone timeline"><b>Timeline (canvas + carriles)</b><code>.timelineWrap</code></div>
+        <div class="zone"><b>Estado + hints</b><code>.statusBar</code></div>
+      </div>
+      <div class="col">
+        <div class="zone list"><b>Hablantes (acordeón)</b><code>SpeakersPanel</code></div>
+        <div class="zone list"><b>Lista de subtítulos</b><code>CaptionList</code></div>
+      </div>
+    </div>
+    <div class="moves"><b>Problema:</b> el editor parte en dos lo sincronizado (video arriba, timeline abajo). El timeline comparte ancho con la columna (~55%), menos precisión para edge-drag.</div>
+  </section>
+
+  <!-- OPCIÓN A -->
+  <section class="panel" id="pA">
+    <div class="wire">
+      <div class="grid-a-top">
+        <div class="zone video"><b>Video</b><code>.videoPlayer</code><span>solo video, sin transporte</span></div>
+        <div class="zone list"><b>Panel con pestañas</b><code>nuevo · Tabs(Hablantes | Subtítulos)</code><span>SpeakersPanel y CaptionList apilados por tab</span></div>
+      </div>
+      <div class="dock"><b>DOCK INFERIOR · todo lo temporal, a todo lo ancho</b>
+        <div class="row">
+          <div class="zone"><b>Transporte</b><code>.playbackControls (movido)</code><span>play · tiempo · track audio</span></div>
+          <div class="zone timeline"><b>Timeline full-width</b><code>.timelineWrap (movido)</code><span>canvas + carriles + scrollbar</span></div>
+          <div class="zone editor"><b>Editor</b><code>.captionEditorBox (movido)</code><span>textarea + botón fragmento</span></div>
+          <div class="zone"><b>Estado</b><code>.statusBar (ya es pie)</code></div>
+        </div>
+      </div>
+    </div>
+    <div class="moves"><b>Se mueve:</b> transporte sale del video → dock · timeline a full-width · editor baja al dock · derecha se vuelve tabs. <b>No se toca:</b> lógica de drag, canvas, atajos.</div>
+    <div class="verdict">
+      <div class="pro"><h3>A favor</h3><ul><li>Timeline ~2× píxeles por segundo → edge-drag preciso</li><li>Todo lo temporal junto (transporte + timeline)</li><li>Tu idea: barra inferior alargada protagonista</li></ul></div>
+      <div class="contra"><h3>En contra</h3><ul><li>Editor lejos del video (mirar ↔ escribir)</li><li>Pestañas nuevas: hay que programar el tab</li><li>Derecha pierde vista simultánea hablantes+lista</li></ul></div>
+    </div>
+  </section>
+
+  <!-- OPCIÓN B -->
+  <section class="panel" id="pB">
+    <div class="wire">
+      <div class="grid-b-top">
+        <div class="zone list"><b>Hablantes</b><code>SpeakersPanel (movido)</code></div>
+        <div class="zone video"><b>Video</b><code>.videoPlayer</code></div>
+        <div class="zone list"><b>Subtítulos</b><code>CaptionList (movido)</code></div>
+      </div>
+      <div class="dock"><b>DOCK INFERIOR · igual que A</b>
+        <div class="row">
+          <div class="zone"><b>Transporte</b><code>.playbackControls</code></div>
+          <div class="zone timeline"><b>Timeline full-width</b><code>.timelineWrap</code></div>
+          <div class="zone editor"><b>Editor</b><code>.captionEditorBox</code></div>
+          <div class="zone"><b>Estado</b><code>.statusBar</code></div>
+        </div>
+      </div>
+    </div>
+    <div class="moves"><b>Se mueve:</b> hablantes y lista se separan en dos columnas arriba; dock idéntico a A. <b>No se toca:</b> lógica interna de cada panel.</div>
+    <div class="verdict">
+      <div class="pro"><h3>A favor</h3><ul><li>Cada cosa visible a la vez: asignar hablante sin cambiar tab</li><li>Video centrado como protagonista</li><li>Flujo izquierda→derecha: quién → qué se ve → qué dice</li></ul></div>
+      <div class="contra"><h3>En contra</h3><ul><li>Tres columnas estrechas en ventanas angostas</li><li>Video más pequeño que hoy</li><li>Más reflow CSS que A</li></ul></div>
+    </div>
+  </section>
+
+  <!-- OPCIÓN C -->
+  <section class="panel" id="pC">
+    <div class="wire grid-actual">
+      <div class="col">
+        <div class="zone video"><b>Video + transporte</b><code>sin cambios</code></div>
+        <div class="zone timeline"><b>Timeline (sube aquí)</b><code>.timelineWrap (reordenado)</code></div>
+        <div class="zone editor"><b>Editor (baja aquí)</b><code>.captionEditorBox (reordenado)</code></div>
+        <div class="zone"><b>Estado</b><code>.statusBar (igual)</code></div>
+      </div>
+      <div class="col">
+        <div class="zone list"><b>Hablantes + lista</b><code>sin cambios</code></div>
+      </div>
+    </div>
+    <div class="moves"><b>Se mueve:</b> solo el orden dentro de leftCol (timeline ↔ editor). Literalmente reordenar 2 bloques JSX + ajustar CSS. <b>No se toca:</b> nada más.</div>
+    <div class="verdict">
+      <div class="pro"><h3>A favor</h3><ul><li>Video y timeline juntos (lo sincronizado, junto)</li><li>Cambio de 10 minutos, riesgo ~cero</li><li>Derecha intacta</li></ul></div>
+      <div class="contra"><h3>En contra</h3><ul><li>Timeline sigue angosto (mismo ancho)</li><li>No es "tu" diseño, es un parche de orden</li></ul></div>
+    </div>
+  </section>
+
+  <!-- OPCIÓN D -->
+  <section class="panel" id="pD">
+    <div class="wire">
+      <div class="grid-actual" style="margin-bottom: 10px;">
+        <div class="col">
+          <div class="zone video"><b>Video + transporte</b><code>sin cambios</code></div>
+          <div class="zone editor"><b>Editor</b><code>.captionEditorBox (se queda)</code></div>
+        </div>
+        <div class="col">
+          <div class="zone list"><b>Hablantes + lista</b><code>sin cambios</code></div>
+        </div>
+      </div>
+      <div class="dock"><b>FILA INFERIOR · 100% del ancho, solo timeline</b>
+        <div class="row">
+          <div class="zone timeline"><b>Timeline full-width</b><code>.timelineWrap (movido fuera de leftCol)</code><span>canvas + carriles + scrollbar + toolbar, de borde a borde</span></div>
+          <div class="zone"><b>Estado</b><code>.statusBar (pasa a pie global)</code></div>
+        </div>
+      </div>
+    </div>
+    <div class="moves"><b>Se mueve:</b> SOLO `.timelineWrap` sale de `leftCol` a una fila inferior full-width; `.statusBar` pasa a pie global. Arriba queda idéntico a hoy. <b>No se toca:</b> nada más — es el cambio estructural más pequeño con el timeline más grande posible.</div>
+    <div class="verdict">
+      <div class="pro"><h3>A favor</h3><ul><li>Timeline al máximo ancho posible (~1.8× el actual)</li><li>Arriba intacto: cero reaprendizaje de tu flujo</li><li>Un solo bloque JSX movido + CSS de fila</li></ul></div>
+      <div class="contra"><h3>En contra</h3><ul><li>Editor queda lejos del timeline (escribir ↔ arrastrar)</li><li>La fila inferior solo tiene timeline: altura a calibrar</li></ul></div>
+    </div>
+  </section>
+
+<script>
+  document.querySelectorAll('.tabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.p).classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

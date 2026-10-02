@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ColorDubber — 3 direcciones de estilo (layout D)</title>
+<style>
+  @font-face { font-family: "Space Grotesk"; src: url("../src/assets/fonts/SpaceGrotesk-600.woff2") format("woff2"); font-weight: 600; }
+  @font-face { font-family: "Space Grotesk"; src: url("../src/assets/fonts/SpaceGrotesk-700.woff2") format("woff2"); font-weight: 700; }
+  @font-face { font-family: "JetBrains Mono"; src: url("../src/assets/fonts/JetBrainsMono-400.woff2") format("woff2"); font-weight: 400; }
+  @font-face { font-family: "JetBrains Mono"; src: url("../src/assets/fonts/JetBrainsMono-600.woff2") format("woff2"); font-weight: 600; }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0c0c0e; color: #ecebf0; font-family: "Segoe UI", system-ui, sans-serif; padding: 24px; max-width: 1180px; margin: 0 auto; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: #a9a7b4; font-size: 13px; margin-bottom: 18px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+  .tabs button { background: #1b1a20; color: #a9a7b4; border: 1px solid #2e2d37; border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
+  .tabs button.active { background: #e85d4e; border-color: #e85d4e; color: #fff; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .brief { font-size: 13px; color: #a9a7b4; background: #1b1a20; border: 1px solid #2e2d37; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+  .brief b { color: #ecebf0; }
+
+  /* ===== marco común del layout D ===== */
+  .app { border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-height: 640px; }
+  .top { display: grid; grid-template-columns: 1.25fr 1fr; gap: 12px; flex: 1; }
+  .left, .right { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .video { border-radius: 10px; aspect-ratio: 16/8; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+  .transport { display: flex; align-items: center; gap: 8px; border-radius: 8px; padding: 8px 12px; }
+  .tbtn { width: 30px; height: 30px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+  .editor { border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.5; }
+  .sidecard { border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .spk { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 6px 8px; border-radius: 6px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .caprow { font-size: 12px; padding: 7px 9px; border-radius: 6px; display: flex; gap: 8px; align-items: baseline; }
+  .caprow time { font-family: "JetBrains Mono", monospace; font-size: 11px; flex-shrink: 0; }
+  .dock { border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .ruler { height: 26px; border-radius: 6px; position: relative; overflow: hidden; font-family: "JetBrains Mono", monospace; font-size: 10px; }
+  .lane { height: 30px; border-radius: 6px; position: relative; overflow: hidden; }
+  .clip { position: absolute; top: 4px; bottom: 4px; border-radius: 4px; font-size: 10.5px; padding: 3px 7px; white-space: nowrap; overflow: hidden; }
+  .statusbar { display: flex; gap: 12px; align-items: center; font-size: 11.5px; border-radius: 7px; padding: 7px 12px; }
+  .mono { font-family: "JetBrains Mono", monospace; }
+
+  /* ===== 1 · SALA DE MEZCLAS ===== */
+  #s1 .app { background: #0b0e14; border: 1px solid #1b2740; }
+  #s1 .video { background: radial-gradient(ellipse at 50% 30%, #16213a 0%, #0b0e14 70%); border: 1px solid #1b2740; }
+  #s1 .bigtime { font-family: "JetBrains Mono", monospace; font-weight: 600; font-size: 44px; letter-spacing: 2px; color: #e8eefc; text-shadow: 0 0 24px rgba(78,168,232,.35); }
+  #s1 .bigtime small { font-size: 16px; color: #4ea8e8; }
+  #s1 .transport, #s1 .sidecard, #s1 .dock { background: #101623; border: 1px solid #1b2740; }
+  #s1 .tbtn { background: #1b2740; color: #c9d6f2; }
+  #s1 .tbtn.play { background: #e85d4e; color: #fff; }
+  #s1 .editor { background: #101623; border: 1px solid #1b2740; border-left: 3px solid #e85d4e; }
+  #s1 .spk, #s1 .caprow { background: #141b2c; }
+  #s1 .caprow.active { background: #1d2942; box-shadow: inset 2px 0 0 #e85d4e; }
+  #s1 .caprow time { color: #4ea8e8; }
+  #s1 .ruler { background: #101623; color: #5b6b8c; }
+  #s1 .ruler span { position: absolute; top: 5px; }
+  #s1 .lane { background: #0e1420; }
+  #s1 .needle { position: absolute; top: 0; bottom: 0; width: 2px; background: #e85d4e; box-shadow: 0 0 12px #e85d4e, 0 0 3px #fff; }
+  #s1 .statusbar { background: #101623; color: #5b6b8c; }
+  #s1 .sect { font-size: 10px; letter-spacing: 2px; color: #5b6b8c; text-transform: uppercase; }
+
+  /* ===== 2 · MOVIOLA ===== */
+  #s2 .app { background: #171310; border: 1px solid #33291f; }
+  #s2 .video { background: #0f0c09; border: 1px solid #33291f; }
+  #s2 .slate { font-family: "Space Grotesk", sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 5px; color: #ece3d4; }
+  #s2 .slate small { display: block; font-family: "JetBrains Mono", monospace; font-weight: 400; font-size: 11px; letter-spacing: 1px; color: #e85d4e; margin-top: 6px; }
+  #s2 .transport, #s2 .sidecard, #s2 .dock { background: #1e1813; border: 1px solid #33291f; }
+  #s2 .tbtn { background: #2b231b; color: #ece3d4; border: 1px solid #3d3225; }
+  #s2 .tbtn.play { background: #e85d4e; border-color: #e85d4e; color: #fff; }
+  #s2 .editor { background: #f2e9d8; color: #2b2118; border-radius: 4px; font-family: Georgia, serif; }
+  #s2 .spk, #s2 .caprow { background: #241c14; color: #d8c9ae; }
+  #s2 .caprow.active { background: #2e2318; box-shadow: inset 2px 0 0 #e85d4e; }
+  #s2 .caprow time { color: #c9a86a; }
+  #s2 .sprockets { height: 14px; background-image: radial-gradient(circle, #4a3a28 3px, transparent 3.5px); background-size: 18px 14px; background-position: center; border-top: 1px solid #33291f; border-bottom: 1px solid #33291f; }
+  #s2 .ruler { background: #14100c; color: #c9a86a; }
+  #s2 .ruler span { position: absolute; top: 5px; }
+  #s2 .lane { background: #14100c; }
+  #s2 .needle { position: absolute; top: 0; bottom: 0; width: 2px; background: #e85d4e; }
+  #s2 .statusbar { background: #1e1813; color: #8a7a5f; }
+  #s2 .sect { font-family: "Space Grotesk", sans-serif; font-size: 11px; letter-spacing: 3px; color: #c9a86a; text-transform: uppercase; }
+
+  /* ===== 3 · PRECISIÓN FRÍA ===== */
+  #s3 .app { background: #0e0f11; border: 1px solid #1e2024; }
+  #s3 .video { background: #000; border: 1px solid #1e2024; border-radius: 6px; }
+  #s3 .slate { font-size: 12px; color: #6b6f76; letter-spacing: 1px; }
+  #s3 .slate b { color: #e8eaed; font-weight: 600; }
+  #s3 .transport { background: transparent; border-top: 1px solid #1e2024; border-radius: 0; padding: 8px 2px; }
+  #s3 .tbtn { background: transparent; color: #9a9ea6; border: 1px solid #26282d; width: 28px; height: 28px; border-radius: 5px; }
+  #s3 .tbtn.play { color: #e85d4e; border-color: #e85d4e; box-shadow: 0 0 10px rgba(232,93,78,.35); }
+  #s3 .sidecard { background: transparent; border-left: 1px solid #1e2024; border-radius: 0; padding: 0 0 0 12px; }
+  #s3 .dock { background: transparent; border-top: 1px solid #1e2024; border-radius: 0; padding: 10px 0 0; }
+  #s3 .editor { background: #131416; border: 1px solid #26282d; border-radius: 5px; }
+  #s3 .spk { background: transparent; border-bottom: 1px solid #1e2024; border-radius: 0; padding: 5px 2px; }
+  #s3 .caprow { background: transparent; border-bottom: 1px solid #1a1c1f; border-radius: 0; padding: 5px 2px; }
+  #s3 .caprow.active { background: #16181b; box-shadow: inset 2px 0 0 #e85d4e; }
+  #s3 .caprow time { color: #6b6f76; }
+  #s3 .ruler { background: transparent; color: #55585e; border-bottom: 1px solid #1e2024; border-radius: 0; }
+  #s3 .ruler span { position: absolute; top: 5px; }
+  #s3 .lane { background: transparent; border-bottom: 1px solid #1a1c1f; border-radius: 0; }
+  #s3 .clip { border-radius: 3px; top: 6px; bottom: 6px; }
+  #s3 .needle { position: absolute; top: 0; bottom: 0; width: 1px; background: #e85d4e; }
+  #s3 .statusbar { background: transparent; color: #55585e; padding: 6px 2px; }
+  #s3 .sect { font-size: 9.5px; letter-spacing: 2.5px; color: #55585e; text-transform: uppercase; }
+</style>
+</head>
+<body>
+  <h1>3 direcciones — layout D redimensionable</h1>
+  <p class="sub">Mismo layout, tres pieles. Contenido ficticio; lo que se compara es el sistema: fondo, tipografía, playhead, clips.</p>
+
+  <div class="tabs">
+    <button class="active" data-p="s1">1 · Sala de mezclas</button>
+    <button data-p="s2">2 · Moviola</button>
+    <button data-p="s3">3 · Precisión fría</button>
+  </div>
+
+  <!-- 1 · SALA DE MEZCLAS -->
+  <section class="panel active" id="s1">
+    <div class="brief"><b>Tokens:</b> fondo negro azulado <b>#0b0e14</b> · superficie <b>#101623</b> · línea <b>#1b2740</b> · texto frío <b>#e8eefc</b> · acento coral <b>#e85d4e</b> · secundario hielo <b>#4ea8e8</b>. <b>Tipo:</b> JetBrains Mono gigante para tiempo, sistema para UI. <b>Firma:</b> el timecode monumental + playhead-aguja con halo.</div>
+    <div class="app">
+      <div class="top">
+        <div class="left">
+          <div class="video"><div class="bigtime">00:18:07<small>.40</small></div></div>
+          <div class="transport"><div class="tbtn">⏮</div><div class="tbtn play">▶</div><div class="tbtn">⏭</div><span class="mono" style="font-size:11px;color:#5b6b8c">x1.0 · pista ES</span></div>
+          <div class="editor">¿Y entonces el montaje aguantó <b>tres semanas</b> sin dormir?</div>
+        </div>
+        <div class="right">
+          <div class="sidecard"><span class="sect">Hablantes</span>
+            <div class="spk"><span class="dot" style="background:#e85d4e"></span>Mariana · H1</div>
+            <div class="spk"><span class="dot" style="background:#4ea8e8"></span>Tomás · H2</div>
+            <div class="caprow active"><time>18:04</time>tres semanas sin dormir…</div>
+            <div class="caprow"><time>18:07</time>¿Y entonces el montaje…?</div>
+          </div>
+        </div>
+      </div>
+      <div class="dock"><span class="sect">Timeline · redimensionable ↕</span>
+        <div class="ruler"><span style="left:4%">18:00</span><span style="left:36%">18:05</span><span style="left:68%">18:10</span><div class="needle" style="left:52%"></div></div>
+        <div class="lane"><div class="clip" style="left:6%;width:22%;background:#e85d4e33;border:1px solid #e85d4e">tres semanas…</div><div class="needle" style="left:52%"></div></div>
+        <div class="lane"><div class="clip" style="left:38%;width:30%;background:#4ea8e833;border:1px solid #4ea8e8">¿Y entonces…?</div><div class="needle" style="left:52%"></div></div>
+        <div class="statusbar"><span style="color:#7ed957">● Guardado</span><span class="mono">entrevista.cdp</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · MOVIOLA -->
+  <section class="panel" id="s2">
+    <div class="brief"><b>Tokens:</b> carbón cálido <b>#171310</b> · superficie <b>#1e1813</b> · línea <b>#33291f</b> · pergamino <b>#ece3d4</b> · dorado <b>#c9a86a</b> · coral <b>#e85d4e</b>. <b>Tipo:</b> Space Grotesk con tracking para rótulos, Georgia serif en el editor (papel). <b>Firma:</b> perforaciones de film + editor en papel.</div>
+    <div class="app">
+      <div class="top">
+        <div class="left">
+          <div class="video"><div class="slate">ESC 14 · TOMA 3<small>00:18:07:10 · 24 FPS</small></div></div>
+          <div class="transport"><div class="tbtn">⏮</div><div class="tbtn play">▶</div><div class="tbtn">⏭</div><span class="mono" style="font-size:11px;color:#8a7a5f">24 fps · pista ES</span></div>
+          <div class="editor">¿Y entonces el montaje aguantó tres semanas sin dormir?</div>
+        </div>
+        <div class="right">
+          <div class="sidecard"><span class="sect">Reparto</span>
+            <div class="spk"><span class="dot" style="background:#e85d4e"></span>Mariana · H1</div>
+            <div class="spk"><span class="dot" style="background:#4ea8e8"></span>Tomás · H2</div>
+            <div class="caprow active"><time>18:04</time>tres semanas sin dormir…</div>
+            <div class="caprow"><time>18:07</time>¿Y entonces el montaje…?</div>
+          </div>
+        </div>
+      </div>
+      <div class="dock"><span class="sect">Mesa de montaje · redimensionable ↕</span>
+        <div class="sprockets"></div>
+        <div class="ruler"><span style="left:4%">18:00</span><span style="left:36%">18:05</span><span style="left:68%">18:10</span><div class="needle" style="left:52%"></div></div>
+        <div class="lane"><div class="clip" style="left:6%;width:22%;background:#e85d4e2e;border:1px solid #e85d4e">tres semanas…</div><div class="needle" style="left:52%"></div></div>
+        <div class="lane"><div class="clip" style="left:38%;width:30%;background:#4ea8e82e;border:1px solid #4ea8e8">¿Y entonces…?</div><div class="needle" style="left:52%"></div></div>
+        <div class="sprockets"></div>
+        <div class="statusbar"><span style="color:#7ed957">● Guardado</span><span class="mono">entrevista.cdp</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · PRECISIÓN FRÍA -->
+  <section class="panel" id="s3">
+    <div class="brief"><b>Tokens:</b> negro neutro <b>#0e0f11</b> · hairlines <b>#1e2024</b> · texto <b>#e8eaed</b> · micro <b>#55585e</b> · único brillo coral <b>#e85d4e</b>. <b>Tipo:</b> sistema pequeña + JetBrains Mono solo para datos. <b>Firma:</b> playhead de 1px con halo en el botón play — el único lugar que brilla.</div>
+    <div class="app">
+      <div class="top">
+        <div class="left">
+          <div class="video"><div class="slate"><b>entrevista.mp4</b> · 00:18:07.40</div></div>
+          <div class="transport"><div class="tbtn">⏮</div><div class="tbtn play">▶</div><div class="tbtn">⏭</div><span class="mono" style="font-size:11px;color:#55585e">1.0× · ES</span></div>
+          <div class="editor">¿Y entonces el montaje aguantó tres semanas sin dormir?</div>
+        </div>
+        <div class="right">
+          <div class="sidecard"><span class="sect">Speakers · Lines</span>
+            <div class="spk"><span class="dot" style="background:#e85d4e"></span>Mariana · H1</div>
+            <div class="spk"><span class="dot" style="background:#4ea8e8"></span>Tomás · H2</div>
+            <div class="caprow active"><time>18:04.12</time>tres semanas sin dormir…</div>
+            <div class="caprow"><time>18:07.40</time>¿Y entonces el montaje…?</div>
+          </div>
+        </div>
+      </div>
+      <div class="dock"><span class="sect">Timeline · resizable ↕</span>
+        <div class="ruler"><span style="left:4%">18:00</span><span style="left:36%">18:05</span><span style="left:68%">18:10</span><div class="needle" style="left:52%"></div></div>
+        <div class="lane"><div class="clip" style="left:6%;width:22%;background:#e85d4e26;border:1px solid #e85d4e55">tres semanas…</div><div class="needle" style="left:52%"></div></div>
+        <div class="lane"><div class="clip" style="left:38%;width:30%;background:#4ea8e826;border:1px solid #4ea8e855">¿Y entonces…?</div><div class="needle" style="left:52%"></div></div>
+        <div class="statusbar"><span style="color:#7ed957">●</span><span>entrevista.cdp</span><span style="margin-left:auto">? ayuda</span></div>
+      </div>
+    </div>
+  </section>
+
+<script>
+  document.querySelectorAll('.tabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.p).classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

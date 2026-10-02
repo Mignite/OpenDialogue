@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ColorDubber · Precisión fría · layout D</title>
+<style>
+  @font-face { font-family: "Space Grotesk"; src: url("../src/assets/fonts/SpaceGrotesk-600.woff2") format("woff2"); font-weight: 600; }
+  @font-face { font-family: "JetBrains Mono"; src: url("../src/assets/fonts/JetBrainsMono-400.woff2") format("woff2"); font-weight: 400; }
+  @font-face { font-family: "JetBrains Mono"; src: url("../src/assets/fonts/JetBrainsMono-600.woff2") format("woff2"); font-weight: 600; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { background: #0e0f11; color: #e8eaed; font-family: "Segoe UI", system-ui, sans-serif; font-size: 13px; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  .mono { font-family: "JetBrains Mono", monospace; }
+  .sect { font-size: 9.5px; letter-spacing: 2.5px; color: #55585e; text-transform: uppercase; }
+
+  /* ===== arriba: 2 columnas como hoy ===== */
+  .top { display: grid; grid-template-columns: 1.25fr 1fr; gap: 0; flex: 1; min-height: 0; padding: 14px 16px 0; }
+  .left { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding-right: 16px; }
+  .right { display: flex; flex-direction: column; min-width: 0; border-left: 1px solid #1e2024; padding-left: 16px; overflow: hidden; }
+
+  .video { background: #000; border: 1px solid #1e2024; border-radius: 6px; aspect-ratio: 16/7.2; display: flex; align-items: center; justify-content: center; position: relative; }
+  .video .slate { font-size: 12px; color: #6b6f76; letter-spacing: 1px; }
+  .video .slate b { color: #e8eaed; font-weight: 600; }
+  .video .tc { position: absolute; right: 10px; bottom: 8px; font-family: "JetBrains Mono", monospace; font-size: 12px; color: #e8eaed; background: rgba(0,0,0,.6); padding: 2px 7px; border-radius: 4px; }
+
+  .transport { display: flex; align-items: center; gap: 8px; border-top: 1px solid #1e2024; border-bottom: 1px solid #1e2024; padding: 8px 2px; }
+  .tbtn { background: transparent; color: #9a9ea6; border: 1px solid #26282d; width: 30px; height: 30px; border-radius: 5px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .tbtn:hover { color: #e8eaed; border-color: #3a3d44; }
+  .tbtn.play { color: #e85d4e; border-color: #e85d4e; box-shadow: 0 0 10px rgba(232,93,78,.35); }
+  .tbtn svg { width: 13px; height: 13px; fill: currentColor; }
+  .timeinput { font-family: "JetBrains Mono", monospace; font-size: 12px; background: #131416; border: 1px solid #26282d; color: #e8eaed; border-radius: 5px; padding: 6px 9px; width: 92px; }
+
+  .editor { background: #131416; border: 1px solid #26282d; border-radius: 5px; padding: 10px 12px; }
+  .editor .tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: #9a9ea6; margin-bottom: 6px; }
+  .editor textarea { width: 100%; background: transparent; border: 0; color: #e8eaed; font-size: 13.5px; line-height: 1.55; resize: none; outline: none; font-family: inherit; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+
+  /* ===== derecha ===== */
+  .spk { display: flex; align-items: center; gap: 9px; padding: 7px 2px; border-bottom: 1px solid #1a1c1f; font-size: 12.5px; }
+  .spk .key { margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: #55585e; border: 1px solid #26282d; border-radius: 4px; padding: 1px 6px; }
+  .rchead { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 2px 7px; border-bottom: 1px solid #1e2024; }
+  .caplist { overflow-y: auto; flex: 1; }
+  .caprow { display: flex; gap: 10px; align-items: baseline; padding: 6px 2px; border-bottom: 1px solid #1a1c1f; font-size: 12.5px; cursor: pointer; box-shadow: inset 2px 0 0 transparent; }
+  .caprow:hover { background: #131416; }
+  .caprow time { font-family: "JetBrains Mono", monospace; font-size: 11px; color: #6b6f76; flex-shrink: 0; }
+  .caprow.active { background: #16181b; box-shadow: inset 2px 0 0 #e85d4e; }
+  .caprow .txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ===== dock inferior full-width ===== */
+  .resizebar { height: 9px; cursor: ns-resize; display: flex; align-items: center; justify-content: center; border-top: 1px solid #1e2024; margin-top: 12px; }
+  .resizebar::after { content: ""; width: 56px; height: 3px; border-radius: 2px; background: #2c2f36; }
+  .resizebar:hover::after { background: #e85d4e; }
+  .dock { border-top: 0; padding: 2px 16px 0; display: flex; flex-direction: column; gap: 0; overflow: hidden; }
+  #wave { width: 100%; height: 44px; display: block; }
+  .ruler { height: 20px; position: relative; font-family: "JetBrains Mono", monospace; font-size: 10px; color: #55585e; border-bottom: 1px solid #1e2024; }
+  .ruler span { position: absolute; top: 3px; }
+  .lanes { position: relative; overflow-y: auto; }
+  .lane { height: 32px; border-bottom: 1px solid #1a1c1f; position: relative; }
+  .lanelabel { position: absolute; left: 2px; top: 8px; font-size: 10px; color: #55585e; display: flex; gap: 5px; align-items: center; z-index: 3; background: rgba(14,15,17,.85); padding-right: 6px; }
+  .clip { position: absolute; top: 6px; bottom: 6px; border-radius: 3px; font-size: 10.5px; padding: 2px 7px; white-space: nowrap; overflow: hidden; cursor: grab; }
+  .clip:hover { filter: brightness(1.25); }
+  .clip.sel { outline: 1px solid #e8eaed; }
+  .needle { position: absolute; top: 0; bottom: 0; width: 1px; background: #e85d4e; box-shadow: 0 0 8px rgba(232,93,78,.8); z-index: 4; pointer-events: none; }
+  .scrollbar { height: 8px; background: transparent; position: relative; margin-top: 4px; }
+  .scrollbar .thumb { position: absolute; left: 20%; right: 30%; top: 2px; bottom: 2px; background: #2c2f36; border-radius: 3px; }
+
+  .statusbar { display: flex; gap: 14px; align-items: center; font-size: 11.5px; color: #55585e; padding: 8px 16px; border-top: 1px solid #1e2024; }
+  .statusbar .ok { color: #7ed957; }
+  .statusbar .path { font-family: "JetBrains Mono", monospace; }
+  .statusbar .hint { margin-left: auto; }
+</style>
+</head>
+<body>
+
+  <div class="top">
+    <div class="left">
+      <div class="video">
+        <div class="slate"><b>entrevista.mp4</b> · 1080p · pista ES</div>
+        <div class="tc mono" id="videoTc">00:18:07.40</div>
+      </div>
+      <div class="transport">
+        <div class="tbtn" title="Anterior"><svg viewBox="0 0 16 16"><path d="M3 2h2v12H3zM13 2v12L6 8z"/></svg></div>
+        <div class="tbtn play" id="playBtn" title="Play/Pausa"><svg viewBox="0 0 16 16" id="playIcon"><path d="M4 2l9 6-9 6z"/></svg></div>
+        <div class="tbtn" title="Siguiente"><svg viewBox="0 0 16 16"><path d="M11 2h2v12h-2zM3 2v12l7-6z"/></svg></div>
+        <input class="timeinput mono" value="00:18:07" spellcheck="false">
+        <span class="mono" style="font-size:11px;color:#55585e">1.0×</span>
+      </div>
+      <div class="editor">
+        <div class="tag"><span class="dot" style="background:#e85d4e"></span>H1 · Mariana — E para editar</div>
+        <textarea rows="2" spellcheck="false">¿Y entonces el montaje aguantó tres semanas sin dormir?</textarea>
+      </div>
+    </div>
+    <div class="right">
+      <div style="padding-top:2px"><span class="sect">Speakers</span></div>
+      <div class="spk"><span class="dot" style="background:#e85d4e"></span>Mariana<span class="key">1</span></div>
+      <div class="spk"><span class="dot" style="background:#4ea8e8"></span>Tomás<span class="key">2</span></div>
+      <div class="spk"><span class="dot" style="background:#7ed957"></span>Lucía<span class="key">3</span></div>
+      <div class="rchead"><span class="sect">Lines · 48</span><span class="mono" style="font-size:10.5px;color:#55585e">srt ✓</span></div>
+      <div class="caplist" id="caplist">
+        <div class="caprow" data-t="1092.1"><time>18:12.10</time><span class="txt">…y ahí fue cuando se cayó el servidor.</span></div>
+        <div class="caprow active" data-t="1087.4"><time>18:07.40</time><span class="txt">¿Y entonces el montaje aguantó tres semanas…?</span></div>
+        <div class="caprow" data-t="1084.2"><time>18:04.20</time><span class="txt">Tres semanas sin dormir, te lo juro.</span></div>
+        <div class="caprow" data-t="1079.8"><time>17:59.80</time><span class="txt">El café ya no hacía efecto a esas alturas.</span></div>
+        <div class="caprow" data-t="1075.0"><time>17:55.00</time><span class="txt">Mira, te cuento desde el principio.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="resizebar" id="resizebar" title="Arrastrar para redimensionar"></div>
+
+  <div class="dock" id="dock" style="height: 240px;">
+    <canvas id="wave"></canvas>
+    <div class="ruler" id="ruler"><div class="needle" id="needle" style="left:52%"></div></div>
+    <div class="lanes" id="lanes">
+      <div class="lane" data-lane="0"><span class="lanelabel"><span class="dot" style="background:#e85d4e"></span>H1</span></div>
+      <div class="lane" data-lane="1"><span class="lanelabel"><span class="dot" style="background:#4ea8e8"></span>H2</span></div>
+      <div class="lane" data-lane="2"><span class="lanelabel"><span class="dot" style="background:#7ed957"></span>H3</span></div>
+    </div>
+    <div class="scrollbar"><div class="thumb"></div></div>
+  </div>
+
+  <div class="statusbar">
+    <span class="ok">● Guardado</span>
+    <span class="path">entrevista.cdp</span>
+    <span class="hint">? ayuda · shift+scroll zoom</span>
+    <span class="mono">ES</span>
+  </div>
+
+<script>
+  // ---- waveform ficticio ----
+  const wave = document.getElementById('wave');
+  function drawWave() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = wave.clientWidth, h = wave.clientHeight;
+    wave.width = w * dpr; wave.height = h * dpr;
+    const ctx = wave.getContext('2d'); ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+    let seed = 7;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    ctx.fillStyle = '#3a3d44';
+    const bw = 2, gap = 1;
+    for (let x = 0; x < w; x += bw + gap) {
+      const a = 0.15 + 0.85 * Math.abs(Math.sin(x * 0.05) * rnd() + Math.sin(x * 0.013) * 0.6);
+      const bh = Math.max(1.5, a * (h - 6));
+      ctx.fillStyle = x / w < 0.52 ? '#e85d4e' : '#3a3d44';
+      ctx.fillRect(x, (h - bh) / 2, bw, bh);
+    }
+  }
+
+  // ---- clips ficticios ----
+  const clips = [
+    { lane: 0, l: '6%', w: '20%', bg: 'rgba(232,93,78,.16)', bd: 'rgba(232,93,78,.55)', t: 'tres semanas sin dormir…' },
+    { lane: 0, l: '70%', w: '16%', bg: 'rgba(232,93,78,.16)', bd: 'rgba(232,93,78,.55)', t: '…se cayó el servidor.' },
+    { lane: 1, l: '30%', w: '30%', bg: 'rgba(78,168,232,.14)', bd: 'rgba(78,168,232,.5)', t: '¿Y entonces el montaje…?' },
+    { lane: 2, l: '12%', w: '14%', bg: 'rgba(126,217,87,.12)', bd: 'rgba(126,217,87,.45)', t: 'te cuento…' },
+  ];
+  const lanes = document.querySelectorAll('.lane');
+  clips.forEach(c => {
+    const d = document.createElement('div');
+    d.className = 'clip'; d.textContent = c.t;
+    d.style.left = c.l; d.style.width = c.w;
+    d.style.background = c.bg; d.style.border = '1px solid ' + c.bd;
+    d.addEventListener('click', () => {
+      document.querySelectorAll('.clip').forEach(x => x.classList.remove('sel'));
+      d.classList.add('sel');
+    });
+    lanes[c.lane].appendChild(d);
+  });
+  // aguja del playhead en cada carril
+  document.querySelectorAll('.lane').forEach(l => {
+    const n = document.createElement('div');
+    n.className = 'needle'; n.style.left = '52%';
+    l.appendChild(n);
+  });
+
+  // ---- regla de tiempo ----
+  const ruler = document.getElementById('ruler');
+  [['4%', '18:00'], ['30%', '18:05'], ['62%', '18:10'], ['90%', '18:15']].forEach(([l, t]) => {
+    const s = document.createElement('span'); s.style.left = l; s.textContent = t; ruler.appendChild(s);
+  });
+
+  // ---- resize del dock ----
+  const bar = document.getElementById('resizebar'), dock = document.getElementById('dock');
+  let dragging = false;
+  bar.addEventListener('mousedown', e => { dragging = true; e.preventDefault(); });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const h = Math.min(420, Math.max(120, window.innerHeight - e.clientY - 40));
+    dock.style.height = h + 'px'; drawWave();
+  });
+  window.addEventListener('mouseup', () => dragging = false);
+
+  // ---- play ficticio: la aguja respira ----
+  let playing = false, pos = 0.52, raf = null;
+  const needle = document.getElementById('needle');
+  const needles = document.querySelectorAll('.lane .needle');
+  const tc = document.getElementById('videoTc');
+  function tick() {
+    pos += 0.0006; if (pos > 0.98) pos = 0.02;
+    const pct = (pos * 100).toFixed(2) + '%';
+    needle.style.left = pct;
+    needles.forEach(n => n.style.left = pct);
+    const s = 18 * 60 + pos * 20;
+    tc.textContent = '00:' + String(Math.floor(s / 60)).padStart(2, '0') + ':' + (s % 60).toFixed(2).padStart(5, '0');
+    drawWave();
+    if (playing) raf = requestAnimationFrame(tick);
+  }
+  document.getElementById('playBtn').addEventListener('click', function () {
+    playing = !playing;
+    this.style.boxShadow = playing ? '0 0 14px rgba(232,93,78,.7)' : '0 0 10px rgba(232,93,78,.35)';
+    document.getElementById('playIcon').innerHTML = playing ? '<path d="M3 2h4v12H3zM9 2h4v12H9z"/>' : '<path d="M4 2l9 6-9 6z"/>';
+    if (playing) tick(); else cancelAnimationFrame(raf);
+  });
+
+  // ---- filas clicables ----
+  document.querySelectorAll('.caprow').forEach(r => r.addEventListener('click', () => {
+    document.querySelectorAll('.caprow').forEach(x => x.classList.remove('active'));
+    r.classList.add('active');
+  }));
+
+  window.addEventListener('resize', drawWave);
+  drawWave();
+</script>
+</body>
+</html>
