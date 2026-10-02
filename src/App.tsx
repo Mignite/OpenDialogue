@@ -863,6 +863,14 @@ function App() {
     [],
   );
 
+  // Presets disponibles para los selects de estilo por hablante.
+  // En navegador (sin Tauri) falla y queda []: los selects muestran "—".
+  useEffect(() => {
+    cargarPresetsAss()
+      .then((p) => setPresetsAss(p))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     const unlistenAbrir = listen("abrir_proyecto", () =>
       handleCargarProyecto(),
@@ -886,6 +894,10 @@ function App() {
     const unlistenExportarAss = listen("exportar_ass", () =>
       handleExportarAss(),
     );
+    const unlistenGestionarPresets = listen("gestionar_presets", async () => {
+      setPresetsAss(await cargarPresetsAss());
+      setAssModalAbierto(true);
+    });
     const unlistenCargarAss = listen("cargar_ass", () => handleCargarAss());
 
     return () => {
@@ -899,6 +911,7 @@ function App() {
       unlistenExportarSrt.then((f) => f());
       unlistenExportarJson.then((f) => f());
       unlistenExportarAss.then((f) => f());
+      unlistenGestionarPresets.then((f) => f());
       unlistenCargarAss.then((f) => f());
     };
     // Los handlers leen refs (videoPathRef, captionsRef, etc.), nunca estado stale:
@@ -2734,6 +2747,7 @@ function App() {
         <div className="rightCol">
           <SpeakersPanel
             hablantes={hablantes}
+            presets={presetsAss}
             panelAbierto={panelHablantesAbierto}
             onTogglePanel={togglePanelHablantes}
             onAgregar={agregarHablante}

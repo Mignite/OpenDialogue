@@ -69,6 +69,8 @@
   "speakers.namePlaceholder": "Nombre...",
   "speakers.keyTitle": "Tecla rápida para asignar",
   "speakers.deleteTitle": "Eliminar hablante",
+  "speakers.presetTitle": "Estilo .ass del hablante",
+  "speakers.presetNone": "— Sin estilo —",
   "speakers.add": "+ Añadir hablante",
   "overlap.noOverlaps": "No se encontraron subtítulos solapados.\n",
   "overlap.unassigned": "Sin hablante",

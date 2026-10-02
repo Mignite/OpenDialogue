@@ -65,14 +65,17 @@ export function AssExportModal({
   const [fuentesCargadas, setFuentesCargadas] = useState(false);
   const [listaFuentesAbierta, setListaFuentesAbierta] = useState(false);
   const inputFuenteRef = useRef<HTMLInputElement>(null);
-  // Mapeo hablante -> preset SOLO para este export. No se persiste: no es una
-  // propiedad del hablante ni del proyecto, es una decisión de esta exportación.
+  // Mapeo hablante -> preset para este export. Parte del preset guardado en
+  // cada hablante (`h.presetId`, dato del proyecto) y se puede cambiar acá
+  // solo para esta exportación sin tocar el proyecto.
   const primero = presets[0]?.id ?? "";
   const [asignacion, setAsignacion] = useState<Record<string, string>>({});
   const [presetSinHablante, setPresetSinHablante] = useState<string>(primero);
 
-  const presetDe = (hablanteId: string): string =>
-    asignacion[hablanteId] ?? primero;
+  const presetDe = (hablanteId: string): string => {
+    const h = hablantes.find((x) => x.id === hablanteId);
+    return asignacion[hablanteId] || h?.presetId || primero;
+  };
 
   // Con el campo vacio se muestran las primeras; con texto, las que lo contienen.
   const consulta = (borrador?.fontname ?? "").trim().toLowerCase();

@@ -1,9 +1,10 @@
 import { memo } from "react";
-import type { Hablante } from "../types";
+import type { Hablante, PresetAss } from "../types";
 import { useLocale } from "../i18n";
 
 interface Props {
   hablantes: Hablante[];
+  presets: PresetAss[];
   panelAbierto: boolean;
   onTogglePanel: () => void;
   onAgregar: () => void;
@@ -28,7 +29,7 @@ function normalizarColor(color: string): string {
   return color;
 }
 
-function SpeakersPanel({ hablantes, panelAbierto, onTogglePanel, onAgregar, onActualizar, onCambiarColor, onEliminar, onCommit }: Props) {
+function SpeakersPanel({ hablantes, presets, panelAbierto, onTogglePanel, onAgregar, onActualizar, onCambiarColor, onEliminar, onCommit }: Props) {
   const { t } = useLocale();
   const usersSvg = (
     <svg
@@ -109,6 +110,20 @@ function SpeakersPanel({ hablantes, panelAbierto, onTogglePanel, onAgregar, onAc
                 onChange={(e) => onActualizar(h.id, "tecla", e.target.value)}
                 title={t("speakers.keyTitle")}
               />
+              <select
+                className="speakerPreset"
+                value={h.presetId ?? ""}
+                onFocus={onCommit}
+                onChange={(e) => onActualizar(h.id, "presetId", e.target.value)}
+                title={t("speakers.presetTitle")}
+              >
+                <option value="">{t("speakers.presetNone")}</option>
+                {presets.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                  </option>
+                ))}
+              </select>
               <button className="iconBtnSmall" onClick={() => onEliminar(h.id)} title={t("speakers.deleteTitle")}>
                 {xSvg}
               </button>

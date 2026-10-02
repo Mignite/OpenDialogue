@@ -946,6 +946,22 @@ body {
   font-family: var(--font-mono);
 }
 
+.speakerPreset {
+  max-width: 110px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 6px 4px;
+  color: var(--textDim);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+}
+
+.speakerPreset:hover {
+  border-color: var(--accent);
+}
+
 .addSpeakerBtn {
   background: transparent;
   border: 1px dashed var(--borderStrong);

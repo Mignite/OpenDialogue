@@ -690,9 +690,18 @@ pub fn run() {
                 .item(&exportar_ass)
                 .build()?;
 
+            let gestionar_presets = MenuItemBuilder::new("Gestionar presets .ass...")
+                .id("gestionar_presets")
+                .build(app)?;
+
+            let menu_estilos = SubmenuBuilder::new(app, "Estilos")
+                .item(&gestionar_presets)
+                .build()?;
+
             let menu = MenuBuilder::new(app)
                 .item(&menu_archivo)
                 .item(&menu_exportar)
+                .item(&menu_estilos)
                 .build()?;
             app.set_menu(menu)?;
             Ok(())

@@ -69,6 +69,8 @@
   "speakers.namePlaceholder": "Name...",
   "speakers.keyTitle": "Quick key to assign",
   "speakers.deleteTitle": "Delete speaker",
+  "speakers.presetTitle": "Speaker .ass style",
+  "speakers.presetNone": "— No style —",
   "speakers.add": "+ Add speaker",
   "overlap.noOverlaps": "No overlapping subtitles found.\n",
   "overlap.unassigned": "No speaker",

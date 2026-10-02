@@ -3,6 +3,9 @@ export interface Hablante {
   nombre: string;
   tecla: string;
   color: string;
+  // Preset .ass asignado al hablante (dato del proyecto, se guarda en el .cdp).
+  // undefined = sin asignar → se usa el primer preset al exportar.
+  presetId?: string;
 }
 
 export interface Caption {
