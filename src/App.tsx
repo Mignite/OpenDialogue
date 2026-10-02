@@ -47,11 +47,12 @@ import {
 } from "./utils/captions";
 import { filtrarPorMarquee, captionRowIndex } from "./utils/selection";
 import { buscarFinIslaAudio } from "./utils/audioIslands";
+import { cargarAjustes, guardarAjustes } from "./utils/ajustes";
 
 import { useHistory } from "./hooks/useHistory";
 import SpeakersPanel from "./components/SpeakersPanel";
 import CaptionList from "./components/CaptionList";
-import { useLocale } from "./i18n";
+import { getLocale, useLocale } from "./i18n";
 import "./App.css";
 
 // Carriles por hablante en el timeline: altura fija por carril y tope de
@@ -775,6 +776,11 @@ function App() {
     }
   }
 
+  function cambiarIdioma(locale: "en" | "es") {
+    setLocale(locale);
+    guardarAjustes({ locale });
+  }
+
   async function exportarAssConPreset(
     asignacion: Record<string, string>,
     presetSinHablante: string,
@@ -865,9 +871,17 @@ function App() {
 
   // Presets disponibles para los selects de estilo por hablante.
   // En navegador (sin Tauri) falla y queda []: los selects muestran "—".
+  // Misma tanda: ajustes del usuario (idioma) desde ajustes.json, con
+  // localStorage como respaldo/migración; se reescribe para unificar.
   useEffect(() => {
     cargarPresetsAss()
       .then((p) => setPresetsAss(p))
+      .catch(() => {});
+    cargarAjustes()
+      .then((a) => {
+        if (a.locale) setLocale(a.locale);
+        return guardarAjustes({ locale: getLocale() });
+      })
       .catch(() => {});
   }, []);
 
@@ -3063,7 +3077,7 @@ function App() {
                 className={`LocaleBtn${locale === "en" ? " active" : ""}`}
                 aria-pressed={locale === "en"}
                 aria-label="Switch to English"
-                onClick={() => setLocale("en")}
+                onClick={() => cambiarIdioma("en")}
               >
                 EN
               </button>
@@ -3072,7 +3086,7 @@ function App() {
                 className={`LocaleBtn${locale === "es" ? " active" : ""}`}
                 aria-pressed={locale === "es"}
                 aria-label="Cambiar a español"
-                onClick={() => setLocale("es")}
+                onClick={() => cambiarIdioma("es")}
               >
                 ES
               </button>
