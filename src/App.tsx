@@ -2312,6 +2312,43 @@ function App() {
     return map;
   }, [hablantes]);
 
+  // Live preview sobre el video: estilo del preset asignado al hablante
+  // (mismo mapeo que usa buildAss al exportar). Se recalcula en cada render,
+  // y el render ya tickea con el playhead: sin código de sync extra.
+  const overlayHablante = currentCaption?.hablante_id
+    ? speakerMap.get(currentCaption.hablante_id)
+    : undefined;
+  const overlayPreset =
+    presetsAss.find((p) => p.id === overlayHablante?.presetId) ??
+    presetsAss[0];
+  const overlayStyle = (() => {
+    if (!overlayPreset) return undefined;
+    const v = videoRef.current;
+    const escala = v && v.videoWidth ? v.clientWidth / v.videoWidth : 0.3;
+    const px = Math.min(48, Math.max(10, overlayPreset.fontsize * escala));
+    const borde = Math.max(1, overlayPreset.outline * escala);
+    const al = overlayPreset.alignment;
+    const vertical = al >= 7 ? "top" : al >= 4 ? "middle" : "bottom";
+    const horizontal =
+      al === 1 || al === 4 || al === 7 ? "left"
+      : al === 3 || al === 6 || al === 9 ? "right"
+      : "center";
+    return {
+      fontFamily: `"${overlayPreset.fontname}", sans-serif`,
+      fontSize: px,
+      color: overlayPreset.color,
+      textShadow: `0 0 ${borde}px ${overlayPreset.outlineColor}, 0 1px 2px rgba(0,0,0,.8)`,
+      justifyContent:
+        horizontal === "left" ? "flex-start"
+        : horizontal === "right" ? "flex-end"
+        : "center",
+      textAlign: horizontal as "left" | "center" | "right",
+      alignItems: vertical === "top" ? "flex-start" : vertical === "middle" ? "center" : "flex-end",
+      paddingBottom: vertical === "bottom" ? Math.max(4, overlayPreset.marginV * escala) : undefined,
+      paddingTop: vertical === "top" ? Math.max(4, overlayPreset.marginV * escala) : undefined,
+    } as const;
+  })();
+
   // Follow-scroll de la lista virtual: mantiene visible el caption activo.
   // scrollIntoView con "nearest" no mueve nada si la fila ya es visible, así
   // que no pelea contra el scroll manual del usuario.
@@ -2563,12 +2600,19 @@ function App() {
             </div>
           ) : videoSrc ? (
             <>
-              <video
-                ref={videoRef}
-                src={videoSrc}
-                className="videoPlayer"
-                muted
-              />
+              <div className="videoWrap">
+                <video
+                  ref={videoRef}
+                  src={videoSrc}
+                  className="videoPlayer"
+                  muted
+                />
+                {currentCaption && overlayStyle && (
+                  <div className="videoSubOverlay" style={overlayStyle}>
+                    <span>{currentCaption.texto}</span>
+                  </div>
+                )}
+              </div>
               {audioSrc && <audio ref={audioRef} src={audioSrc} hidden />}
               <div className="playbackControls">
                 <div className="transportBtnGroup">

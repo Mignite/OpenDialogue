@@ -238,6 +238,26 @@ body {
   flex-shrink: 0;
 }
 
+/* Contenedor para el live preview de subtítulos sobre el video */
+.videoWrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.videoSubOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  padding: 6% 8%;
+  pointer-events: none;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.videoSubOverlay span {
+  max-width: 100%;
+}
+
 .videoEmpty,
 .videoMissingTitle {
   display: flex;
