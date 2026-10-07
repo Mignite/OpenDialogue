@@ -37,6 +37,21 @@ fn escribir_atomico(ruta: &std::path::Path, contenido: &[u8]) -> Result<(), Stri
     })
 }
 
+// Hijos sin flash de consola: en Windows, cada proceso hijo de una app GUI
+// abre su propia ventana de consola por un instante (ffmpeg, powershell, reg).
+// CREATE_NO_WINDOW lo evita; los pipes (.output()) siguen funcionando igual.
+#[cfg(target_os = "windows")]
+fn comando_oculto(programa: &str) -> std::process::Command {
+    use std::os::windows::process::CommandExt;
+    let mut cmd = std::process::Command::new(programa);
+    cmd.creation_flags(0x08000000);
+    cmd
+}
+#[cfg(not(target_os = "windows"))]
+fn comando_oculto(programa: &str) -> std::process::Command {
+    std::process::Command::new(programa)
+}
+
 fn calcular_cache_key(ruta_video: &str) -> Result<String, String> {
     let metadata = std::fs::metadata(ruta_video).map_err(|e| e.to_string())?;
     let size = metadata.len();
@@ -259,7 +274,7 @@ fn leer_archivo_texto(ruta: String) -> Result<String, String> {
 
 #[tauri::command]
 fn verificar_ffmpeg() -> bool {
-    std::process::Command::new("ffmpeg")
+    comando_oculto("ffmpeg")
         .arg("-version")
         .output()
         .is_ok()
@@ -418,8 +433,6 @@ async fn extraer_audio_stream(
     audio_track_index: usize,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || -> Result<String, String> {
-        use std::process::Command;
-
         let cache_key = calcular_cache_key(&ruta_video)?;
         let temp_dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
         std::fs::create_dir_all(&temp_dir).map_err(|e| e.to_string())?;
@@ -445,7 +458,7 @@ async fn extraer_audio_stream(
         // -f mp4 explícito: el muxer se elige por la extensión del archivo y
         // ".part" no la tiene (ffmpeg 9 falla con "Unable to choose an output
         // format"). El rename final a .m4a preserva el formato.
-        let mut output = Command::new("ffmpeg")
+        let mut output = comando_oculto("ffmpeg")
             .args([
                 "-i",
                 &ruta_video,
@@ -471,7 +484,7 @@ async fn extraer_audio_stream(
                 String::from_utf8_lossy(&output.stderr).lines().next().unwrap_or("")
             );
             let _ = std::fs::remove_file(&output_part);
-            output = Command::new("ffmpeg")
+            output = comando_oculto("ffmpeg")
                 .args([
                     "-i",
                     &ruta_video,
@@ -529,7 +542,7 @@ fn listar_fuentes_sistema() -> Result<Vec<String>, String> {
     #[cfg(target_os = "windows")]
     {
         const PS: &str = "Add-Type -AssemblyName System.Drawing; [System.Drawing.Text.InstalledFontCollection]::new().Families | ForEach-Object { $_.Name }";
-        if let Ok(salida) = std::process::Command::new("powershell")
+        if let Ok(salida) = comando_oculto("powershell")
             .args(["-NoProfile", "-NonInteractive", "-Command", PS])
             .output()
         {
@@ -559,7 +572,7 @@ fn listar_fuentes_sistema() -> Result<Vec<String>, String> {
 #[cfg(target_os = "linux")]
 fn familias_fc_list() -> Vec<String> {
     use std::collections::HashSet;
-    let Ok(salida) = std::process::Command::new("fc-list").args([":", "family"]).output()
+    let Ok(salida) = comando_oculto("fc-list").args([":", "family"]).output()
     else {
         return Vec::new();
     };
@@ -587,7 +600,7 @@ fn familias_del_registro() -> Vec<String> {
     for clave in claves {
         // Si la clave no existe (típico en HKCU sin fuentes de usuario), reg
         // escribe en stderr y devuelve código 1: no es un error.
-        let Ok(salida) = std::process::Command::new("reg").args(["query", clave]).output()
+        let Ok(salida) = comando_oculto("reg").args(["query", clave]).output()
         else {
             continue;
         };
