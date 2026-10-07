@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "ColorDubber",
+  "productName": "OpenDialogue",
   "version": "0.1.0",
   "identifier": "com.migue.colordubber",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "ColorDubber",
+        "title": "OpenDialogue",
         "width": 800,
         "height": 600
       }

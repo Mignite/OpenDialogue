@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { limpiarNombresFuentes } from "../fuentes";
+import { limpiarNombresFuentes, familiaCss } from "../fuentes";
 
 describe("limpiarNombresFuentes", () => {
   it("quita el sufijo de tipo del registro", () => {
@@ -35,5 +35,20 @@ describe("limpiarNombresFuentes", () => {
 
   it("devuelve lista vacía si no hay nada", () => {
     expect(limpiarNombresFuentes([])).toEqual([]);
+  });
+});
+
+describe("familiaCss", () => {
+  it("arma font-family entrecomillada con fallback", () => {
+    expect(familiaCss("Arial")).toBe('"Arial", sans-serif');
+  });
+
+  it("devuelve undefined con nombre vacío", () => {
+    expect(familiaCss("")).toBeUndefined();
+    expect(familiaCss("   ")).toBeUndefined();
+  });
+
+  it("quita comillas para no romper el estilo", () => {
+    expect(familiaCss('Bebas "Neue')).toBe('"Bebas Neue", sans-serif');
   });
 });

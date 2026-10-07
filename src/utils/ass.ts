@@ -410,3 +410,25 @@ export function presetDesdeEstilos(
     marginV: base.marginV,
   };
 }
+
+/** Resuelve el preset a usar para un hablante al exportar: primero lo elegido
+ *  en el modal para este export, si no lo guardado en el hablante (`presetId`
+ *  del proyecto), si no el de sin-hablante. Pura para poder testearla: el bug
+ *  de ignorar `presetId` vivió en el resolver inline de App sin test. */
+export function presetParaExportar(
+  hablantes: Hablante[],
+  porId: Map<string, PresetAss>,
+  asignacion: Record<string, string>,
+  hablanteId: string | null,
+  sinHablante: PresetAss,
+): PresetAss {
+  if (hablanteId) {
+    const h = hablantes.find((x) => x.id === hablanteId);
+    return (
+      porId.get(asignacion[hablanteId]) ??
+      (h?.presetId ? porId.get(h.presetId) : undefined) ??
+      sinHablante
+    );
+  }
+  return sinHablante;
+}

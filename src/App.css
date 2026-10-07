@@ -967,7 +967,8 @@ body {
 }
 
 .speakerPreset {
-  max-width: 110px;
+  max-width: 150px;
+  width: 100%;
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
@@ -976,6 +977,7 @@ body {
   font-size: 11px;
   font-family: var(--font-mono);
   cursor: pointer;
+  text-overflow: ellipsis;
 }
 
 .speakerPreset:hover {
@@ -996,6 +998,54 @@ body {
 .addSpeakerBtn:hover {
   border-color: var(--info);
   color: var(--text);
+}
+
+/* ===== PANEL DE ESTILOS (presets .ass de primera clase) ===== */
+/* Reutiliza el contenedor acordeón de hablantes y los controles .ass* del
+   modal: misma familia visual, sin duplicar el sistema. */
+.stylesPanel {
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.stylesPanel .assPresetList {
+  border-right: none;
+  padding-right: 0;
+  max-height: 168px;
+  overflow-y: auto;
+}
+
+.stylesPanel .assFields {
+  grid-template-columns: 1fr;
+}
+
+.stylesPanel .assPresetActions {
+  padding-top: 6px;
+}
+
+/* Wordmark mínima en la barra de estado: firma sin espacio muerto. */
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--textFaint);
+  white-space: nowrap;
+}
+
+.wordmarkDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
 }
 
 /* ===== BOTONES GENERALES ===== */
@@ -1558,13 +1608,6 @@ button.primary:hover {
   color: var(--text);
 }
 
-.assBody {
-  display: grid;
-  grid-template-columns: 190px 1fr;
-  gap: 16px;
-  min-height: 0;
-}
-
 .assPresetList {
   display: flex;
   flex-direction: column;
@@ -1749,19 +1792,6 @@ button.primary:hover {
   flex: 1;
 }
 
-.assUnsaved {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--surface2);
-  border: 1px solid var(--warn);
-  border-radius: var(--r-sm);
-  padding: 8px 10px;
-  font-size: 12px;
-  color: var(--text);
-}
-
-
 .assHead .grow,
 .assAssignRow .grow,
 .assAssignHead .grow {
@@ -1770,13 +1800,6 @@ button.primary:hover {
 
 .assModalHead .grow {
   flex: 1;
-}
-
-.assRight {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
 }
 
 .assPresetSwatch {

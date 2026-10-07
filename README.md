@@ -1,4 +1,4 @@
-# ColorDubber
+# OpenDialogue
 
 ![Tauri v2](https://img.shields.io/badge/Tauri-v2-24C8DB?logo=tauri)
 ![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react)
@@ -78,7 +78,7 @@ Installer at `C:\t\release\bundle\nsis`.
 ## Usage
 
 1. Transcribe in [auto-subs](https://github.com/tmoroney/auto-subs) (any model), export SRT (+TXT to keep speakers).
-2. Open video in ColorDubber (drag & drop or File menu), wait for volume analysis (waveform).
+2. Open video in OpenDialogue (drag & drop or File menu), wait for volume analysis (waveform).
 3. File → Import auto-subs (SRT+TXT): pick the SRT, the twin TXT loads automatically.
 4. Edit on timeline: block-move, trim edges, assign speaker (`1–9`), split, delete, recolor.
 5. Save project (`.json`) and export `.srt` / combined JSON.

@@ -74,6 +74,15 @@ export function fuenteResuelve(nombre: string): boolean {
   return ok;
 }
 
+/** CSS para pintar un nombre en su propia fuente (apoyo visual en
+ *  selectores y filas). Entrecomillado + fallback sans-serif; undefined si
+ *  vacío. NO interpolar `fontname` crudo: un nombre con comillas (posible vía
+ *  import .ass) rompería el estilo. */
+export function familiaCss(nombre: string): string | undefined {
+  const limpio = nombre.trim().replace(/["']/g, "");
+  return limpio === "" ? undefined : `"${limpio}", sans-serif`;
+}
+
 /** Deja pasar solo las familias que el renderer puede pintar. */
 export function detectarFamilias(candidatas: string[]): string[] {
   if (typeof document === "undefined") return candidatas;

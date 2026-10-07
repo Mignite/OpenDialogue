@@ -690,7 +690,7 @@ pub fn run() {
                 .item(&exportar_ass)
                 .build()?;
 
-            let gestionar_presets = MenuItemBuilder::new("Gestionar presets .ass...")
+            let gestionar_presets = MenuItemBuilder::new("Estilos...")
                 .id("gestionar_presets")
                 .build(app)?;
 

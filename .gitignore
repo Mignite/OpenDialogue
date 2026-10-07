@@ -27,6 +27,8 @@ AGENTS.md
 
 .superpowers/
 
+.openchamber/
+
 # Benchmarks de diarizacion: codigo, pesos de modelo (.onnx), ejecutables y
 # material de prueba. Son GB y NO van al repo. Un `git add -A` los metio en el
 # historial (commit 044f3b1, 2026-09-26) y el push subio ~1 GB de LFS; se purgo

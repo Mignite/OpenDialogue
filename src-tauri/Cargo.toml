@@ -1,10 +1,10 @@
 [package]
-name = "colordubber"
+name = "opendialogue"
 version = "0.1.0"
-description = "ColorDubber — editor de subtítulos multi-hablante"
+description = "OpenDialogue — editor de subtítulos multi-hablante"
 authors = ["migue"]
 edition = "2021"
-default-run = "colordubber"
+default-run = "opendialogue"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -12,7 +12,7 @@ default-run = "colordubber"
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "colordubber_lib"
+name = "opendialogue_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [profile.release]

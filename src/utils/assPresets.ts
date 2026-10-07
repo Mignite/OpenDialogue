@@ -54,6 +54,17 @@ export function nuevoPreset(base: Partial<PresetAss> = {}): PresetAss {
   };
 }
 
+/** "Default" -> "Default 2", y si ya existe "Default 3". Evita el
+ *  "Default copia copia" de concatenar la palabra cada vez. Si la base está
+ *  libre se devuelve tal cual; si viene vacía se parte de "Preset". */
+export function nombreLibre(base: string, existentes: string[]): string {
+  const limpio = base.trim().replace(/\s+\d+$/, "") || "Preset";
+  if (!existentes.includes(limpio)) return limpio;
+  let n = 2;
+  while (existentes.includes(`${limpio} ${n}`)) n++;
+  return `${limpio} ${n}`;
+}
+
 export async function cargarPresetsAss(): Promise<PresetAss[]> {
   try {
     const ruta = await join(await appConfigDir(), ASS_PRESETS_ARCHIVO);

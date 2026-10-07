@@ -12,6 +12,7 @@ import {
   fusionarLineas,
   parseAss,
   presetDesdeEstilos,
+  presetParaExportar,
   ASS_STYLE_FORMAT,
   ASS_EVENTS_FORMAT,
 } from "../ass";
@@ -22,6 +23,54 @@ const HABLANTES: Hablante[] = [
   { id: "sp1", nombre: "Juan", tecla: "1", color: "#E85D4E" },
   { id: "sp2", nombre: "María", tecla: "2", color: "#4EA8E8" },
 ];
+
+describe("presetParaExportar", () => {
+  const p1: PresetAss = { ...DEFAULT_PRESET_ASS, id: "p1", nombre: "Uno" };
+  const p2: PresetAss = { ...DEFAULT_PRESET_ASS, id: "p2", nombre: "Dos" };
+  const porId = new Map([
+    [p1.id, p1],
+    [p2.id, p2],
+  ]);
+  const habs: Hablante[] = [
+    { ...HABLANTES[0], presetId: "p2" },
+    { ...HABLANTES[1] },
+  ];
+
+  it("respeta lo elegido en el modal primero", () => {
+    expect(presetParaExportar(habs, porId, { sp1: "p1" }, "sp1", p1).id).toBe(
+      "p1",
+    );
+  });
+
+  it("cae al presetId guardado si el modal no tocó la fila", () => {
+    expect(presetParaExportar(habs, porId, {}, "sp1", p1).id).toBe("p2");
+  });
+
+  it("cae a sinHablante si no hay nada asignado", () => {
+    expect(presetParaExportar(habs, porId, {}, "sp2", p1).id).toBe("p1");
+  });
+
+  it("usa sinHablante para captions sin hablante", () => {
+    expect(presetParaExportar(habs, porId, { sp1: "p2" }, null, p1).id).toBe(
+      "p1",
+    );
+  });
+
+  it("ignora ids que ya no existen y cae al siguiente nivel", () => {
+    expect(
+      presetParaExportar(habs, porId, { sp1: "borrado" }, "sp1", p1).id,
+    ).toBe("p2");
+    expect(
+      presetParaExportar(
+        [{ ...habs[0], presetId: "borrado" }],
+        porId,
+        {},
+        "sp1",
+        p1,
+      ).id,
+    ).toBe("p1");
+  });
+});
 
 describe("hexToAssColor", () => {
   it("convierte a BGR invertido con alpha opaco", () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { presetsDesdeJson, presetsAJson, nuevoPreset } from "../assPresets";
+import { presetsDesdeJson, presetsAJson, nuevoPreset, nombreLibre } from "../assPresets";
 import { DEFAULT_PRESET_ASS } from "../constants";
 import type { PresetAss } from "../../types";
 
@@ -59,6 +59,29 @@ describe("presetsAJson", () => {
     const lista = [P1, { ...P1, id: "p2", nombre: "Con sombra", shadow: 4 }];
     const r = presetsDesdeJson(presetsAJson(lista));
     expect(r).toEqual(lista);
+  });
+});
+
+describe("nombreLibre", () => {
+  it("numera desde 2 sin tocar el nombre base", () => {
+    expect(nombreLibre("Default", ["Default"])).toBe("Default 2");
+  });
+
+  it("salta los números ya ocupados", () => {
+    expect(nombreLibre("Default", ["Default", "Default 2"])).toBe("Default 3");
+  });
+
+  it("no concatena el contador sobre sí mismo", () => {
+    expect(nombreLibre("Default 2", ["Default", "Default 2"])).toBe("Default 3");
+  });
+
+  it("devuelve la base tal cual si está libre", () => {
+    expect(nombreLibre("Cine", [])).toBe("Cine");
+  });
+
+  it("parte de Preset con base vacía", () => {
+    expect(nombreLibre("", [])).toBe("Preset");
+    expect(nombreLibre("  ", ["Preset"])).toBe("Preset 2");
   });
 });
 

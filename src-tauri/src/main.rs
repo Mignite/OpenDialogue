@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    colordubber_lib::run()
+    opendialogue_lib::run()
 }
