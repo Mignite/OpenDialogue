@@ -273,11 +273,13 @@ fn leer_archivo_texto(ruta: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn verificar_ffmpeg() -> bool {
-    comando_oculto("ffmpeg")
-        .arg("-version")
-        .output()
-        .is_ok()
+async fn verificar_ffmpeg() -> bool {
+    // Async para no congelar el hilo principal mientras arranca ffmpeg.
+    tauri::async_runtime::spawn_blocking(|| {
+        comando_oculto("ffmpeg").arg("-version").output().is_ok()
+    })
+    .await
+    .unwrap_or(false)
 }
 
 #[tauri::command]
@@ -537,36 +539,43 @@ fn escribir_archivo_texto(ruta: String, contenido: String) -> Result<(), String>
 /// familias sino estilos ("Arial Bold", "Calibri Bold Italic"), que el filtro
 /// del frontend descarta midiendo pero no puede renombrar.
 #[tauri::command]
-fn listar_fuentes_sistema() -> Result<Vec<String>, String> {
-    // Windows: GDI+ da las familias reales (ver doc arriba).
-    #[cfg(target_os = "windows")]
-    {
-        const PS: &str = "Add-Type -AssemblyName System.Drawing; [System.Drawing.Text.InstalledFontCollection]::new().Families | ForEach-Object { $_.Name }";
-        if let Ok(salida) = comando_oculto("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", PS])
-            .output()
+async fn listar_fuentes_sistema() -> Result<Vec<String>, String> {
+    // Async + spawn_blocking (igual que listar_tracks_audio): powershell
+    // tarda ~400 ms y como comando sync congelaba el hilo principal al abrir
+    // la app (el panel de Estilos pide las fuentes al montar).
+    tauri::async_runtime::spawn_blocking(|| {
+        // Windows: GDI+ da las familias reales (ver doc arriba).
+        #[cfg(target_os = "windows")]
         {
-            let familias: Vec<String> = String::from_utf8_lossy(&salida.stdout)
-                .lines()
-                .map(|l| l.trim().to_string())
-                .filter(|l| !l.is_empty())
-                .collect();
-            if !familias.is_empty() {
-                return Ok(familias);
+            const PS: &str = "Add-Type -AssemblyName System.Drawing; [System.Drawing.Text.InstalledFontCollection]::new().Families | ForEach-Object { $_.Name }";
+            if let Ok(salida) = comando_oculto("powershell")
+                .args(["-NoProfile", "-NonInteractive", "-Command", PS])
+                .output()
+            {
+                let familias: Vec<String> = String::from_utf8_lossy(&salida.stdout)
+                    .lines()
+                    .map(|l| l.trim().to_string())
+                    .filter(|l| !l.is_empty())
+                    .collect();
+                if !familias.is_empty() {
+                    return Ok(familias);
+                }
             }
+            return Ok(familias_del_registro());
         }
-        return Ok(familias_del_registro());
-    }
-    // Linux: fontconfig (`fc-list : family`, una familia por línea; las
-    // entradas multi-familia vienen separadas por coma). Sin deps nuevas.
-    #[cfg(target_os = "linux")]
-    {
-        return Ok(familias_fc_list());
-    }
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-    {
-        return Ok(Vec::new());
-    }
+        // Linux: fontconfig (`fc-list : family`, una familia por línea; las
+        // entradas multi-familia vienen separadas por coma). Sin deps nuevas.
+        #[cfg(target_os = "linux")]
+        {
+            return Ok(familias_fc_list());
+        }
+        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+        {
+            return Ok(Vec::new());
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[cfg(target_os = "linux")]
