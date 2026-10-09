@@ -48,6 +48,7 @@ import { cargarAjustes, guardarAjustes } from "./utils/ajustes";
 
 import { useHistory } from "./hooks/useHistory";
 import { useAssEstilos } from "./hooks/useAssEstilos";
+import { useWaveform } from "./hooks/useWaveform";
 import SpeakersPanel from "./components/SpeakersPanel";
 import StylesPanel from "./components/StylesPanel";
 import CaptionList from "./components/CaptionList";
@@ -75,8 +76,6 @@ function App() {
   const [rutaProyecto, setRutaProyecto] = useState<string>("");
   const [videoNoEncontrado, setVideoNoEncontrado] = useState<boolean>(false);
   const [rutaFaltante, setRutaFaltante] = useState<string>("");
-  const [volumen, setVolumen] = useState<number[]>([]);
-  const [analizando, setAnalizando] = useState<boolean>(false);
   const [playheadTime, setPlayheadTime] = useState<number>(0);
   const [windowSeconds, setWindowSeconds] = useState<number>(10);
   const [windowStart, setWindowStart] = useState<number>(0);
@@ -157,8 +156,6 @@ function App() {
   const rutaProyectoRef = useRef("");
   const videoPathRef = useRef("");
   const playheadPendienteRef = useRef<number | null>(null);
-  const volumenRef = useRef<number[]>([]);
-  const analisisVolumenRequestRef = useRef(0);
   const selectedCaptionIdsRef = useRef<string[]>([]);
   const bodyDragRef = useRef<{
     ids: string[];
@@ -212,6 +209,8 @@ function App() {
     notify,
     alExportar: cerrarAssModal,
   });
+  // Slice 2 del monolito: waveform (análisis + caché + prerender).
+  const onda = useWaveform({ waveformPreRenderRef });
   const playheadFrameSkipRef = useRef(0);
   const dragScrollVelocityRef = useRef(0);
   // Auto-scroll vertical del trackArea durante el marquee (px/s). El pan
@@ -229,19 +228,16 @@ function App() {
     windowStartRef.current = 0;
     windowTargetRef.current = 0;
     updateScrollbarThumb(0, windowSecondsRef.current, 0);
-    // Descartar análisis/volumen/duración del video anterior (un análisis en
+    // Descartar análisis/volumen del video anterior (un análisis en
     // vuelo del video viejo ya no puede pintar su waveform acá)
-    analisisVolumenRequestRef.current++;
-    setVolumen([]);
-    setAnalizando(false);
+    onda.reiniciar();
     setVideoDuration(0);
-    waveformCacheRef.current.clear();
-    analizarVolumenDe(path);
+    onda.analizarVolumenDe(path);
   }
 
   useEffect(() => {
     selectedCaptionIdsRef.current = selectedCaptionIds;
-    volumenRef.current = volumen;
+    onda.volumenRef.current = onda.volumen;
     windowSecondsRef.current = windowSeconds;
     captionsRef.current = captions;
     hablantesRef.current = hablantes;
@@ -266,60 +262,6 @@ function App() {
   }, [captions]);
 
   useEffect(() => {
-    const vol = volumen;
-    if (vol.length === 0) {
-      waveformPreRenderRef.current = null;
-      return;
-    }
-    // Mientras llegan chunks, saltar el prerender: se regenera una sola vez
-    // al terminar el análisis (volumen + analizando actualizan en el mismo batch).
-    if (analizando) return;
-    const PISO_DB = -50;
-    const TECHO_DB = 0;
-    const height = 90;
-    const w = vol.length;
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      waveformPreRenderRef.current = null;
-      return;
-    }
-
-    const imageData = ctx.createImageData(w, height);
-    const data = imageData.data;
-    const barHeight = height * 0.85;
-
-    for (let x = 0; x < w; x++) {
-      const amp = vol[x];
-      const db = 20 * Math.log10(Math.max(amp, 1e-5));
-      const normalizado = Math.max(
-        0,
-        Math.min(1, (db - PISO_DB) / (TECHO_DB - PISO_DB)),
-      );
-      const barH = Math.max(1, normalizado * barHeight);
-      const y0 = Math.floor((height - barH) / 2);
-      const y1 = Math.ceil((height + barH) / 2);
-
-      const r = Math.min(255, Math.floor(normalizado * 2 * 255));
-      const g = Math.min(255, Math.floor((2 - normalizado * 2) * 255));
-      const b = Math.max(0, Math.floor((1 - normalizado * 1.5) * 255));
-
-      for (let y = y0; y < y1 && y < height; y++) {
-        const idx = (y * w + x) * 4;
-        data[idx] = r;
-        data[idx + 1] = g;
-        data[idx + 2] = b;
-        data[idx + 3] = 255;
-      }
-    }
-
-    ctx.putImageData(imageData, 0, 0);
-    waveformPreRenderRef.current = canvas;
-  }, [volumen, analizando]);
-
-  useEffect(() => {
     if (ignoreNextChangeRef.current) {
       ignoreNextChangeRef.current = false;
       return;
@@ -329,94 +271,6 @@ function App() {
       setHayCambios(true);
     }
   }, [captions, hablantes, rutaProyecto]);
-
-  // Nuevo ref al inicio del componente
-  const waveformCacheRef = useRef<Map<string, number[]>>(new Map());
-
-  // Cache en memoria con tope: evita que una sesión larga acumule waveforms
-  // de decenas de videos sin límite.
-  function cachearVolumen(clave: string, datos: number[]) {
-    const cache = waveformCacheRef.current;
-    if (cache.has(clave)) cache.delete(clave);
-    cache.set(clave, datos);
-    while (cache.size > 8) {
-      const primera = cache.keys().next().value;
-      if (primera === undefined) break;
-      cache.delete(primera);
-    }
-  }
-
-  async function analizarVolumenDe(ruta: string) {
-    // Single-track: siempre la pista 0 (el video llega pre-editado con solo
-    // diálogo). Sin selector de pista ni extracción: el video suena directo.
-    const track_index = 0;
-
-    const claveCache = `${ruta}::${track_index}`;
-    const miRequestId = ++analisisVolumenRequestRef.current;
-
-    const cached = waveformCacheRef.current.get(claveCache);
-    if (cached) {
-      setVolumen(cached);
-      setAnalizando(false);
-      return;
-    }
-
-    try {
-      const tieneCache = await invoke<boolean>("existe_cache_volumen", {
-        rutaVideo: ruta,
-        trackIndex: track_index,
-      });
-      if (analisisVolumenRequestRef.current !== miRequestId) return; // respuesta obsoleta, descartar
-
-      if (tieneCache) {
-        const datos = await invoke<number[]>("cargar_cache_volumen", {
-          rutaVideo: ruta,
-          trackIndex: track_index,
-        });
-        if (analisisVolumenRequestRef.current !== miRequestId) return;
-        cachearVolumen(claveCache, datos);
-        setVolumen(datos);
-        setAnalizando(false);
-        return;
-      }
-    } catch (err) {
-      console.warn("Error al leer caché de disco:", err);
-    }
-
-    setAnalizando(true);
-    setVolumen([]);
-
-    const unlistenChunk = await listen<[number | null, number[]]>(
-      "volumen_chunk",
-      (event) => {
-        const [chunkTrack, datos] = event.payload;
-        if (chunkTrack !== track_index) return; // descarta chunks de análisis anteriores
-        if (analisisVolumenRequestRef.current !== miRequestId) {
-          unlistenChunk();
-          return;
-        }
-        setVolumen((prev) => [...prev, ...datos]);
-      },
-    );
-
-    try {
-      const resultado = await invoke<number[]>("analizar_volumen", {
-        ruta,
-        trackIndex: track_index,
-      });
-      unlistenChunk();
-      if (analisisVolumenRequestRef.current !== miRequestId) return;
-      cachearVolumen(claveCache, resultado);
-      setVolumen(resultado);
-    } catch (err) {
-      unlistenChunk();
-      console.error("Error analizando volumen:", err);
-    } finally {
-      if (analisisVolumenRequestRef.current === miRequestId)
-        setAnalizando(false);
-    }
-  }
-
 
   async function cargarSrtDesdeRuta(path: string) {
     try {
@@ -594,11 +448,8 @@ function App() {
       setHablantes(proyecto.hablantes || []);
       setSelectedCaptionIds([]);
       // Descartar waveform/duración del proyecto anterior
-      analisisVolumenRequestRef.current++;
-      setVolumen([]);
-      setAnalizando(false);
+      onda.reiniciar();
       setVideoDuration(0);
-      waveformCacheRef.current.clear();
 
       const existe: boolean = await invoke("existe_archivo", {
         ruta: proyecto.ruta_video,
@@ -630,16 +481,13 @@ function App() {
     setVideoPath("");
     setRutaProyecto("");
     setVideoNoEncontrado(false);
-    setVolumen([]);
     setCaptions([]);
     setHablantes([]);
     setSelectedCaptionIds([]);
     playheadPendienteRef.current = null;
     // Descartar análisis en vuelo, waveform y duración del proyecto anterior
-    analisisVolumenRequestRef.current++;
-    setAnalizando(false);
+    onda.reiniciar();
     setVideoDuration(0);
-    waveformCacheRef.current.clear();
     windowStartRef.current = 0;
     windowTargetRef.current = 0;
     updateScrollbarThumb(0, windowSecondsRef.current, 0);
@@ -1205,7 +1053,7 @@ function App() {
   // Duración de un fragmento nuevo: usa la isla de audio (fin del diálogo
   // bajo el playhead) si hay análisis de volumen; fallback a ISLA_FALLBACK.
   function duracionFragmento(inicio: number): number {
-    const finIsla = buscarFinIslaAudio(volumenRef.current, inicio);
+    const finIsla = buscarFinIslaAudio(onda.volumenRef.current, inicio);
     return finIsla !== null ? finIsla - inicio : ISLA_FALLBACK;
   }
 
@@ -2211,7 +2059,7 @@ function App() {
       ctx.fillText(`${m}:${String(s).padStart(2, "0")}`, x + 3, 3);
     }
 
-    const vol = volumenRef.current;
+    const vol = onda.volumenRef.current;
     if (vol.length > 0 && waveformPreRenderRef.current) {
       const wfCanvas = waveformPreRenderRef.current;
       const sxFloat = ws * VENTANAS_POR_SEGUNDO;
@@ -2940,8 +2788,8 @@ function App() {
           )}
           <div className="timelineToolbar">
             <span className="zoomLabel">
-              {analizando
-                ? t("app.timeline.analyzing", { seconds: (volumen.length / VENTANAS_POR_SEGUNDO).toFixed(0) })
+              {onda.analizando
+                ? t("app.timeline.analyzing", { seconds: (onda.volumen.length / VENTANAS_POR_SEGUNDO).toFixed(0) })
                 : t("app.timeline.zoom", { seconds: windowSeconds.toFixed(1) })}
             </span>
             <button
