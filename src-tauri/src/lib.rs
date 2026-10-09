@@ -385,11 +385,11 @@ async fn listar_fuentes_sistema() -> Result<Vec<String>, String> {
         // entradas multi-familia vienen separadas por coma). Sin deps nuevas.
         #[cfg(target_os = "linux")]
         {
-            return Ok(familias_fc_list());
+            Ok(familias_fc_list())
         }
         #[cfg(not(any(target_os = "windows", target_os = "linux")))]
         {
-            return Ok(Vec::new());
+            Ok(Vec::new())
         }
     })
     .await
