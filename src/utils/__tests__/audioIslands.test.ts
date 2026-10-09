@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buscarFinIslaAudio, compactarWaveform } from "../audioIslands";
+import { buscarFinIslaAudio, picoEnRango } from "../audioIslands";
 
 const VPS = 15;
 
@@ -73,28 +73,22 @@ describe("buscarFinIslaAudio", () => {
   });
 });
 
-describe("compactarWaveform", () => {
-  it("devuelve el mismo array cuando cabe en el máximo", () => {
-    const vol = [0.1, 0.5, 0.3];
-    expect(compactarWaveform(vol, 4096)).toEqual([0.1, 0.5, 0.3]);
+describe("picoEnRango", () => {
+  // vol de 1s exacto a 15 vps: vol[i] = i/100.
+  const vol = Array.from({ length: 15 }, (_, i) => i / 100);
+
+  it("toma el pico de las ventanas intersectadas", () => {
+    // [0.2s, 0.4s) cubre ventanas 3..6 → pico 0.05.
+    expect(picoEnRango(vol, 0.2, 0.4)).toBeCloseTo(0.05, 6);
   });
 
-  it("topa el largo al máximo preservando picos", () => {
-    // 100 ventanas, 10 de salida: cada píxel cubre 10 ventanas con un pico.
-    const vol = new Array(100).fill(0.01);
-    vol[5] = 0.9;
-    vol[95] = 0.8;
-    const out = compactarWaveform(vol, 10);
-    expect(out).toHaveLength(10);
-    expect(out[0]).toBe(0.9);
-    expect(out[9]).toBe(0.8);
+  it("devuelve 0 fuera del audio o con entrada vacía", () => {
+    expect(picoEnRango(vol, 5.0, 6.0)).toBe(0);
+    expect(picoEnRango([], 0.0, 1.0)).toBe(0);
   });
 
-  it("devuelve vacío con entrada vacía", () => {
-    expect(compactarWaveform([], 4096)).toEqual([]);
-  });
-
-  it("un maxW de 1 colapsa todo al pico global", () => {
-    expect(compactarWaveform([0.1, 0.9, 0.3], 1)).toEqual([0.9]);
+  it("un rango menor a una ventana evalúa esa ventana", () => {
+    // 0.005s dentro de la ventana 7 (0.07).
+    expect(picoEnRango(vol, 0.47, 0.475)).toBeCloseTo(0.07, 6);
   });
 });

@@ -43,7 +43,7 @@ import {
   findSnapTime,
 } from "./utils/captions";
 import { filtrarPorMarquee, captionRowIndex, filasDestinoRelativas } from "./utils/selection";
-import { buscarFinIslaAudio } from "./utils/audioIslands";
+import { buscarFinIslaAudio, picoEnRango } from "./utils/audioIslands";
 import { cargarAjustes, guardarAjustes } from "./utils/ajustes";
 
 import { useHistory } from "./hooks/useHistory";
@@ -150,7 +150,6 @@ function App() {
 
   const hablantesRef = useRef<Hablante[]>([]);
   const speakerMapRef = useRef<Map<string, Hablante>>(new Map());
-  const waveformPreRenderRef = useRef<HTMLCanvasElement | null>(null);
   const currentCaptionIdxRef = useRef<number>(-1);
 
   const rutaProyectoRef = useRef("");
@@ -209,8 +208,8 @@ function App() {
     notify,
     alExportar: cerrarAssModal,
   });
-  // Slice 2 del monolito: waveform (análisis + caché + prerender).
-  const onda = useWaveform({ waveformPreRenderRef });
+  // Slice 2 del monolito: waveform (análisis + caché).
+  const onda = useWaveform();
   const playheadFrameSkipRef = useRef(0);
   const dragScrollVelocityRef = useRef(0);
   // Auto-scroll vertical del trackArea durante el marquee (px/s). El pan
@@ -2065,26 +2064,33 @@ function App() {
       ctx.fillText(`${m}:${String(s).padStart(2, "0")}`, x + 3, 3);
     }
 
+    // Waveform en tiempo real: por cada píxel visible se agrega el pico del
+    // tramo [t0,t1). Sin canvas de prerender topado: vale para cualquier
+    // duración y la precisión es la del dato (1/15 s) a cualquier zoom.
     const vol = onda.volumenRef.current;
-    if (vol.length > 0 && waveformPreRenderRef.current) {
-      const wfCanvas = waveformPreRenderRef.current;
-      // El prerender puede ir compactado (videos largos): escalar la posición
-      // de ventanas a píxeles del canvas. Sin compactar la escala es 1.
-      const escala = wfCanvas.width / vol.length;
-      const sxFloat = ws * VENTANAS_POR_SEGUNDO * escala;
-      const sx = Math.max(0, Math.floor(sxFloat));
-      const frac = sxFloat - sx;
-      const sw = Math.min(
-        wfCanvas.width - sx,
-        Math.ceil(wSec * VENTANAS_POR_SEGUNDO * escala) + 1,
-      );
-      if (sw > 1) {
-        ctx.imageSmoothingEnabled = false;
-        ctx.save();
-        ctx.translate(-frac * ((width - TRACK_LABEL_W) / sw), 0);
-        ctx.drawImage(wfCanvas, sx, 0, sw, 90, TRACK_LABEL_W, 0, width - TRACK_LABEL_W, height);
-        ctx.restore();
-        ctx.imageSmoothingEnabled = true;
+    if (vol.length > 0) {
+      const PISO_DB = -50;
+      const TECHO_DB = 0;
+      const barHeight = height * 0.85;
+      const x0 = TRACK_LABEL_W;
+      const pxW = Math.max(1, Math.floor(width - TRACK_LABEL_W));
+      for (let px = 0; px < pxW; px++) {
+        const t0 = ws + (px / pxW) * wSec;
+        const t1 = ws + ((px + 1) / pxW) * wSec;
+        const amp = picoEnRango(vol, t0, t1);
+        const db = 20 * Math.log10(Math.max(amp, 1e-5));
+        const normalizado = Math.max(
+          0,
+          Math.min(1, (db - PISO_DB) / (TECHO_DB - PISO_DB)),
+        );
+        const barH = Math.max(1, normalizado * barHeight);
+        const y0 = Math.floor((height - barH) / 2);
+        const y1 = Math.ceil((height + barH) / 2);
+        const r = Math.min(255, Math.floor(normalizado * 2 * 255));
+        const g = Math.min(255, Math.floor((2 - normalizado * 2) * 255));
+        const b = Math.max(0, Math.floor((1 - normalizado * 1.5) * 255));
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fillRect(x0 + px, y0, 1, y1 - y0);
       }
     }
 

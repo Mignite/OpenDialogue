@@ -1,17 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { compactarWaveform } from "../utils/audioIslands";
-import { WAVEFORM_MAX_W } from "../utils/constants";
 
-// Waveform: análisis de volumen (symphonia vía IPC) + caché + prerender.
+// Waveform: análisis de volumen (symphonia vía IPC) + caché en memoria.
+// El dibujado es en tiempo real desde `volumen` (ver drawCanvasFrame): sin
+// prerender topado, vale para cualquier duración.
 // El mirror bare `volumenRef = volumen` se queda en App (regla transversal:
 // un solo mirror); este hook expone el ref para los lectores en rAF.
-export function useWaveform({
-  waveformPreRenderRef,
-}: {
-  waveformPreRenderRef: { current: HTMLCanvasElement | null };
-}) {
+export function useWaveform() {
   const [volumen, setVolumen] = useState<number[]>([]);
   const [analizando, setAnalizando] = useState<boolean>(false);
   const volumenRef = useRef<number[]>([]);
@@ -132,64 +128,6 @@ export function useWaveform({
       if (enCursoRef.current === ruta) enCursoRef.current = null;
     }
   }
-
-  useEffect(() => {
-    const vol = volumen;
-    if (vol.length === 0) {
-      waveformPreRenderRef.current = null;
-      return;
-    }
-    // Mientras llegan chunks, saltar el prerender: se regenera una sola vez
-    // al terminar el análisis (volumen + analizando actualizan en el mismo batch).
-    if (analizando) return;
-    // El canvas no puede superar WAVEFORM_MAX_W px (los navegadores lo matan
-    // sin error): en videos largos se compacta preservando picos. El dibujado
-    // mapea con escala (ver drawCanvasFrame), así que el tiempo no se mueve.
-    const datos = compactarWaveform(vol, WAVEFORM_MAX_W);
-    const PISO_DB = -50;
-    const TECHO_DB = 0;
-    const height = 90;
-    const w = datos.length;
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      waveformPreRenderRef.current = null;
-      return;
-    }
-
-    const imageData = ctx.createImageData(w, height);
-    const data = imageData.data;
-    const barHeight = height * 0.85;
-
-    for (let x = 0; x < w; x++) {
-      const amp = datos[x];
-      const db = 20 * Math.log10(Math.max(amp, 1e-5));
-      const normalizado = Math.max(
-        0,
-        Math.min(1, (db - PISO_DB) / (TECHO_DB - PISO_DB)),
-      );
-      const barH = Math.max(1, normalizado * barHeight);
-      const y0 = Math.floor((height - barH) / 2);
-      const y1 = Math.ceil((height + barH) / 2);
-
-      const r = Math.min(255, Math.floor(normalizado * 2 * 255));
-      const g = Math.min(255, Math.floor((2 - normalizado * 2) * 255));
-      const b = Math.max(0, Math.floor((1 - normalizado * 1.5) * 255));
-
-      for (let y = y0; y < y1 && y < height; y++) {
-        const idx = (y * w + x) * 4;
-        data[idx] = r;
-        data[idx + 1] = g;
-        data[idx + 2] = b;
-        data[idx + 3] = 255;
-      }
-    }
-
-    ctx.putImageData(imageData, 0, 0);
-    waveformPreRenderRef.current = canvas;
-  }, [volumen, analizando, waveformPreRenderRef]);
 
   return { volumen, analizando, volumenRef, analizarVolumenDe, reiniciar, estaEnAnalisis };
 }

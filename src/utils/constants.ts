@@ -1,10 +1,6 @@
 import type { PresetAss } from "../types";
 
 export const VENTANAS_POR_SEGUNDO = 15;
-// Ancho máximo del canvas de prerender del waveform: los navegadores matan
-// canvas de más de ~32767 px por lado (sin error), y un video de 100 min da
-// ~90k ventanas. 4096 es seguro en todos los motores incluido WebKitGTK.
-export const WAVEFORM_MAX_W = 4096;
 export const EXT_VIDEO = [".mp4", ".mov", ".avi", ".mkv"];
 export const EDGE_TRIGGER = 0.92;
 export const NEW_MARGIN = 0.08;

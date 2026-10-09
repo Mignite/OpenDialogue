@@ -57,21 +57,15 @@ export function buscarFinIslaAudio(
   return fin;
 }
 
-// Reduce el waveform a como máximo maxW muestras preservando picos: cada
-// píxel de salida toma el MÁXIMO de su tramo (mejor que la media para ver
-// diálogo). Si ya cabe, devuelve el mismo contenido. Existe porque el canvas
-// de prerender no puede superar WAVEFORM_MAX_W píxeles de ancho.
-export function compactarWaveform(vol: number[], maxW: number): number[] {
-  if (vol.length <= maxW) return [...vol];
-  const out: number[] = new Array(maxW);
-  for (let i = 0; i < maxW; i++) {
-    const desde = Math.floor((i * vol.length) / maxW);
-    const hasta = Math.max(desde + 1, Math.floor(((i + 1) * vol.length) / maxW));
-    let pico = 0;
-    for (let j = desde; j < hasta && j < vol.length; j++) {
-      if (vol[j] > pico) pico = vol[j];
-    }
-    out[i] = pico;
+// Pico del RMS en [t0, t1): agregación por píxel para el dibujado en tiempo
+// real (sin prerender topado). Fuera del audio o vacío → 0.
+export function picoEnRango(vol: number[], t0: number, t1: number): number {
+  const vps = VENTANAS_POR_SEGUNDO;
+  const a = Math.max(0, Math.floor(t0 * vps));
+  const b = Math.min(vol.length, Math.max(a + 1, Math.ceil(t1 * vps)));
+  let pico = 0;
+  for (let i = a; i < b; i++) {
+    if (vol[i] > pico) pico = vol[i];
   }
-  return out;
+  return pico;
 }
