@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buscarFinIslaAudio } from "../audioIslands";
+import { buscarFinIslaAudio, compactarWaveform } from "../audioIslands";
 
 const VPS = 15;
 
@@ -70,5 +70,31 @@ describe("buscarFinIslaAudio", () => {
     const fin = buscarFinIslaAudio(vol, 0.0);
     expect(fin).not.toBeNull();
     expect(fin!).toBeCloseTo(3.0, 1);
+  });
+});
+
+describe("compactarWaveform", () => {
+  it("devuelve el mismo array cuando cabe en el máximo", () => {
+    const vol = [0.1, 0.5, 0.3];
+    expect(compactarWaveform(vol, 4096)).toEqual([0.1, 0.5, 0.3]);
+  });
+
+  it("topa el largo al máximo preservando picos", () => {
+    // 100 ventanas, 10 de salida: cada píxel cubre 10 ventanas con un pico.
+    const vol = new Array(100).fill(0.01);
+    vol[5] = 0.9;
+    vol[95] = 0.8;
+    const out = compactarWaveform(vol, 10);
+    expect(out).toHaveLength(10);
+    expect(out[0]).toBe(0.9);
+    expect(out[9]).toBe(0.8);
+  });
+
+  it("devuelve vacío con entrada vacía", () => {
+    expect(compactarWaveform([], 4096)).toEqual([]);
+  });
+
+  it("un maxW de 1 colapsa todo al pico global", () => {
+    expect(compactarWaveform([0.1, 0.9, 0.3], 1)).toEqual([0.9]);
   });
 });

@@ -2068,12 +2068,15 @@ function App() {
     const vol = onda.volumenRef.current;
     if (vol.length > 0 && waveformPreRenderRef.current) {
       const wfCanvas = waveformPreRenderRef.current;
-      const sxFloat = ws * VENTANAS_POR_SEGUNDO;
+      // El prerender puede ir compactado (videos largos): escalar la posición
+      // de ventanas a píxeles del canvas. Sin compactar la escala es 1.
+      const escala = wfCanvas.width / vol.length;
+      const sxFloat = ws * VENTANAS_POR_SEGUNDO * escala;
       const sx = Math.max(0, Math.floor(sxFloat));
       const frac = sxFloat - sx;
       const sw = Math.min(
         wfCanvas.width - sx,
-        Math.ceil(wSec * VENTANAS_POR_SEGUNDO) + 1,
+        Math.ceil(wSec * VENTANAS_POR_SEGUNDO * escala) + 1,
       );
       if (sw > 1) {
         ctx.imageSmoothingEnabled = false;

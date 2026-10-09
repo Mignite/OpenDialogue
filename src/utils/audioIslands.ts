@@ -56,3 +56,22 @@ export function buscarFinIslaAudio(
   if (fin < finMin) fin = finMin;
   return fin;
 }
+
+// Reduce el waveform a como máximo maxW muestras preservando picos: cada
+// píxel de salida toma el MÁXIMO de su tramo (mejor que la media para ver
+// diálogo). Si ya cabe, devuelve el mismo contenido. Existe porque el canvas
+// de prerender no puede superar WAVEFORM_MAX_W píxeles de ancho.
+export function compactarWaveform(vol: number[], maxW: number): number[] {
+  if (vol.length <= maxW) return [...vol];
+  const out: number[] = new Array(maxW);
+  for (let i = 0; i < maxW; i++) {
+    const desde = Math.floor((i * vol.length) / maxW);
+    const hasta = Math.max(desde + 1, Math.floor(((i + 1) * vol.length) / maxW));
+    let pico = 0;
+    for (let j = desde; j < hasta && j < vol.length; j++) {
+      if (vol[j] > pico) pico = vol[j];
+    }
+    out[i] = pico;
+  }
+  return out;
+}

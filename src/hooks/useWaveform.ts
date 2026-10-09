@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { compactarWaveform } from "../utils/audioIslands";
+import { WAVEFORM_MAX_W } from "../utils/constants";
 
 // Waveform: análisis de volumen (symphonia vía IPC) + caché + prerender.
 // El mirror bare `volumenRef = volumen` se queda en App (regla transversal:
@@ -140,10 +142,14 @@ export function useWaveform({
     // Mientras llegan chunks, saltar el prerender: se regenera una sola vez
     // al terminar el análisis (volumen + analizando actualizan en el mismo batch).
     if (analizando) return;
+    // El canvas no puede superar WAVEFORM_MAX_W px (los navegadores lo matan
+    // sin error): en videos largos se compacta preservando picos. El dibujado
+    // mapea con escala (ver drawCanvasFrame), así que el tiempo no se mueve.
+    const datos = compactarWaveform(vol, WAVEFORM_MAX_W);
     const PISO_DB = -50;
     const TECHO_DB = 0;
     const height = 90;
-    const w = vol.length;
+    const w = datos.length;
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = height;
@@ -158,7 +164,7 @@ export function useWaveform({
     const barHeight = height * 0.85;
 
     for (let x = 0; x < w; x++) {
-      const amp = vol[x];
+      const amp = datos[x];
       const db = 20 * Math.log10(Math.max(amp, 1e-5));
       const normalizado = Math.max(
         0,
