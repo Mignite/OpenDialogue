@@ -1,6 +1,6 @@
 [package]
 name = "opendialogue"
-version = "1.1.0"
+version = "1.1.1"
 description = "OpenDialogue — editor de subtítulos multi-hablante"
 authors = ["migue"]
 edition = "2021"

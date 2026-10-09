@@ -10,6 +10,22 @@ export function captionRowIndex(
   return idx === -1 ? 0 : idx + 1;
 }
 
+// Corrimiento relativo de carriles para el body drag en bloque: cada clip
+// conserva su offset respecto al lead. shift = filaDestinoLead -
+// filaOrigenLead; el destino se clampéa a [0, maxFila] (0 = sin asignar).
+// Solo cede la relación en los bordes, donde el clip que se saldría se queda.
+export function filasDestinoRelativas(
+  filasOrigen: Map<string, number>,
+  shift: number,
+  maxFila: number,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const [id, fila] of filasOrigen) {
+    out.set(id, Math.min(maxFila, Math.max(0, fila + shift)));
+  }
+  return out;
+}
+
 export interface RectMarquee {
   t1: number;
   t2: number;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { captionRowIndex, filtrarPorMarquee } from "../selection";
+import { captionRowIndex, filtrarPorMarquee, filasDestinoRelativas } from "../selection";
 import type { Caption, Hablante } from "../../types";
 
 function makeCap(id: string, inicio: number, fin: number, hablante_id: string | null = null): Caption {
@@ -61,5 +61,36 @@ describe("filtrarPorMarquee", () => {
     const caps = [makeCap("c1", 0, 1, "s1"), makeCap("c2", 10, 12, "s1")];
     const ids = filtrarPorMarquee(caps, hablantes, { t1: 2, t2: 9, fila1: 1, fila2: 1 });
     expect(ids).toEqual([]);
+  });
+});
+
+describe("filasDestinoRelativas", () => {
+  it("shifts every row by the same delta, preserving the pattern", () => {
+    const origen = new Map([["a", 1], ["b", 2], ["c", 3]]);
+    expect(filasDestinoRelativas(origen, 1, 5)).toEqual(new Map([["a", 2], ["b", 3], ["c", 4]]));
+  });
+
+  it("is identity with shift 0", () => {
+    const origen = new Map([["a", 0], ["b", 2]]);
+    expect(filasDestinoRelativas(origen, 0, 5)).toEqual(new Map([["a", 0], ["b", 2]]));
+  });
+
+  it("shifts negatively", () => {
+    const origen = new Map([["a", 2], ["b", 3]]);
+    expect(filasDestinoRelativas(origen, -2, 5)).toEqual(new Map([["a", 0], ["b", 1]]));
+  });
+
+  it("clamps at row 0 instead of going negative", () => {
+    const origen = new Map([["a", 0], ["b", 1]]);
+    expect(filasDestinoRelativas(origen, -1, 5)).toEqual(new Map([["a", 0], ["b", 0]]));
+  });
+
+  it("clamps at maxFila instead of overflowing", () => {
+    const origen = new Map([["a", 3], ["b", 2]]);
+    expect(filasDestinoRelativas(origen, 1, 3)).toEqual(new Map([["a", 3], ["b", 3]]));
+  });
+
+  it("returns empty for empty input", () => {
+    expect(filasDestinoRelativas(new Map(), 2, 5)).toEqual(new Map());
   });
 });

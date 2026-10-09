@@ -44,7 +44,7 @@ import {
   FormatOverlapReport,
   findSnapTime,
 } from "./utils/captions";
-import { filtrarPorMarquee, captionRowIndex } from "./utils/selection";
+import { filtrarPorMarquee, captionRowIndex, filasDestinoRelativas } from "./utils/selection";
 import { buscarFinIslaAudio } from "./utils/audioIslands";
 import { cargarAjustes, guardarAjustes } from "./utils/ajustes";
 
@@ -169,14 +169,21 @@ function App() {
     els: Map<string, HTMLElement>;
     filaOrigen: Map<string, number>;
     targetFila: number;
+    // Corrimiento vertical relativo al lead (targetFila - filaOrigen(lead)):
+    // el bloque conserva el patrón de hablantes (H1,H2,H3 -> H2,H3,H4).
+    shiftFila: number;
     lastX: number;
     lastY: number;
     ctrlDown: boolean;
   } | null>(null);
   const justFinishedBodyDragRef = useRef(false);
   const marqueeStateRef = useRef<{
-    startX: number;
-    startY: number;
+    // Ancla en coords de CONTENIDO (no de viewport): así el inicio no se
+    // mueve cuando el pan/scroll corre bajo el rectángulo.
+    t0: number;
+    fila0: number;
+    lastX: number;
+    lastY: number;
     active: boolean;
     modo: "replace" | "add" | "toggle";
   } | null>(null);
@@ -194,6 +201,9 @@ function App() {
   );
   const playheadFrameSkipRef = useRef(0);
   const dragScrollVelocityRef = useRef(0);
+  // Auto-scroll vertical del trackArea durante el marquee (px/s). El pan
+  // horizontal reusa dragScrollVelocityRef, igual que el body drag.
+  const marqueeScrollVelRef = useRef(0);
   const isDirtyRef = useRef(false);
   const [hayCambios, setHayCambios] = useState(false);
   const ignoreNextChangeRef = useRef(true);
@@ -1021,30 +1031,39 @@ function App() {
     if (deltaT < -lead.inicio) deltaT = -lead.inicio;
     bd.deltaT = deltaT;
     if (Math.abs(deltaT) > 0.002) bd.moved = true;
-    // Fila destino (para el salto vertical y la reasignación al soltar)
+    // Fila destino del lead (para el corrimiento relativo al soltar)
     const fila = Math.floor(
       (clientY - rect.top + area.scrollTop) / TRACK_H,
     );
     if (fila >= 0 && fila <= hablantesRef.current.length) {
       bd.targetFila = fila;
     }
+    // Corrimiento relativo: cada clip conserva su offset respecto al lead.
+    const shift = bd.targetFila - (bd.filaOrigen.get(bd.ids[0]) ?? 0);
+    bd.shiftFila = shift;
     // Un arrastre SOLO vertical (cambiar de carril sin mover en el tiempo)
     // también debe commitear: el moved no puede depender solo del deltaT.
-    if (bd.targetFila !== (bd.filaOrigen.get(bd.ids[0]) ?? 0)) {
+    if (shift !== 0) {
       bd.moved = true;
     }
     // Mover los clips con transform (sin re-render de React)
     const pxX = (deltaT / wSec) * areaWidth;
+    const destinos = filasDestinoRelativas(
+      bd.filaOrigen,
+      shift,
+      hablantesRef.current.length,
+    );
     for (const [id, el] of bd.els) {
       const fila0 = bd.filaOrigen.get(id) ?? 0;
-      const py = (bd.targetFila - fila0) * TRACK_H;
+      const py = ((destinos.get(id) ?? fila0) - fila0) * TRACK_H;
       el.style.transform = `translate(${pxX}px, ${py}px)`;
       el.style.zIndex = "30";
     }
-    // Highlight del track destino
+    // Highlight de los carriles destino reales (pueden ser varios)
+    const filasDestino = new Set(destinos.values());
     const tracks = Array.from(area.querySelectorAll<HTMLElement>(".track"));
     tracks.forEach((t, i) => {
-      t.classList.toggle("dropTarget", i === bd.targetFila);
+      t.classList.toggle("dropTarget", filasDestino.has(i));
     });
   }
 
@@ -1066,7 +1085,11 @@ function App() {
             ? Math.max(0, video.duration - windowSecondsRef.current)
             : 0;
 
-        if (isDraggingPlayheadRef.current || bodyDragRef.current) {
+        if (
+          isDraggingPlayheadRef.current ||
+          bodyDragRef.current ||
+          marqueeStateRef.current?.active
+        ) {
           const vel = dragScrollVelocityRef.current;
           if (vel !== 0) {
             const nuevo = Math.max(0, windowStartRef.current + vel * dt);
@@ -1083,6 +1106,19 @@ function App() {
             }
           } else {
             windowTargetRef.current = windowStartRef.current;
+          }
+          // Auto-scroll vertical del trackArea solo durante el marquee, y
+          // repintado: el inicio está anclado a contenido, así que el pan o
+          // el scroll lo mueven en pantalla aunque el cursor no se mueva.
+          // El mouseup combina el inicio anclado con el fin mapeado en vivo.
+          const msq = marqueeStateRef.current;
+          if (msq?.active) {
+            const areaQ = trackAreaRef.current;
+            const vv = marqueeScrollVelRef.current;
+            if (areaQ && vv !== 0) {
+              areaQ.scrollTop = Math.max(0, areaQ.scrollTop + vv * dt);
+            }
+            pintarMarquee();
           }
         } else if (
           autoFollowingRef.current &&
@@ -1330,11 +1366,16 @@ function App() {
   );
 
   // Mueve una selección de captions un deltaT (manteniendo cada duración).
-  // pushHistorial UNA vez: Ctrl+Z deshace todo el bloque.
+  // cambios reasigna hablantes por id (corrimiento relativo del body drag);
+  // ausente o vacío = solo tiempo. pushHistorial UNA vez: Ctrl+Z deshace el bloque.
   const moverCaptions = useCallback(
-    (ids: string[], deltaT: number, nuevoHablanteId?: string | null) => {
+    (
+      ids: string[],
+      deltaT: number,
+      cambios?: Map<string, string | null>,
+    ) => {
       if (ids.length === 0) return;
-      if (deltaT === 0 && nuevoHablanteId === undefined) return;
+      if (deltaT === 0 && (!cambios || cambios.size === 0)) return;
       pushHistorial();
       setCaptions((prev) => {
         const copy = prev.map((c) => {
@@ -1346,8 +1387,8 @@ function App() {
             inicio: nuevoInicio,
             fin: nuevoInicio + dur,
           };
-          if (nuevoHablanteId !== undefined) {
-            updated.hablante_id = nuevoHablanteId;
+          if (cambios && cambios.has(c.id)) {
+            updated.hablante_id = cambios.get(c.id) ?? null;
           }
           return updated;
         });
@@ -1509,6 +1550,30 @@ function App() {
     video.currentTime = clampedTime;
     isScrollingManuallyRef.current = false;
   }
+  // Pinta el overlay del marquee: el inicio está anclado a contenido
+  // (t0/fila0) y se proyecta a viewport con el ws/scrollTop VIVOS, así el
+  // rectángulo dice la verdad mientras el pan/scroll corre debajo. El fin
+  // es el puntero. Se llama en mousemove y en cada frame del rAF.
+  function pintarMarquee() {
+    const ms = marqueeStateRef.current;
+    const ov = marqueeOverlayRef.current;
+    const area = trackAreaRef.current;
+    if (!ms?.active || !ov || !area) return;
+    const rect = area.getBoundingClientRect();
+    const areaWidth = Math.max(1, area.clientWidth - TRACK_LABEL_W);
+    const wSec = windowSecondsRef.current;
+    const ws = windowStartRef.current;
+    const x0 =
+      rect.left + TRACK_LABEL_W + ((ms.t0 - ws) / wSec) * areaWidth;
+    const y0 = rect.top + ms.fila0 * TRACK_H - area.scrollTop;
+    const x1 = ms.lastX;
+    const y1 = ms.lastY;
+    ov.style.left = `${Math.min(x0, x1)}px`;
+    ov.style.top = `${Math.min(y0, y1)}px`;
+    ov.style.width = `${Math.abs(x1 - x0)}px`;
+    ov.style.height = `${Math.abs(y1 - y0)}px`;
+    ov.style.display = "block";
+  }
   // Manejar eventos del mouse para el playhead y bordes
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1593,14 +1658,40 @@ function App() {
 
       if (marqueeStateRef.current?.active) {
         const ms = marqueeStateRef.current;
-        const ov = marqueeOverlayRef.current;
-        if (ov) {
-          const x = Math.min(ms.startX, e.clientX);
-          const y = Math.min(ms.startY, e.clientY);
-          ov.style.left = `${x}px`;
-          ov.style.top = `${y}px`;
-          ov.style.width = `${Math.abs(e.clientX - ms.startX)}px`;
-          ov.style.height = `${Math.abs(e.clientY - ms.startY)}px`;
+        ms.lastX = e.clientX;
+        ms.lastY = e.clientY;
+        pintarMarquee();
+        // Auto-pan horizontal + auto-scroll vertical en los bordes para
+        // seleccionar más allá de lo visible (igual que el body drag). El
+        // mouseup ya lee windowStart/scrollTop vivos, así que el cálculo
+        // final sale correcto a través de scrolls sin más cambios.
+        const area = trackAreaRef.current;
+        if (area) {
+          const rect = area.getBoundingClientRect();
+          const wSec = windowSecondsRef.current;
+          const x = e.clientX - rect.left;
+          const edgeZone = 30;
+          const maxScrollSpeed = wSec * 0.5;
+          if (x < edgeZone) {
+            dragScrollVelocityRef.current =
+              -maxScrollSpeed * (1 - x / edgeZone);
+          } else if (x > rect.width - edgeZone) {
+            dragScrollVelocityRef.current =
+              maxScrollSpeed * ((x - (rect.width - edgeZone)) / edgeZone);
+          } else {
+            dragScrollVelocityRef.current = 0;
+          }
+          const y = e.clientY - rect.top;
+          const vZone = 24;
+          const maxVScroll = 600;
+          if (y < vZone) {
+            marqueeScrollVelRef.current = -maxVScroll * (1 - y / vZone);
+          } else if (y > rect.height - vZone) {
+            marqueeScrollVelRef.current =
+              maxVScroll * ((y - (rect.height - vZone)) / vZone);
+          } else {
+            marqueeScrollVelRef.current = 0;
+          }
         }
         return;
       }
@@ -1694,6 +1785,8 @@ function App() {
       if (marqueeStateRef.current?.active) {
         const ms = marqueeStateRef.current;
         marqueeStateRef.current = null;
+        dragScrollVelocityRef.current = 0;
+        marqueeScrollVelRef.current = 0;
         const ov = marqueeOverlayRef.current;
         if (ov) ov.style.display = "none";
         const area = trackAreaRef.current;
@@ -1710,9 +1803,9 @@ function App() {
             captionsRef.current,
             hablantesRef.current,
             {
-              t1: toT(ms.startX),
+              t1: ms.t0,
               t2: toT(_e.clientX),
-              fila1: Math.max(0, Math.floor(toFila(ms.startY))),
+              fila1: Math.max(0, Math.floor(ms.fila0)),
               fila2: Math.max(0, Math.floor(toFila(_e.clientY))),
             },
           );
@@ -1751,23 +1844,26 @@ function App() {
             .forEach((t) => t.classList.remove("dropTarget"));
         }
         if (bd.moved) {
-          let nuevoHablanteId: string | null | undefined = undefined;
+          // Reasignación relativa: cada clip va a su fila destino según el
+          // shift del lead; los que ya están en su destino no se tocan.
           const hablantes = hablantesRef.current;
-          const fila = bd.targetFila;
-          if (fila === 0) {
-            nuevoHablanteId = null;
-          } else if (fila > 0 && fila <= hablantes.length) {
-            nuevoHablanteId = hablantes[fila - 1].id;
-          }
-          // Si el destino coincide con el hablante actual de TODOS los
-          // clips seleccionados, no aplicar el cambio (idempotente).
-          const caps = captionsRef.current.filter((c) =>
-            bd.ids.includes(c.id),
+          const destinos = filasDestinoRelativas(
+            bd.filaOrigen,
+            bd.shiftFila,
+            hablantes.length,
           );
-          if (caps.every((c) => c.hablante_id === nuevoHablanteId)) {
-            nuevoHablanteId = undefined;
+          const cambios = new Map<string, string | null>();
+          for (const c of captionsRef.current) {
+            if (!bd.ids.includes(c.id)) continue;
+            if (!bd.filaOrigen.has(c.id)) continue; // sin el en DOM: no tocar
+            const fila = destinos.get(c.id) ?? 0;
+            const nuevoId =
+              fila === 0 ? null : (hablantes[fila - 1]?.id ?? null);
+            if (nuevoId !== (c.hablante_id ?? null)) {
+              cambios.set(c.id, nuevoId);
+            }
           }
-          moverCaptions(bd.ids, bd.deltaT, nuevoHablanteId);
+          moverCaptions(bd.ids, bd.deltaT, cambios);
           justFinishedBodyDragRef.current = true;
         }
         return;
@@ -2442,6 +2538,7 @@ function App() {
         els,
         filaOrigen,
         targetFila: captionRowIndex(cap.hablante_id, hablantesRef.current),
+        shiftFila: 0,
         lastX: e.clientX,
         lastY: e.clientY,
         ctrlDown: false,
@@ -2756,20 +2853,30 @@ function App() {
                   : e.ctrlKey || e.metaKey
                     ? "toggle"
                     : "replace";
+                const areaMd = trackAreaRef.current;
+                const rectMd = areaMd?.getBoundingClientRect();
+                const areaWMd = Math.max(
+                  1,
+                  (areaMd?.clientWidth ?? 1) - TRACK_LABEL_W,
+                );
                 marqueeStateRef.current = {
-                  startX: e.clientX,
-                  startY: e.clientY,
+                  t0: rectMd
+                    ? windowStartRef.current +
+                      ((e.clientX - rectMd.left - TRACK_LABEL_W) / areaWMd) *
+                        windowSecondsRef.current
+                    : windowStartRef.current,
+                  fila0: rectMd
+                    ? (e.clientY - rectMd.top + (areaMd?.scrollTop ?? 0)) /
+                      TRACK_H
+                    : 0,
+                  lastX: e.clientX,
+                  lastY: e.clientY,
                   active: true,
                   modo,
                 };
-                const ov = marqueeOverlayRef.current;
-                if (ov) {
-                  ov.style.left = `${e.clientX}px`;
-                  ov.style.top = `${e.clientY}px`;
-                  ov.style.width = "0px";
-                  ov.style.height = "0px";
-                  ov.style.display = "block";
-                }
+                dragScrollVelocityRef.current = 0;
+                marqueeScrollVelRef.current = 0;
+                pintarMarquee();
                 if (modo === "replace") {
                   setSelectedCaptionIds([]);
                 }
