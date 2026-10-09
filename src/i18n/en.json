@@ -9,8 +9,6 @@
   "app.transport.playPause": "Play / Pause",
   "app.transport.forward": "Forward 5s",
   "app.timeInput.title": "Click to edit, Enter to seek",
-  "app.trackSelector.title": "Select audio to use for waveform and transcription",
-  "app.trackSelector.extracting": "extracting audio...",
   "app.editor.multiSelected": "{count} selected",
   "app.editor.disabledMulti": "E disabled with multiple",
   "app.editor.editing": "Editing",

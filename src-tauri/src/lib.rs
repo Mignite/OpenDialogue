@@ -38,7 +38,7 @@ fn escribir_atomico(ruta: &std::path::Path, contenido: &[u8]) -> Result<(), Stri
 }
 
 // Hijos sin flash de consola: en Windows, cada proceso hijo de una app GUI
-// abre su propia ventana de consola por un instante (ffmpeg, powershell, reg).
+// abre su propia ventana de consola por un instante (powershell, reg).
 // CREATE_NO_WINDOW lo evita; los pipes (.output()) siguen funcionando igual.
 #[cfg(target_os = "windows")]
 fn comando_oculto(programa: &str) -> std::process::Command {
@@ -181,74 +181,6 @@ struct Proyecto {
     playhead: f64,
 }
 
-#[derive(Serialize)]
-struct TrackInfo {
-    index: usize,
-    nombre: String,
-    canales: u16,
-    sample_rate: u32,
-}
-
-#[tauri::command]
-async fn listar_tracks_audio(ruta: String) -> Result<Vec<TrackInfo>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        use symphonia::core::formats::FormatOptions;
-        use symphonia::core::io::MediaSourceStream;
-        use symphonia::core::meta::MetadataOptions;
-        use symphonia::core::probe::Hint;
-
-        let file = std::fs::File::open(&ruta).map_err(|e| e.to_string())?;
-        let mss = MediaSourceStream::new(Box::new(file), Default::default());
-        let mut hint = Hint::new();
-        if let Some(ext) = std::path::Path::new(&ruta)
-            .extension()
-            .and_then(|e| e.to_str())
-        {
-            hint.with_extension(ext);
-        }
-
-        let probed = symphonia::default::get_probe()
-            .format(
-                &hint,
-                mss,
-                &FormatOptions::default(),
-                &MetadataOptions::default(),
-            )
-            .map_err(|e| e.to_string())?;
-
-        let format = probed.format;
-        let mut resultado = Vec::new();
-
-        for (i, track) in format
-            .tracks()
-            .iter()
-            .filter(|t| t.codec_params.sample_rate.is_some())
-            .enumerate()
-        {
-            let canales = track
-                .codec_params
-                .channels
-                .map(|c| c.count() as u16)
-                .unwrap_or(2);
-            let sample_rate = track.codec_params.sample_rate.unwrap();
-            println!(
-                "[TRACKS] symphonia asigna índice {} al stream_id={:?} ({}ch, {}Hz)",
-                i, track.id, canales, sample_rate
-            );
-            resultado.push(TrackInfo {
-                index: i,
-                nombre: format!("Track {}", i + 1),
-                canales,
-                sample_rate,
-            });
-        }
-
-        Ok(resultado)
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
 #[tauri::command]
 fn guardar_proyecto(ruta: String, proyecto: Proyecto) -> Result<(), String> {
     let json = serde_json::to_string_pretty(&proyecto).map_err(|e| e.to_string())?;
@@ -270,16 +202,6 @@ fn existe_archivo(ruta: String) -> bool {
 #[tauri::command]
 fn leer_archivo_texto(ruta: String) -> Result<String, String> {
     std::fs::read_to_string(&ruta).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn verificar_ffmpeg() -> bool {
-    // Async para no congelar el hilo principal mientras arranca ffmpeg.
-    tauri::async_runtime::spawn_blocking(|| {
-        comando_oculto("ffmpeg").arg("-version").output().is_ok()
-    })
-    .await
-    .unwrap_or(false)
 }
 
 #[tauri::command]
@@ -429,102 +351,6 @@ async fn analizar_volumen(
 }
 
 #[tauri::command]
-async fn extraer_audio_stream(
-    app: tauri::AppHandle,
-    ruta_video: String,
-    audio_track_index: usize,
-) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || -> Result<String, String> {
-        let cache_key = calcular_cache_key(&ruta_video)?;
-        let temp_dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
-        std::fs::create_dir_all(&temp_dir).map_err(|e| e.to_string())?;
-        let output_file = temp_dir.join(format!("audio_v2_{}_{}.m4a", cache_key, audio_track_index));
-        // Se escribe a un .part y se renombra al final: un crash de ffmpeg a
-        // mitad nunca deja un cache truncado que parezca válido para siempre.
-        let output_part = output_file.with_extension("part");
-
-        if output_file.exists() {
-            println!(
-                "[AUDIO_EXTRACT] Cache HIT para track={}, archivo={:?}",
-                audio_track_index, output_file
-            );
-            return Ok(output_file.to_string_lossy().to_string());
-        }
-
-        println!(
-            "[AUDIO_EXTRACT] ffmpeg -i \"{}\" -vn -c:a copy -map 0:a:{} -movflags +faststart -y \"{}\"",
-            ruta_video, audio_track_index, output_part.display()
-        );
-
-        let map_arg = format!("0:a:{}", audio_track_index);
-        // -f mp4 explícito: el muxer se elige por la extensión del archivo y
-        // ".part" no la tiene (ffmpeg 9 falla con "Unable to choose an output
-        // format"). El rename final a .m4a preserva el formato.
-        let mut output = comando_oculto("ffmpeg")
-            .args([
-                "-i",
-                &ruta_video,
-                "-vn",
-                "-c:a",
-                "copy",
-                "-map",
-                &map_arg,
-                "-movflags",
-                "+faststart",
-                "-f",
-                "mp4",
-                "-y",
-                output_part.to_str().ok_or("Ruta de salida inválida")?,
-            ])
-            .output()
-            .map_err(|e| format!("Error ejecutando ffmpeg: {}", e))?;
-
-        if !output.status.success() {
-            // Codec no soportado en contenedor destino: reintentar transcode a AAC
-            println!(
-                "[AUDIO_EXTRACT] copy falló ({}), reintentando con AAC...",
-                String::from_utf8_lossy(&output.stderr).lines().next().unwrap_or("")
-            );
-            let _ = std::fs::remove_file(&output_part);
-            output = comando_oculto("ffmpeg")
-                .args([
-                    "-i",
-                    &ruta_video,
-                    "-vn",
-                    "-c:a",
-                    "aac",
-                    "-b:a",
-                    "192k",
-                    "-map",
-                    &map_arg,
-                    "-movflags",
-                    "+faststart",
-                    "-f",
-                    "mp4",
-                    "-y",
-                    output_part.to_str().ok_or("Ruta de salida inválida")?,
-                ])
-                .output()
-                .map_err(|e| format!("Error ejecutando ffmpeg: {}", e))?;
-            if !output.status.success() {
-                let _ = std::fs::remove_file(&output_part);
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(format!("FFmpeg falló (copy y AAC): {}", stderr));
-            }
-        }
-
-        std::fs::rename(&output_part, &output_file).map_err(|e| {
-            let _ = std::fs::remove_file(&output_part);
-            format!("Error finalizando extracción: {}", e)
-        })?;
-
-        Ok(output_file.to_string_lossy().to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-#[tauri::command]
 fn escribir_archivo_texto(ruta: String, contenido: String) -> Result<(), String> {
     escribir_atomico(std::path::Path::new(&ruta), contenido.as_bytes())
 }
@@ -540,9 +366,9 @@ fn escribir_archivo_texto(ruta: String, contenido: String) -> Result<(), String>
 /// del frontend descarta midiendo pero no puede renombrar.
 #[tauri::command]
 async fn listar_fuentes_sistema() -> Result<Vec<String>, String> {
-    // Async + spawn_blocking (igual que listar_tracks_audio): powershell
-    // tarda ~400 ms y como comando sync congelaba el hilo principal al abrir
-    // la app (el panel de Estilos pide las fuentes al montar).
+    // Async + spawn_blocking: powershell tarda ~400 ms y como comando
+    // sync congelaba el hilo principal al abrir la app (el panel de
+    // Estilos pide las fuentes al montar).
     tauri::async_runtime::spawn_blocking(|| {
         // Windows: GDI+ da las familias reales (ver doc arriba).
         #[cfg(target_os = "windows")]
@@ -653,9 +479,6 @@ pub fn run() {
             escribir_archivo_en_carpeta,
             existe_cache_volumen,
             cargar_cache_volumen,
-            listar_tracks_audio,
-            extraer_audio_stream,
-            verificar_ffmpeg,
             listar_fuentes_sistema,
         ])
         .setup(|app| {

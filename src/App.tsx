@@ -14,7 +14,6 @@ import type {
   Hablante,
   Caption,
   Proyecto,
-  TrackInfo,
   PresetAss,
 } from "./types";
 import {
@@ -93,15 +92,12 @@ function App() {
     useState<boolean>(false);
   const [timeInputValue, setTimeInputValue] = useState<string>("");
   const [editandoTiempo, setEditandoTiempo] = useState<boolean>(false);
-  const [extrayendo, setExtrayendo] = useState<boolean>(false);
   const [autoFollowing, setAutoFollowing] = useState<boolean>(true);
   const autoFollowingRef = useRef(true);
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const isScrollingManuallyRef = useRef(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [audioSrc, setAudioSrc] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -202,24 +198,22 @@ function App() {
   const [hayCambios, setHayCambios] = useState(false);
   const ignoreNextChangeRef = useRef(true);
 
-  const [tracks, setTracks] = useState<TrackInfo[]>([]);
-  const [trackSeleccionado, setTrackSeleccionado] = useState<number | null>(
-    null,
-  );
-
-  async function cargarTracks(ruta: string) {
-    try {
-      const lista = await invoke<TrackInfo[]>("listar_tracks_audio", { ruta });
-      if (videoPathRef.current !== ruta) return; // se abrió otro video mientras tanto
-      setTracks(lista);
-      if (lista.length > 0) {
-        setTrackSeleccionado(lista[0].index); // para waveform y remuxeo
-      } else {
-        setTrackSeleccionado(null);
-      }
-    } catch (err) {
-      console.error("Error cargando tracks:", err);
-    }
+  function cargarVideoDesdeRuta(path: string) {
+    console.log(`[DEBUG APP] cargarVideoDesdeRuta -> path=${path}`);
+    setVideoPath(path);
+    setVideoSrc(convertFileSrc(path));
+    setVideoNoEncontrado(false);
+    windowStartRef.current = 0;
+    windowTargetRef.current = 0;
+    updateScrollbarThumb(0, windowSecondsRef.current, 0);
+    // Descartar análisis/volumen/duración del video anterior (un análisis en
+    // vuelo del video viejo ya no puede pintar su waveform acá)
+    analisisVolumenRequestRef.current++;
+    setVolumen([]);
+    setAnalizando(false);
+    setVideoDuration(0);
+    waveformCacheRef.current.clear();
+    analizarVolumenDe(path);
   }
 
   useEffect(() => {
@@ -329,11 +323,10 @@ function App() {
     }
   }
 
-  async function analizarVolumenDe(ruta: string, track_index?: number) {
-    if (track_index === undefined) {
-      console.warn("analizarVolumenDe llamado sin track_index");
-      return;
-    }
+  async function analizarVolumenDe(ruta: string) {
+    // Single-track: siempre la pista 0 (el video llega pre-editado con solo
+    // diálogo). Sin selector de pista ni extracción: el video suena directo.
+    const track_index = 0;
 
     const claveCache = `${ruta}::${track_index}`;
     const miRequestId = ++analisisVolumenRequestRef.current;
@@ -401,26 +394,6 @@ function App() {
     }
   }
 
-  function cargarVideoDesdeRuta(path: string) {
-    console.log(`[DEBUG APP] cargarVideoDesdeRuta -> path=${path}`);
-    setVideoPath(path);
-    setVideoSrc(convertFileSrc(path));
-    setVideoNoEncontrado(false);
-    windowStartRef.current = 0;
-    windowTargetRef.current = 0;
-    updateScrollbarThumb(0, windowSecondsRef.current, 0);
-    setTracks([]);
-    setTrackSeleccionado(null);
-    setAudioSrc(null);
-    // Descartar análisis/volumen/duración del video anterior (un análisis en
-    // vuelo del video viejo ya no puede pintar su waveform acá)
-    analisisVolumenRequestRef.current++;
-    setVolumen([]);
-    setAnalizando(false);
-    setVideoDuration(0);
-    waveformCacheRef.current.clear();
-    cargarTracks(path);
-  }
 
   async function cargarSrtDesdeRuta(path: string) {
     try {
@@ -596,9 +569,6 @@ function App() {
       setRutaProyecto(path);
       setCaptions(proyecto.captions || []);
       setHablantes(proyecto.hablantes || []);
-      setTracks([]);
-      setTrackSeleccionado(null);
-      setAudioSrc(null);
       setSelectedCaptionIds([]);
       // Descartar waveform/duración del proyecto anterior
       analisisVolumenRequestRef.current++;
@@ -640,9 +610,6 @@ function App() {
     setVolumen([]);
     setCaptions([]);
     setHablantes([]);
-    setTracks([]);
-    setTrackSeleccionado(null);
-    setAudioSrc(null);
     setSelectedCaptionIds([]);
     playheadPendienteRef.current = null;
     // Descartar análisis en vuelo, waveform y duración del proyecto anterior
@@ -1004,81 +971,26 @@ function App() {
     }
   }, [videoSrc]);
 
+  // El video suena directo (single-track): sin elemento <audio> aparte no
+  // hay nada que sincronizar. Solo se refleja play/pause en el botón.
   useEffect(() => {
     const video = videoRef.current;
-    const audio = audioRef.current;
-    if (!video || !audio) return;
+    if (!video) return;
 
     const onPlay = () => {
       setReproduciendo(true);
-      audio.play().catch(() => {});
     };
     const onPause = () => {
       setReproduciendo(false);
-      audio.pause();
-    };
-    const onSeeked = () => {
-      if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
-        if (Math.abs(audio.currentTime - video.currentTime) > 0.5) {
-          audio.currentTime = video.currentTime;
-        }
-      }
     };
 
     video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause);
-    video.addEventListener("seeked", onSeeked);
     return () => {
       video.removeEventListener("play", onPlay);
       video.removeEventListener("pause", onPause);
-      video.removeEventListener("seeked", onSeeked);
     };
-  }, [videoSrc, audioSrc]);
-  useEffect(() => {
-    const video = videoRef.current;
-    const audio = audioRef.current;
-    if (!video || !audio || !audioSrc) return;
-
-    // El sync escucha "canplay" SIN once: si el audio.play() se intentó antes
-    // de que el elemento estuviera listo (NotSupportedError silenciado por el
-    // catch), el siguiente canplay reintenta. Un sync con { once: true } se
-    // consume mientras el video está pausado y deja el audio mudo para siempre.
-    // El currentTime solo se ajusta si el desfase supera el umbral: resetearlo
-    // a cada canplay/seek del video (stalls de decodificación, seeks) hace que
-    // el audio tartamudee como un juego a bajos fps.
-    const UMBRAL_SYNC = 0.5;
-    const sync = () => {
-      if (Math.abs(audio.currentTime - video.currentTime) > UMBRAL_SYNC) {
-        audio.currentTime = video.currentTime;
-      }
-      if (!video.paused) {
-        audio.play().catch(() => {});
-      }
-    };
-
-    const onAudioError = () => {
-      console.error(
-        "[AUDIO] error del elemento audio:",
-        audio.error?.code,
-        audio.error?.message,
-        "src:",
-        audio.src,
-      );
-      // Reintentar la carga en vez de desmutear el video: desmutear dejaría
-      // dos fuentes sonando a la vez (combate de fase / tartamudeo).
-      audio.load();
-    };
-
-    if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
-      sync();
-    }
-    audio.addEventListener("canplay", sync);
-    audio.addEventListener("error", onAudioError);
-    return () => {
-      audio.removeEventListener("canplay", sync);
-      audio.removeEventListener("error", onAudioError);
-    };
-  }, [audioSrc]);
+  }, [videoSrc]);
 
   useEffect(() => {
     const el = timelineRef.current;
@@ -1086,37 +998,6 @@ function App() {
     el.addEventListener("wheel", handleWheelTimeline, { passive: false });
     return () => el.removeEventListener("wheel", handleWheelTimeline);
   }, []);
-
-  useEffect(() => {
-    if (
-      videoPathRef.current &&
-      trackSeleccionado !== null &&
-      tracks.length > 0
-    ) {
-      console.log(`[TRACK] Cambiando a track ${trackSeleccionado}`);
-
-      analizarVolumenDe(videoPathRef.current, trackSeleccionado);
-
-      const rutaAlPedir = videoPathRef.current;
-      setExtrayendo(true);
-      (async () => {
-        try {
-          const rutaAudio = await invoke<string>("extraer_audio_stream", {
-            rutaVideo: rutaAlPedir,
-            audioTrackIndex: trackSeleccionado,
-          });
-
-          if (videoPathRef.current !== rutaAlPedir) return;
-
-          setAudioSrc(convertFileSrc(rutaAudio));
-        } catch (err) {
-          console.error("Error extrayendo audio:", err);
-        } finally {
-          if (videoPathRef.current === rutaAlPedir) setExtrayendo(false);
-        }
-      })();
-    }
-  }, [trackSeleccionado, videoPath, tracks]);
 
   // Helper del body drag: aplica el transform de los clips arrastrados según
   // el TIEMPO bajo el cursor (ws + x→tiempo), no según píxeles acumulados,
@@ -1261,35 +1142,29 @@ function App() {
 
   function togglePlay() {
     const video = videoRef.current;
-    const audio = audioRef.current;
     if (!video) return;
     if (video.paused) {
       video.play().catch(() => {});
-      audio?.play().catch(() => {});
       setAutoFollowing(true);
       isScrollingManuallyRef.current = false;
     } else {
       video.pause();
-      audio?.pause();
     }
   }
 
   function saltar(delta: number) {
     const video = videoRef.current;
-    const audio = audioRef.current;
     if (!video) return;
     const newTime = Math.max(
       0,
       Math.min(video.duration || Infinity, video.currentTime + delta),
     );
     video.currentTime = newTime;
-    if (audio) audio.currentTime = newTime;
     isScrollingManuallyRef.current = false;
   }
 
   function saltarCaption(direccion: 1 | -1) {
     const video = videoRef.current;
-    const audio = audioRef.current;
     if (!video) return;
     const caps = sortedByStartRef.current;
     if (caps.length === 0) return;
@@ -1320,7 +1195,6 @@ function App() {
       newTime = lo > 0 ? caps[lo - 1].inicio + 0.01 : caps[0].inicio + 0.01;
     }
     video.currentTime = newTime;
-    if (audio) audio.currentTime = newTime;
     isScrollingManuallyRef.current = false;
   }
 
@@ -1448,10 +1322,8 @@ function App() {
       seleccionSola(id);
       const cap = captionsRef.current.find((c) => c.id === id);
       const video = videoRef.current;
-      const audio = audioRef.current;
       if (cap && video) {
         video.currentTime = cap.inicio;
-        if (audio) audio.currentTime = cap.inicio;
       }
     },
     [seleccionRango, toggleSeleccion, seleccionSola],
@@ -2663,7 +2535,6 @@ function App() {
                   ref={videoRef}
                   src={videoSrc}
                   className="videoPlayer"
-                  muted
                 />
                 {currentCaption && overlayStyle && (
                   <div className="videoSubOverlay" style={overlayStyle}>
@@ -2671,7 +2542,6 @@ function App() {
                   </div>
                 )}
               </div>
-              {audioSrc && <audio ref={audioRef} src={audioSrc} hidden />}
               <div className="playbackControls">
                 <div className="transportBtnGroup">
                   <button
@@ -2736,44 +2606,6 @@ function App() {
                   onKeyDown={handleTimeInputKeyDown}
                   title={t("app.timeInput.title")}
                 />
-                {tracks.length > 1 && (
-                  <div className="trackSelectorWrap">
-                    <select
-                      className="trackSelector"
-                      value={trackSeleccionado ?? ""}
-                      onChange={(e) =>
-                        setTrackSeleccionado(Number(e.target.value))
-                      }
-                      disabled={extrayendo}
-                      data-extracting={extrayendo || undefined}
-                      title={t("app.trackSelector.title")}
-                    >
-                      {tracks.map((t) => (
-                        <option key={t.index} value={t.index}>
-                          {t.nombre && t.nombre.trim() !== ""
-                            ? t.nombre
-                            : `Track ${t.index + 1}`}{" "}
-                          ({t.canales}ch, {t.sample_rate}Hz)
-                        </option>
-                      ))}
-                    </select>
-                    {extrayendo && (
-                      <span className="extractingIndicator">
-                        <svg
-                          className="icon sm spin"
-                          viewBox="0 0 16 16"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth={1.6}
-                          strokeLinecap="round"
-                        >
-                          <path d="M8 1.8a6.2 6.2 0 1 1-6.2 6.2" />
-                        </svg>
-                        {t("app.trackSelector.extracting")}
-                      </span>
-                    )}
-                  </div>
-                )}
               </div>
             </>
           ) : (

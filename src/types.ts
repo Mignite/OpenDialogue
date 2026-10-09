@@ -23,13 +23,6 @@ export interface Proyecto {
   playhead: number;
 }
 
-export interface TrackInfo {
-  index: number;
-  nombre: string;
-  sample_rate: number;
-  canales: number;
-}
-
 export interface OverlapEntry {
   inicio: number;
   fin: number;

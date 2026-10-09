@@ -25,7 +25,7 @@ Visual multi-speaker subtitle editor and color-coding companion for [auto-subs](
 - **ASS export** — styled `.ass` with per-speaker presets (font, size, colors, outline, margins, alignment), system font picker, round-trip import.
 - **auto-subs import** — pick the SRT, the twin TXT is found automatically (same folder/name). Speakers matched by text, accent/punctuation tolerant.
 - **Audio islands** — new fragments snap to the optimal dialogue length (1.5–5s) from RMS vs local background noise.
-- **Persistence** — `.json` projects with playhead, per-track audio, volume cache, atomic writes.
+- **Persistence** — `.json` projects with playhead, volume cache, atomic writes.
 
 ## Stack
 
@@ -35,7 +35,7 @@ Visual multi-speaker subtitle editor and color-coding companion for [auto-subs](
 | Frontend | React 19, TypeScript, Vite 7, Vitest 4 |
 | Styles | CSS design tokens (`:root`), local fonts `Space Grotesk` / `JetBrains Mono` / `Inter` |
 | Backend | Rust, `symphonia` (volume analysis), `tokio` (async commands) |
-| Audio | FFmpeg (extraction, required on PATH) |
+| Audio | The video's own audio track (single-track files; pre-edit to dialogue only) |
 | Fonts (ASS picker) | GDI+ via PowerShell on Windows, `fc-list` (fontconfig) on Linux |
 
 > Former AI era (until 2026-09-20): local Whisper (`whisper-rs`/Vulkan) + `polyvoice` diarization, later a `pyannote` external-Python option. Cut on purpose: transcription belongs to auto-subs; this app is its visual companion.
@@ -47,11 +47,10 @@ Visual multi-speaker subtitle editor and color-coding companion for [auto-subs](
 - **Rust** toolchain (`rustup`)
 - **Node.js** 20+ and npm
 - **Visual Studio Build Tools** with C++ workload (MSVC)
-- **FFmpeg** on PATH — `winget install Gyan.FFmpeg`; verify with `ffmpeg -version`
 
 ### Linux (verified on Fedora 44 KDE)
 
-- **Rust** toolchain (`rustup`), **Node.js** 20+ and npm, **FFmpeg** on PATH
+- **Rust** toolchain (`rustup`), **Node.js** 20+ and npm
 - WebView build deps (Fedora): `webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel libayatana-appindicator-gtk3-devel`
 - Equivalents on Debian/Ubuntu: `libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev`
 
@@ -100,7 +99,7 @@ Full shortcuts: press `?` inside the app. UI in English and Spanish (toggle in s
 ```
 src/
   App.tsx / App.css          # layout, canvas loop, keybindings, IPC
-  types.ts                   # Caption, Hablante, Proyecto, TrackInfo
+  types.ts                   # Caption, Hablante, Proyecto
   components/
     CaptionList.tsx          # virtualized list
     SpeakersPanel.tsx        # speakers accordion

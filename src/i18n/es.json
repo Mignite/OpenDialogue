@@ -9,8 +9,6 @@
   "app.transport.playPause": "Pausa / Reproducir",
   "app.transport.forward": "Adelantar 5s",
   "app.timeInput.title": "Click para editar, Enter para saltar ahí",
-  "app.trackSelector.title": "Selecciona el audio a usar en el waveform y transcripción",
-  "app.trackSelector.extracting": "extrayendo audio...",
   "app.editor.multiSelected": "{count} seleccionados",
   "app.editor.disabledMulti": "E deshabilitado con varios",
   "app.editor.editing": "Editando",
