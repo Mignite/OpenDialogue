@@ -157,6 +157,10 @@ struct Hablante {
     nombre: String,
     tecla: String,
     color: String,
+    // Estilo .ass elegido para el hablante (ver SpeakersPanel). Proyectos
+    // viejos no traen la clave → None (mismo patrón que playhead).
+    #[serde(default, rename = "presetId")]
+    preset_id: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -542,4 +546,34 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn proyecto_value(preset: Option<&str>) -> serde_json::Value {
+        let mut hablante =
+            serde_json::json!({"id": "h1", "nombre": "A", "tecla": "1", "color": "#fff"});
+        if let Some(pid) = preset {
+            hablante["presetId"] = pid.into();
+        }
+        serde_json::json!({"ruta_video": "v.mp4", "captions": [], "hablantes": [hablante]})
+    }
+
+    #[test]
+    fn preset_id_sobrevive_roundtrip() {
+        let p: Proyecto =
+            serde_json::from_value(proyecto_value(Some("p1"))).expect("parse");
+        assert_eq!(p.hablantes[0].preset_id.as_deref(), Some("p1"));
+        let de_vuelta = serde_json::to_string(&p).expect("serialize");
+        assert!(de_vuelta.contains("\"presetId\":\"p1\""));
+    }
+
+    #[test]
+    fn proyecto_viejo_sin_preset_id_ni_playhead() {
+        let p: Proyecto = serde_json::from_value(proyecto_value(None)).expect("parse");
+        assert_eq!(p.hablantes[0].preset_id, None);
+        assert_eq!(p.playhead, 0.0);
+    }
 }
