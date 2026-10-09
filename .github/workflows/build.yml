@@ -26,7 +26,11 @@ jobs:
           node-version: 24
           cache: npm
 
-      - uses: dtolnay/rust-toolchain@stable
+      # Toolchain PINEADO a 1.99.0 (== toolchain local, rustc 2026-09-28):
+      # `stable` rodante rompió fmt--check (el rustfmt nuevo une líneas que
+      # el local parte) y romperá clippy -D warnings con lints futuros.
+      # Para subir versión: alinear local (`rustup update`) y este pin juntos.
+      - uses: dtolnay/rust-toolchain@1.99.0
         with:
           components: rustfmt, clippy
 
@@ -86,7 +90,7 @@ jobs:
           node-version: 24
           cache: npm
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.99.0
 
       - run: npm ci
 
