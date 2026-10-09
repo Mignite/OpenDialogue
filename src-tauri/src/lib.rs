@@ -334,6 +334,12 @@ async fn analizar_volumen(
             let nuevo_chunk = resultados[ultimo_flush_idx..].to_vec();
             let _ = app.emit("volumen_chunk", (track_index, nuevo_chunk));
         }
+        // Blindaje: un container válido sin audio decodificable daría un
+        // .cache de 0 bytes que el loader rechazaría en cada apertura
+        // (re-análisis eterno). No se guarda; se informa.
+        if resultados.is_empty() {
+            return Err("El video no tiene audio decodificable".to_string());
+        }
         let _ = guardar_cache_volumen(&app, &ruta, track_index, &resultados);
 
         Ok(resultados)

@@ -15,15 +15,26 @@ export function useWaveform({
   const volumenRef = useRef<number[]>([]);
   const analisisVolumenRequestRef = useRef(0);
   const waveformCacheRef = useRef<Map<string, number[]>>(new Map());
+  // Ruta con análisis en curso (si hay). Reabrirla no duplica el trabajo:
+  // se deja el análisis y sus chunks en paz (ver estaEnAnalisis).
+  const enCursoRef = useRef<string | null>(null);
 
   // Descarta el análisis en vuelo y limpia el waveform (al abrir video,
   // proyecto o empezar uno nuevo). No toca duración ni ventana: eso es App.
   const reiniciar = useCallback(() => {
+    enCursoRef.current = null;
     analisisVolumenRequestRef.current++;
     setVolumen([]);
     setAnalizando(false);
     waveformCacheRef.current.clear();
   }, []);
+
+  // ¿Sigue corriendo el análisis de esta ruta? Para no pisarlo al reabrir
+  // el mismo video a mitad de análisis (el waveform continúa y completa).
+  const estaEnAnalisis = useCallback(
+    (ruta: string) => enCursoRef.current === ruta,
+    [],
+  );
 
   // Cache en memoria con tope: evita que una sesión larga acumule waveforms
   // de decenas de videos sin límite.
@@ -43,6 +54,12 @@ export function useWaveform({
     // diálogo). Sin selector de pista ni extracción: el video suena directo.
     const track_index = 0;
 
+    // Blindaje: si esta misma ruta ya se está analizando (reapertura a mitad
+    // de análisis), no duplicar ni resetear: los chunks en vuelo siguen
+    // llegando y el resultado se acepta con el requestId vigente.
+    if (enCursoRef.current === ruta) return;
+    enCursoRef.current = ruta;
+
     const claveCache = `${ruta}::${track_index}`;
     const miRequestId = ++analisisVolumenRequestRef.current;
 
@@ -50,6 +67,7 @@ export function useWaveform({
     if (cached) {
       setVolumen(cached);
       setAnalizando(false);
+      enCursoRef.current = null;
       return;
     }
 
@@ -69,6 +87,7 @@ export function useWaveform({
         cachearVolumen(claveCache, datos);
         setVolumen(datos);
         setAnalizando(false);
+        enCursoRef.current = null;
         return;
       }
     } catch (err) {
@@ -106,6 +125,9 @@ export function useWaveform({
     } finally {
       if (analisisVolumenRequestRef.current === miRequestId)
         setAnalizando(false);
+      // Las salidas obsoletas (stale) no limpian: el análisis vigente es de
+      // otra ruta (reiniciar ya limpió) o de esta misma en curso.
+      if (enCursoRef.current === ruta) enCursoRef.current = null;
     }
   }
 
@@ -163,5 +185,5 @@ export function useWaveform({
     waveformPreRenderRef.current = canvas;
   }, [volumen, analizando, waveformPreRenderRef]);
 
-  return { volumen, analizando, volumenRef, analizarVolumenDe, reiniciar };
+  return { volumen, analizando, volumenRef, analizarVolumenDe, reiniciar, estaEnAnalisis };
 }

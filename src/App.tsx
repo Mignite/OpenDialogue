@@ -228,6 +228,12 @@ function App() {
     windowStartRef.current = 0;
     windowTargetRef.current = 0;
     updateScrollbarThumb(0, windowSecondsRef.current, 0);
+    if (onda.estaEnAnalisis(path)) {
+      // Reapertura del mismo video a mitad de análisis: el análisis y sus
+      // chunks siguen en curso, no resetear el waveform (continuará y
+      // completará solo). Solo se reencuadra la vista.
+      return;
+    }
     // Descartar análisis/volumen del video anterior (un análisis en
     // vuelo del video viejo ya no puede pintar su waveform acá)
     onda.reiniciar();
