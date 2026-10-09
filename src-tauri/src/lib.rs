@@ -563,8 +563,7 @@ mod tests {
 
     #[test]
     fn preset_id_sobrevive_roundtrip() {
-        let p: Proyecto =
-            serde_json::from_value(proyecto_value(Some("p1"))).expect("parse");
+        let p: Proyecto = serde_json::from_value(proyecto_value(Some("p1"))).expect("parse");
         assert_eq!(p.hablantes[0].preset_id.as_deref(), Some("p1"));
         let de_vuelta = serde_json::to_string(&p).expect("serialize");
         assert!(de_vuelta.contains("\"presetId\":\"p1\""));
