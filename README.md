@@ -12,7 +12,7 @@ Visual multi-speaker subtitle editor and color-coding companion for [auto-subs](
 
 ## Screenshots
 
-![ColorDubber — per-speaker timeline and color coding](https://raw.githubusercontent.com/Mignite/ColorDubber/main/design/screenshot.png)
+![OpenDialogue — per-speaker timeline and color coding](design/screenshot.png)
 
 > See the approved design study in [`design/mockup.html`](design/mockup.html) (tokens, typography, per-speaker timeline).
 
@@ -103,6 +103,7 @@ src/
   components/
     CaptionList.tsx          # virtualized list
     SpeakersPanel.tsx        # speakers accordion
+    StylesPanel.tsx          # style presets accordion (auto-save)
     AssExportModal.tsx       # .ass export: presets, per-speaker mapping, font picker
   utils/
     srt.ts                   # parseSrt / buildSrt
@@ -112,10 +113,11 @@ src/
     autosubs.ts              # parseAutosubsTxt / text-match speaker assignment
     captions.ts              # findSnapTime, BuildOverlapReport
     time.ts                  # formatTime / parseTimeInput
-    selection.ts             # filtrarPorMarquee
+    selection.ts             # filtrarPorMarquee, filasDestinoRelativas
     audioIslands.ts          # buscarFinIslaAudio
     constants.ts             # PALETA, VENTANAS_POR_SEGUNDO, etc.
   hooks/useHistory.ts        # pushHistorial / deshacer / rehacer
+  i18n/en.json, es.json      # UI strings (es/en toggle)
 src-tauri/
   src/lib.rs                 # Tauri commands + menu + IPC
   Cargo.toml
@@ -129,11 +131,11 @@ design/
 ## Tests
 
 ```bash
-npm test          # vitest run — 127 tests (srt, time, captions, selection, audioIslands, autosubs, ass, assPresets)
+npm test          # vitest run — 151 tests (srt, time, captions, selection, audioIslands, autosubs, ass, assPresets)
 npm run build     # tsc + vite build (type gate)
 ```
 
-Rust has no linter configured; `cargo check` is fast.
+Rust: `cargo check` is fast; `cargo clippy --all-targets` and `cargo fmt --check` gate CI.
 
 ## License
 

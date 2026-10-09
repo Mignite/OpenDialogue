@@ -7,10 +7,9 @@ use tauri::Manager;
 
 // Guard de concurrencia: evita dos análisis de volumen del mismo track
 // emitiendo chunks duplicados al frontend.
-static ANALIZANDO: std::sync::LazyLock<std::sync::Mutex<std::collections::HashSet<(String, usize)>>> =
-    std::sync::LazyLock::new(|| {
-        std::sync::Mutex::new(std::collections::HashSet::new())
-    });
+static ANALIZANDO: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashSet<(String, usize)>>,
+> = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
 
 // Limpia el registro de análisis en vuelo al dropearse (pase lo que pase en el
 // cuerpo del análisis), para que un error no bloquee análisis futuros.
@@ -143,11 +142,8 @@ async fn cargar_cache_volumen(
             return Err("Cache de volumen corrupto, se re-analizará".to_string());
         }
         let mut resultado = Vec::with_capacity(bytes.len() / 4);
-        for chunk in bytes.chunks_exact(4) {
-            let arr: [u8; 4] = chunk
-                .try_into()
-                .map_err(|_| "Error leyendo cache".to_string())?;
-            resultado.push(f32::from_le_bytes(arr));
+        for arr in bytes.as_chunks::<4>().0 {
+            resultado.push(f32::from_le_bytes(*arr));
         }
         Ok(resultado)
     })
@@ -256,10 +252,6 @@ async fn analizar_volumen(
         let mut format = probed.format;
 
         let idx = track_index.unwrap_or(0);
-        println!(
-            "[WAVEFORM] track_index recibido={:?}, idx usado={}",
-            track_index, idx
-        );
         let track = format
             .tracks()
             .iter()
@@ -269,10 +261,6 @@ async fn analizar_volumen(
             .clone();
 
         let track_id = track.id;
-        println!(
-            "[WAVEFORM] Decodificando symphonia stream_id={}, track_id={}",
-            track_id, idx
-        );
         let sample_rate = track.codec_params.sample_rate.ok_or("Sin sample rate")? as f64;
 
         let mut decoder = symphonia::default::get_codecs()
@@ -387,7 +375,7 @@ async fn listar_fuentes_sistema() -> Result<Vec<String>, String> {
                     return Ok(familias);
                 }
             }
-            return Ok(familias_del_registro());
+            Ok(familias_del_registro())
         }
         // Linux: fontconfig (`fc-list : family`, una familia por línea; las
         // entradas multi-familia vienen separadas por coma). Sin deps nuevas.
@@ -407,8 +395,7 @@ async fn listar_fuentes_sistema() -> Result<Vec<String>, String> {
 #[cfg(target_os = "linux")]
 fn familias_fc_list() -> Vec<String> {
     use std::collections::HashSet;
-    let Ok(salida) = comando_oculto("fc-list").args([":", "family"]).output()
-    else {
+    let Ok(salida) = comando_oculto("fc-list").args([":", "family"]).output() else {
         return Vec::new();
     };
     let mut vistas: HashSet<String> = HashSet::new();
@@ -435,8 +422,7 @@ fn familias_del_registro() -> Vec<String> {
     for clave in claves {
         // Si la clave no existe (típico en HKCU sin fuentes de usuario), reg
         // escribe en stderr y devuelve código 1: no es un error.
-        let Ok(salida) = comando_oculto("reg").args(["query", clave]).output()
-        else {
+        let Ok(salida) = comando_oculto("reg").args(["query", clave]).output() else {
             continue;
         };
         for linea in String::from_utf8_lossy(&salida.stdout).lines() {
