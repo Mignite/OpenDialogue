@@ -14,7 +14,6 @@ import type {
   Hablante,
   Caption,
   Proyecto,
-  PresetAss,
 } from "./types";
 import {
   VENTANAS_POR_SEGUNDO,
@@ -27,10 +26,9 @@ import {
 } from "./utils/constants";
 import { formatTime, parseTimeInput } from "./utils/time";
 import { parseSrt, buildSrt, formatSrtTimestamp } from "./utils/srt";
-import { buildAss, parseAss, presetDesdeEstilos, presetParaExportar } from "./utils/ass";
+import { parseAss, presetDesdeEstilos } from "./utils/ass";
 import {
   cargarPresetsAss,
-  guardarPresetsAss,
   nuevoPreset,
 } from "./utils/assPresets";
 import { AssExportModal } from "./components/AssExportModal";
@@ -49,6 +47,7 @@ import { buscarFinIslaAudio } from "./utils/audioIslands";
 import { cargarAjustes, guardarAjustes } from "./utils/ajustes";
 
 import { useHistory } from "./hooks/useHistory";
+import { useAssEstilos } from "./hooks/useAssEstilos";
 import SpeakersPanel from "./components/SpeakersPanel";
 import StylesPanel from "./components/StylesPanel";
 import CaptionList from "./components/CaptionList";
@@ -191,14 +190,28 @@ function App() {
   const [exportMensaje, setExportMensaje] = useState<string>("");
   const [showHelp, setShowHelp] = useState(false);
   const [assModalAbierto, setAssModalAbierto] = useState(false);
-  const [presetsAss, setPresetsAss] = useState<PresetAss[]>([]);
-  const [resAss, setResAss] = useState({ x: 1920, y: 1080 });
   const { pushHistorial, deshacer, rehacer } = useHistory(
     captionsRef,
     hablantesRef,
     setCaptions,
     setHablantes,
   );
+  // Mensaje efímero del statusBar con auto-limpieza (un solo timer: los
+  // llamados seguidos no se pisan). useCallback-estable para los hooks.
+  const mensajeTimerRef = useRef<number>(0);
+  const notify = useCallback((msg: string) => {
+    setExportMensaje(msg);
+    window.clearTimeout(mensajeTimerRef.current);
+    mensajeTimerRef.current = window.setTimeout(() => setExportMensaje(""), 5000);
+  }, []);
+  const cerrarAssModal = useCallback(() => setAssModalAbierto(false), []);
+  // Slice 1 del monolito: estilos .ass (presets + export + PlayRes).
+  const ass = useAssEstilos({
+    captionsRef,
+    hablantesRef,
+    notify,
+    alExportar: cerrarAssModal,
+  });
   const playheadFrameSkipRef = useRef(0);
   const dragScrollVelocityRef = useRef(0);
   // Auto-scroll vertical del trackArea durante el marquee (px/s). El pan
@@ -742,89 +755,14 @@ function App() {
     // El PlayRes sigue al video real para que el tamaño de fuente se vea igual
     // en Kdenlive. Sin video cargado, 1080p.
     const v = videoRef.current;
-    setResAss({ x: v?.videoWidth || 1920, y: v?.videoHeight || 1080 });
-    setPresetsAss(await cargarPresetsAss());
+    ass.setResAss({ x: v?.videoWidth || 1920, y: v?.videoHeight || 1080 });
+    void ass.recargarPresets();
     setAssModalAbierto(true);
   }
-
-  // useCallback-estable: se pasa a paneles memo() que re-renderizan con el
-  // playhead (~10×/s) si el callback cambia de identidad.
-  // Timer del auto-guardado (trailing debounce): el write a disco vive acá,
-  // no en el panel.
-  const presetWriteTimerRef = useRef<number>(0);
-  const persistirPresets = useCallback(
-    async (presets: PresetAss[], opts?: { ya?: boolean }) => {
-      setPresetsAss(presets);
-      // El estado en memoria es inmediato (typing fluido); el disco va con
-      // trailing debounce: un solo write por ráfaga de keystrokes y siempre
-      // con el ÚLTIMO contenido (sin reordenamientos). `ya:true` escribe al
-      // instante (import .ass: el mensaje de éxito debe implicar disco).
-      window.clearTimeout(presetWriteTimerRef.current);
-      const escribir = async () => {
-        try {
-          await guardarPresetsAss(presets);
-        } catch (err) {
-          console.error("Error guardando presets .ass:", err);
-          setExportMensaje(t("styles.saveError"));
-          setTimeout(() => setExportMensaje(""), 5000);
-        }
-      };
-      if (opts?.ya) {
-        await escribir();
-        return;
-      }
-      presetWriteTimerRef.current = window.setTimeout(() => {
-        void escribir();
-      }, 400);
-    },
-    [],
-  );
 
   function cambiarIdioma(locale: "en" | "es") {
     setLocale(locale);
     guardarAjustes({ locale });
-  }
-
-  async function exportarAssConPreset(
-    asignacion: Record<string, string>,
-    presetSinHablante: string,
-  ) {
-    try {
-      const path = await save({
-        filters: [{ name: t("dialog.filterAss"), extensions: ["ass"] }],
-        defaultPath: "subtitulos.ass",
-      });
-      if (!path) return;
-      // La asignacion vive solo en el modal: se resuelve a un preset por
-      // hablante y se la pasa al builder. No se persiste en ningun lado.
-      // Si el modal no tocó la fila, vale lo guardado en el hablante.
-      const porId = new Map(presetsAss.map((p) => [p.id, p]));
-      const primero = presetsAss[0];
-      const sinHablante = porId.get(presetSinHablante) ?? primero;
-      if (!sinHablante) return;
-      const presetDe = (hablanteId: string | null) =>
-        presetParaExportar(
-          hablantesRef.current,
-          porId,
-          asignacion,
-          hablanteId,
-          sinHablante,
-        );
-      // Se arma DESPUÉS del save: si el usuario cancela, no se hace el trabajo.
-      const contenido = buildAss(
-        captionsRef.current,
-        hablantesRef.current,
-        presetDe,
-        resAss.x,
-        resAss.y,
-      );
-      await invoke("escribir_archivo_texto", { ruta: path, contenido });
-      setAssModalAbierto(false);
-      setExportMensaje(t("assExport.done", { count: captionsRef.current.length }));
-      setTimeout(() => setExportMensaje(""), 5000);
-    } catch (err) {
-      console.error("Error exportando .ass:", err);
-    }
   }
 
   async function handleCargarAss() {
@@ -849,7 +787,7 @@ function App() {
           `preset-import-${Date.now().toString(36)}`,
         ) ?? nuevoPreset({ nombre: nombrePreset });
       const actuales = await cargarPresetsAss();
-      await persistirPresets(
+      await ass.persistirPresets(
         [...actuales.filter((p) => p.id !== nuevo.id), nuevo],
         { ya: true },
       );
@@ -887,14 +825,10 @@ function App() {
     [],
   );
 
-  // Presets disponibles para los selects de estilo por hablante.
-  // En navegador (sin Tauri) falla y queda []: los selects muestran "—".
-  // Misma tanda: ajustes del usuario (idioma) desde ajustes.json, con
+  // Ajustes del usuario (idioma) desde ajustes.json, con
   // localStorage como respaldo/migración; se reescribe para unificar.
+  // (Los presets los carga useAssEstilos en su propio effect.)
   useEffect(() => {
-    cargarPresetsAss()
-      .then((p) => setPresetsAss(p))
-      .catch(() => {});
     cargarAjustes()
       .then((a) => {
         if (a.locale) setLocale(a.locale);
@@ -930,7 +864,7 @@ function App() {
       // El menú "Estilos..." abre el panel de estilos (ya no un modal de
       // export): los presets son nivel usuario y se editan en cualquier
       // momento, sin subtítulos de por medio.
-      setPresetsAss(await cargarPresetsAss());
+      void ass.recargarPresets();
       setPanelEstilosAbierto(true);
     });
     const unlistenCargarAss = listen("cargar_ass", () => handleCargarAss());
@@ -2345,8 +2279,8 @@ function App() {
     ? speakerMap.get(currentCaption.hablante_id)
     : undefined;
   const overlayPreset =
-    presetsAss.find((p) => p.id === overlayHablante?.presetId) ??
-    presetsAss[0];
+    ass.presetsAss.find((p) => p.id === overlayHablante?.presetId) ??
+    ass.presetsAss[0];
   const overlayStyle = (() => {
     if (!overlayPreset) return undefined;
     const v = videoRef.current;
@@ -2778,7 +2712,7 @@ function App() {
         <div className="rightCol">
           <SpeakersPanel
             hablantes={hablantes}
-            presets={presetsAss}
+            presets={ass.presetsAss}
             panelAbierto={panelHablantesAbierto}
             onTogglePanel={togglePanelHablantes}
             onAgregar={agregarHablante}
@@ -2788,10 +2722,10 @@ function App() {
             onCommit={pushHistorial}
           />
           <StylesPanel
-            presets={presetsAss}
+            presets={ass.presetsAss}
             panelAbierto={panelEstilosAbierto}
             onTogglePanel={togglePanelEstilos}
-            onGuardar={persistirPresets}
+            onGuardar={ass.persistirPresets}
           />
 
           <div className="rightColHeader">
@@ -3223,10 +3157,10 @@ function App() {
           en cada apertura, así no necesita efecto de sincronización. */}
       {assModalAbierto && (
         <AssExportModal
-          presets={presetsAss}
+          presets={ass.presetsAss}
           hablantes={hablantes}
-          onCerrar={() => setAssModalAbierto(false)}
-          onExportar={exportarAssConPreset}
+          onCerrar={cerrarAssModal}
+          onExportar={ass.exportarAssConPreset}
         />
       )}
     </main>
