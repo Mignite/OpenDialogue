@@ -254,6 +254,7 @@ Tauri v2 + React 19 + Rust. Multi-speaker subtitle editor (color-coding); auto-s
 - **Release 1.2.0** (tag `v1.2.0`, publicación directa): slices 1-2, presetId en proyecto, blindaje caché/análisis, waveform tiempo real + fix largos, Fase 0 (clippy/fmt/cache en CI, toolchain pineado 1.99.0, sin cross-env/ffmpeg). 154 vitest + 2 Rust + gates en verde.
 - **Preview con solapes**: el overlay mostraba un solo caption; ahora itera todos los activos (`lineasOverlayActivas()` en `ass.ts` + 5 tests, mismo orden que el export) con su preset cada uno; contenedor con alineación del preset base + wrapper interior (flex-row intacto, una línea se ve igual). `currentCaption` sin cambios. 159/159 + build OK.
 - **Preview fiel al render**: la escala usaba el ancho del elemento (con letterbox por `max-height`+`contain` la inflaba) → ahora `min` de ambos ejes como libass; fuera el clamp 10–48px; el overlay se dimensiona al video visible (no al elemento) con márgenes del preset escalados (no % fijos); `ASS_EM_PREVIEW=0.85` en constants compensa celda ASS vs em CSS (calibrar contra mpv).
+- **ASS_EM calibrado**: Eche comparó preview vs captura mpv mismo frame → idéntico con 0.85. Constante marcada no-tocar-sin-remedir.
 
 ## IPC Surface (commands)
 `guardar_proyecto`, `cargar_proyecto`, `existe_archivo`, `leer_archivo_texto`, `escribir_archivo_texto`, `escribir_archivo_en_carpeta`, `analizar_volumen` (emits `volumen_chunk`), `existe_cache_volumen`, `cargar_cache_volumen`, `listar_fuentes_sistema` (GDI+/DirectWrite vía PowerShell, ~400 ms; registro solo de fallback)

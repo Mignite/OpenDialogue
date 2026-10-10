@@ -4,8 +4,9 @@ export const VENTANAS_POR_SEGUNDO = 15;
 export const EXT_VIDEO = [".mp4", ".mov", ".avi", ".mkv"];
 // Compensación celda ASS vs em CSS: en libass/VSFilter Fontsize es altura de
 // celda (ascent+descent) y en CSS font-size es el em — con el mismo número el
-// texto en CSS se ve ~10-25% más grande según la fuente. Calibrar contra mpv
-// (renderer de referencia): si el preview queda chico, subir hacia 1.0.
+// texto en CSS se ve ~10-25% más grande según la fuente.
+// Calibrado contra mpv (10-oct-2026, Eche): 0.85 clava el preview. No tocar
+// sin re-comparar contra mpv en el mismo frame.
 export const ASS_EM_PREVIEW = 0.85;
 export const EDGE_TRIGGER = 0.92;
 export const NEW_MARGIN = 0.08;
