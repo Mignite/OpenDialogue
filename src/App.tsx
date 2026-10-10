@@ -13,7 +13,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type {
   Hablante,
   Caption,
-  Proyecto,
   PresetAss,
 } from "./types";
 import {
@@ -26,18 +25,8 @@ import {
   ISLA_FALLBACK,
 } from "./utils/constants";
 import { formatTime, parseTimeInput } from "./utils/time";
-import { parseSrt, buildSrt, formatSrtTimestamp } from "./utils/srt";
-import { parseAss, presetDesdeEstilos } from "./utils/ass";
-import {
-  cargarPresetsAss,
-  nuevoPreset,
-} from "./utils/assPresets";
+import { buildSrt, formatSrtTimestamp } from "./utils/srt";
 import { AssExportModal } from "./components/AssExportModal";
-import {
-  asignarHablantesPorTexto,
-  hablantesDesdeNombres,
-  parseAutosubsTxt,
-} from "./utils/autosubs";
 import {
   BuildOverlapReport,
   FormatOverlapReport,
@@ -50,6 +39,7 @@ import { cargarAjustes, guardarAjustes } from "./utils/ajustes";
 
 import { useHistory } from "./hooks/useHistory";
 import { useAssEstilos } from "./hooks/useAssEstilos";
+import { useProyecto } from "./hooks/useProyecto";
 import { useWaveform } from "./hooks/useWaveform";
 import SpeakersPanel from "./components/SpeakersPanel";
 import StylesPanel from "./components/StylesPanel";
@@ -75,7 +65,6 @@ function App() {
     ? selectedCaptionIds[selectedCaptionIds.length - 1]
     : null;
   const [videoPath, setVideoPath] = useState<string>("");
-  const [rutaProyecto, setRutaProyecto] = useState<string>("");
   const [videoNoEncontrado, setVideoNoEncontrado] = useState<boolean>(false);
   const [rutaFaltante, setRutaFaltante] = useState<string>("");
   const [playheadTime, setPlayheadTime] = useState<number>(0);
@@ -154,7 +143,6 @@ function App() {
   const speakerMapRef = useRef<Map<string, Hablante>>(new Map());
   const currentCaptionIdxRef = useRef<number>(-1);
 
-  const rutaProyectoRef = useRef("");
   const videoPathRef = useRef("");
   const playheadPendienteRef = useRef<number | null>(null);
   const selectedCaptionIdsRef = useRef<string[]>([]);
@@ -217,30 +205,66 @@ function App() {
   // Auto-scroll vertical del trackArea durante el marquee (px/s). El pan
   // horizontal reusa dragScrollVelocityRef, igual que el body drag.
   const marqueeScrollVelRef = useRef(0);
-  const isDirtyRef = useRef(false);
-  const [hayCambios, setHayCambios] = useState(false);
-  const ignoreNextChangeRef = useRef(true);
 
-  function cargarVideoDesdeRuta(path: string) {
-    console.log(`[DEBUG APP] cargarVideoDesdeRuta -> path=${path}`);
-    setVideoPath(path);
-    setVideoSrc(convertFileSrc(path));
-    setVideoNoEncontrado(false);
-    windowStartRef.current = 0;
-    windowTargetRef.current = 0;
-    updateScrollbarThumb(0, windowSecondsRef.current, 0);
-    if (onda.estaEnAnalisis(path)) {
-      // Reapertura del mismo video a mitad de análisis: el análisis y sus
-      // chunks siguen en curso, no resetear el waveform (continuará y
-      // completará solo). Solo se reencuadra la vista.
-      return;
-    }
-    // Descartar análisis/volumen del video anterior (un análisis en
-    // vuelo del video viejo ya no puede pintar su waveform acá)
-    onda.reiniciar();
-    setVideoDuration(0);
-    onda.analizarVolumenDe(path);
-  }
+  // useCallback-estable (solo refs, setters estables y fns estables de onda):
+  // se inyecta al slice useProyecto sin re-suscripciones.
+  const { reiniciar: reiniciarOnda, analizarVolumenDe, estaEnAnalisis } = onda;
+  const cargarVideoDesdeRuta = useCallback(
+    (path: string) => {
+      console.log(`[DEBUG APP] cargarVideoDesdeRuta -> path=${path}`);
+      setVideoPath(path);
+      setVideoSrc(convertFileSrc(path));
+      setVideoNoEncontrado(false);
+      windowStartRef.current = 0;
+      windowTargetRef.current = 0;
+      updateScrollbarThumb(0, windowSecondsRef.current, 0);
+      if (estaEnAnalisis(path)) {
+        // Reapertura del mismo video a mitad de análisis: el análisis y sus
+        // chunks siguen en curso, no resetear el waveform (continuará y
+        // completará solo). Solo se reencuadra la vista.
+        return;
+      }
+      // Descartar análisis/volumen del video anterior (un análisis en
+      // vuelo del video viejo ya no puede pintar su waveform acá)
+      reiniciarOnda();
+      setVideoDuration(0);
+      analizarVolumenDe(path);
+    },
+    [reiniciarOnda, analizarVolumenDe, estaEnAnalisis],
+  );
+
+  // Slice 3 del monolito: proyecto y archivos (guardar/cargar/nuevo, abrir
+  // video/SRT, imports). Dueño de rutaProyecto + flags dirty.
+  const proyecto = useProyecto(
+    {
+      captionsRef,
+      hablantesRef,
+      videoPathRef,
+      videoRef,
+      playheadPendienteRef,
+      windowStartRef,
+      windowTargetRef,
+      windowSecondsRef,
+    },
+    {
+      setCaptions,
+      setHablantes,
+      setSelectedCaptionIds,
+      setVideoSrc,
+      setVideoPath,
+      setVideoNoEncontrado,
+      setRutaFaltante,
+      setVideoDuration,
+    },
+    {
+      pushHistorial,
+      notify,
+      persistirPresetsAss: ass.persistirPresets,
+      cargarVideo: cargarVideoDesdeRuta,
+      reiniciarOnda,
+      updateScrollbarThumb,
+    },
+  );
 
   useEffect(() => {
     selectedCaptionIdsRef.current = selectedCaptionIds;
@@ -248,7 +272,7 @@ function App() {
     windowSecondsRef.current = windowSeconds;
     captionsRef.current = captions;
     hablantesRef.current = hablantes;
-    rutaProyectoRef.current = rutaProyecto;
+    proyecto.rutaProyectoRef.current = proyecto.rutaProyecto;
     videoPathRef.current = videoPath;
     autoFollowingRef.current = autoFollowing;
   });
@@ -269,236 +293,13 @@ function App() {
   }, [captions]);
 
   useEffect(() => {
-    if (ignoreNextChangeRef.current) {
-      ignoreNextChangeRef.current = false;
-      return;
-    }
-    if (captions.length > 0 || hablantes.length > 0 || rutaProyecto.length > 0) {
-      isDirtyRef.current = true;
-      setHayCambios(true);
-    }
-  }, [captions, hablantes, rutaProyecto]);
+    proyecto.marcarSucio(
+      captions.length > 0 ||
+        hablantes.length > 0 ||
+        proyecto.rutaProyecto.length > 0,
+    );
+  }, [captions, hablantes, proyecto.rutaProyecto, proyecto]);
 
-  async function cargarSrtDesdeRuta(path: string) {
-    try {
-      const contenido = await invoke<string>("leer_archivo_texto", {
-        ruta: path,
-      });
-      const parsed = parseSrt(contenido);
-      ignoreNextChangeRef.current = true;
-      isDirtyRef.current = false;
-      setHayCambios(false);
-      setCaptions(parsed);
-    } catch (err) {
-      console.error("Error cargando SRT:", err);
-    }
-  }
-
-  async function handleAbrirVideo() {
-    try {
-      const path = await open({
-        multiple: false,
-        filters: [{ name: t("dialog.filterVideo"), extensions: ["mp4", "mov", "avi", "mkv"] }],
-      });
-      if (path) {
-        console.log(`[DEBUG handleAbrirVideo] Video seleccionado: ${path}`);
-        cargarVideoDesdeRuta(path);
-      }
-    } catch (err) {
-      console.error("[ERROR handleAbrirVideo] Error abriendo diálogo:", err);
-      console.log("[DEBUG] No se pudo abrir el diálogo de video");
-    }
-  }
-
-  async function handleAbrirSrt() {
-    try {
-      const path = await open({
-        multiple: false,
-        filters: [{ name: t("dialog.filterSubtitles"), extensions: ["srt"] }],
-      });
-      if (path) await cargarSrtDesdeRuta(path);
-    } catch (err) {
-      console.error("Error abriendo diálogo SRT:", err);
-    }
-  }
-
-  // Importa el par SRT+TXT de auto-subs: tiempos del SRT, hablantes de los
-  // turnos "Speaker N" del TXT (match secuencial por texto en autosubs.ts).
-  // Primero el SRT; el TXT gemelo (misma carpeta, misma base) se busca solo
-  // y si no está se pide en un segundo diálogo.
-  async function handleImportarAutosubs() {
-    try {
-      const srtPath = await open({
-        multiple: false,
-        filters: [{ name: t("dialog.filterSubtitles"), extensions: ["srt"] }],
-      });
-      if (!srtPath) return;
-      const contenidoSrt = await invoke<string>("leer_archivo_texto", {
-        ruta: srtPath,
-      });
-      const cues = parseSrt(contenidoSrt);
-      if (cues.length === 0) return;
-      const gemelo = (srtPath as string).replace(/\.srt$/i, ".txt");
-      let txtPath: string | null = null;
-      try {
-        const existe: boolean = await invoke("existe_archivo", { ruta: gemelo });
-        if (existe) txtPath = gemelo;
-      } catch {
-        txtPath = null;
-      }
-      if (!txtPath) {
-        txtPath = (await open({
-          multiple: false,
-          filters: [{ name: t("dialog.filterText"), extensions: ["txt"] }],
-        })) as string | null;
-      }
-      if (!txtPath) return;
-      const contenidoTxt = await invoke<string>("leer_archivo_texto", {
-        ruta: txtPath,
-      });
-      const turnos = parseAutosubsTxt(contenidoTxt);
-      const numeros = asignarHablantesPorTexto(cues, turnos);
-      const hablantes = hablantesDesdeNombres(
-        [...new Set(numeros.filter((n): n is string => n !== null))].sort(),
-      );
-      const idPorNumero = new Map(
-        hablantes.map((h) => [h.nombre.replace(/^Hablante /, ""), h.id]),
-      );
-      pushHistorial();
-      ignoreNextChangeRef.current = true;
-      isDirtyRef.current = false;
-      setHayCambios(false);
-      setHablantes(hablantes);
-      setCaptions(
-        cues.map((c, i) => ({
-          ...c,
-          hablante_id: numeros[i] !== null ? (idPorNumero.get(numeros[i] as string) ?? null) : null,
-        })),
-      );
-      setSelectedCaptionIds([]);
-    } catch (err) {
-      console.error("Error importando auto-subs:", err);
-    }
-  }
-
-  async function guardarProyectoEnRuta(path: string) {
-    console.log("Guardando en:", path);
-    console.log("videoPathRef:", videoPathRef.current);
-    console.log("captionsRef:", captionsRef.current.length, "captions");
-    console.log("hablantesRef:", hablantesRef.current.length, "hablantes");
-
-    const proyecto: Proyecto = {
-      ruta_video: videoPathRef.current,
-      hablantes: hablantesRef.current,
-      captions: captionsRef.current,
-      playhead: videoRef.current?.currentTime ?? 0,
-    };
-
-    try {
-      await invoke("guardar_proyecto", { ruta: path, proyecto });
-      if (rutaProyectoRef.current !== path) {
-        ignoreNextChangeRef.current = true;
-      }
-      isDirtyRef.current = false;
-      setHayCambios(false);
-      setRutaProyecto(path);
-      rutaProyectoRef.current = path;
-      console.log("Guardado exitoso");
-    } catch (err) {
-      console.error("ERROR al guardar:", err);
-    }
-  }
-
-  async function handleGuardarComo() {
-    try {
-      const path = await save({
-        filters: [{ name: t("dialog.filterProject"), extensions: ["json"] }],
-      });
-      if (!path) return;
-      await guardarProyectoEnRuta(path);
-    } catch (err) {
-      console.error("Error abriendo diálogo de guardado:", err);
-    }
-  }
-
-  async function handleGuardar() {
-    if (rutaProyectoRef.current) {
-      await guardarProyectoEnRuta(rutaProyectoRef.current);
-    } else {
-      await handleGuardarComo();
-    }
-  }
-
-  async function handleCargarProyecto() {
-    if (isDirtyRef.current) {
-      const ok = await ask(
-        t("app.confirm.openProject"),
-        { title: t("app.confirm.unsavedTitle"), kind: "warning" },
-      );
-      if (!ok) return;
-    }
-    const path = await open({
-      multiple: false,
-      filters: [{ name: t("dialog.filterProject"), extensions: ["json"] }],
-    });
-    if (!path) return;
-
-    try {
-      const proyecto: Proyecto = await invoke("cargar_proyecto", {
-        ruta: path,
-      });
-      ignoreNextChangeRef.current = true;
-      isDirtyRef.current = false;
-      setHayCambios(false);
-      setRutaProyecto(path);
-      setCaptions(proyecto.captions || []);
-      setHablantes(proyecto.hablantes || []);
-      setSelectedCaptionIds([]);
-      // Descartar waveform/duración del proyecto anterior
-      onda.reiniciar();
-      setVideoDuration(0);
-
-      const existe: boolean = await invoke("existe_archivo", {
-        ruta: proyecto.ruta_video,
-      });
-      playheadPendienteRef.current = proyecto.playhead ?? 0;
-      if (existe) {
-        cargarVideoDesdeRuta(proyecto.ruta_video);
-      } else {
-        setRutaFaltante(proyecto.ruta_video);
-        setVideoNoEncontrado(true);
-      }
-    } catch (err) {
-      console.error("Error cargando proyecto:", err);
-    }
-  }
-
-  async function handleNuevoProyecto() {
-    if (isDirtyRef.current) {
-      const ok = await ask(t("app.confirm.newProject"), {
-        title: t("app.confirm.unsavedTitle"),
-        kind: "warning",
-      });
-      if (!ok) return;
-    }
-    ignoreNextChangeRef.current = true;
-    isDirtyRef.current = false;
-    setHayCambios(false);
-    setVideoSrc("");
-    setVideoPath("");
-    setRutaProyecto("");
-    setVideoNoEncontrado(false);
-    setCaptions([]);
-    setHablantes([]);
-    setSelectedCaptionIds([]);
-    playheadPendienteRef.current = null;
-    // Descartar análisis en vuelo, waveform y duración del proyecto anterior
-    onda.reiniciar();
-    setVideoDuration(0);
-    windowStartRef.current = 0;
-    windowTargetRef.current = 0;
-    updateScrollbarThumb(0, windowSecondsRef.current, 0);
-  }
   async function handleExportarSrtPorHablante() {
     if (captionsRef.current.length === 0) {
       setExportMensaje(t("app.export.noCaptions"));
@@ -620,56 +421,6 @@ function App() {
     guardarAjustes({ locale });
   }
 
-  async function handleCargarAss() {
-    try {
-      const path = await open({
-        multiple: false,
-        filters: [{ name: t("dialog.filterAss"), extensions: ["ass"] }],
-      });
-      if (!path) return;
-      const contenido = await invoke<string>("leer_archivo_texto", { ruta: path });
-      const resultado = parseAss(contenido);
-      if (resultado.captions.length === 0) return;
-
-      // El import crea un preset desde el Style Default del archivo: es la vía
-      // para traer estilos de un .ass de Premiere sin tipearlos.
-      const nombrePreset =
-        (path as string).split(/[\\/]/).pop()?.replace(/\.ass$/i, "") ?? "Importado";
-      const nuevo =
-        presetDesdeEstilos(
-          resultado.styles,
-          nombrePreset,
-          `preset-import-${Date.now().toString(36)}`,
-        ) ?? nuevoPreset({ nombre: nombrePreset });
-      const actuales = await cargarPresetsAss();
-      await ass.persistirPresets(
-        [...actuales.filter((p) => p.id !== nuevo.id), nuevo],
-        { ya: true },
-      );
-
-      // Mismo patrón que cargarSrtDesdeRuta: la carga deja el proyecto limpio.
-      ignoreNextChangeRef.current = true;
-      isDirtyRef.current = false;
-      setHayCambios(false);
-      setHablantes(resultado.hablantes);
-      setCaptions(resultado.captions);
-      setSelectedCaptionIds([]);
-      setExportMensaje(
-        t("assExport.importDone", {
-          count: resultado.captions.length,
-          speakers: resultado.hablantes.length,
-        }) +
-          " " +
-          t("assExport.importPresetCreated", { name: nombrePreset }),
-      );
-      setTimeout(() => setExportMensaje(""), 5000);
-    } catch (err) {
-      console.error("Error importando .ass:", err);
-      setExportMensaje(t("assExport.importError", { error: String(err) }));
-      setTimeout(() => setExportMensaje(""), 5000);
-    }
-  }
-
   const togglePanelHablantes = useCallback(
     () => setPanelHablantesAbierto((v) => !v),
     [],
@@ -694,17 +445,17 @@ function App() {
 
   useEffect(() => {
     const unlistenAbrir = listen("abrir_proyecto", () =>
-      handleCargarProyecto(),
+      proyecto.handleCargarProyecto(),
     );
-    const unlistenGuardar = listen("guardar_proyecto", () => handleGuardar());
+    const unlistenGuardar = listen("guardar_proyecto", () => proyecto.handleGuardar());
     const unlistenGuardarComo = listen("guardar_como", () =>
-      handleGuardarComo(),
+      proyecto.handleGuardarComo(),
     );
-    const unlistenNuevo = listen("nuevo_proyecto", () => handleNuevoProyecto());
-    const unlistenAbrirVideo = listen("abrir_video", () => handleAbrirVideo());
-    const unlistenCargarSrt = listen("cargar_srt", () => handleAbrirSrt());
+    const unlistenNuevo = listen("nuevo_proyecto", () => proyecto.handleNuevoProyecto());
+    const unlistenAbrirVideo = listen("abrir_video", () => proyecto.handleAbrirVideo());
+    const unlistenCargarSrt = listen("cargar_srt", () => proyecto.handleAbrirSrt());
     const unlistenImportarAutosubs = listen("importar_autosubs", () =>
-      handleImportarAutosubs(),
+      proyecto.handleImportarAutosubs(),
     );
     const unlistenExportarSrt = listen("exportar_srt_hablantes", () =>
       handleExportarSrtPorHablante(),
@@ -722,7 +473,7 @@ function App() {
       void ass.recargarPresets();
       setPanelEstilosAbierto(true);
     });
-    const unlistenCargarAss = listen("cargar_ass", () => handleCargarAss());
+    const unlistenCargarAss = listen("cargar_ass", () => proyecto.handleCargarAss());
 
     return () => {
       unlistenAbrir.then((f) => f());
@@ -1735,9 +1486,9 @@ function App() {
       if (e.ctrlKey && e.key.toLowerCase() === "s") {
         e.preventDefault();
         if (e.shiftKey) {
-          handleGuardarComo();
+          proyecto.handleGuardarComo();
         } else {
-          handleGuardar();
+          proyecto.handleGuardar();
         }
         return;
       }
@@ -1893,7 +1644,7 @@ function App() {
           for (const p of event.payload.paths) {
             const lower = p.toLowerCase();
             if (lower.endsWith(".srt")) {
-              cargarSrtDesdeRuta(p);
+              proyecto.cargarSrtDesdeRuta(p);
             } else if (EXT_VIDEO.some((ext) => lower.endsWith(ext))) {
               cargarVideoDesdeRuta(p);
             }
@@ -1916,7 +1667,7 @@ function App() {
       unlisten = await win.onCloseRequested(async (event) => {
         event.preventDefault();
 
-        if (isDirtyRef.current) {
+        if (proyecto.isDirtyRef.current) {
           const ok = await ask(
             t("app.confirm.closeProject"),
             { title: t("app.confirm.unsavedTitle"), kind: "warning" },
@@ -2424,7 +2175,7 @@ function App() {
               </p>
               <p className="missingPath">{rutaFaltante}</p>
               <div className="missingActions">
-                <button onClick={handleAbrirVideo}>{t("app.searchVideo")}</button>
+                <button onClick={proyecto.handleAbrirVideo}>{t("app.searchVideo")}</button>
                 <button
                   className="secondary"
                   onClick={() => setVideoNoEncontrado(false)}
@@ -2533,7 +2284,7 @@ function App() {
           ) : (
             <div className="videoEmpty">
               <p>{t("app.noVideoLoaded")}</p>
-              <button onClick={handleAbrirVideo}>{t("app.chooseVideo")}</button>
+              <button onClick={proyecto.handleAbrirVideo}>{t("app.chooseVideo")}</button>
             </div>
           )}
 
@@ -2874,13 +2625,13 @@ function App() {
               <span className="wordmarkDot" aria-hidden="true" />
               OpenDialogue
             </span>
-            {rutaProyecto ? (
+            {proyecto.rutaProyecto ? (
               <>
-                <span className={`saveState ${hayCambios ? "dirty" : "clean"}`}>
+                <span className={`saveState ${proyecto.hayCambios ? "dirty" : "clean"}`}>
                   <span className="saveDot" />
-                  {hayCambios ? t("app.status.unsaved") : t("app.status.saved")}
+                  {proyecto.hayCambios ? t("app.status.unsaved") : t("app.status.saved")}
                 </span>
-                <span className="statusPath">{rutaProyecto}</span>
+                <span className="statusPath">{proyecto.rutaProyecto}</span>
               </>
             ) : (
               <span className="muted">{t("app.status.noProject")}</span>

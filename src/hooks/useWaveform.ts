@@ -47,7 +47,9 @@ export function useWaveform() {
     }
   }
 
-  async function analizarVolumenDe(ruta: string) {
+  // useCallback-estable (solo refs/setters/funciones de módulo): los
+  // consumidores (cargarVideo, slice useProyecto) no re-suscriben nada.
+  const analizarVolumenDe = useCallback(async (ruta: string) => {
     // Single-track: siempre la pista 0 (el video llega pre-editado con solo
     // diálogo). Sin selector de pista ni extracción: el video suena directo.
     const track_index = 0;
@@ -127,7 +129,7 @@ export function useWaveform() {
       // otra ruta (reiniciar ya limpió) o de esta misma en curso.
       if (enCursoRef.current === ruta) enCursoRef.current = null;
     }
-  }
+  }, []);
 
   return { volumen, analizando, volumenRef, analizarVolumenDe, reiniciar, estaEnAnalisis };
 }
