@@ -21,7 +21,6 @@ import {
   EDGE_TRIGGER,
   NEW_MARGIN,
   LERP_FACTOR,
-  PALETA,
   ISLA_FALLBACK,
   ASS_EM_PREVIEW,
 } from "./utils/constants";
@@ -40,6 +39,7 @@ import { cargarAjustes, guardarAjustes } from "./utils/ajustes";
 
 import { useHistory } from "./hooks/useHistory";
 import { useAssEstilos } from "./hooks/useAssEstilos";
+import { useHablantes } from "./hooks/useHablantes";
 import { useProyecto } from "./hooks/useProyecto";
 import { useWaveform } from "./hooks/useWaveform";
 import SpeakersPanel from "./components/SpeakersPanel";
@@ -141,7 +141,6 @@ function App() {
   const playheadLineRef = useRef<HTMLDivElement | null>(null);
 
   const hablantesRef = useRef<Hablante[]>([]);
-  const speakerMapRef = useRef<Map<string, Hablante>>(new Map());
   const currentCaptionIdxRef = useRef<number>(-1);
 
   const videoPathRef = useRef("");
@@ -201,6 +200,18 @@ function App() {
   });
   // Slice 2 del monolito: waveform (análisis + caché).
   const onda = useWaveform();
+
+  // Slice 4 del monolito: hablantes (CRUD + speakerMap). El state se queda
+  // en App (como captions hasta el slice 5): cero reordenamientos y el ref
+  // lo siguen leyendo los mismos sitios sin cambios.
+  const voces = useHablantes({
+    hablantes,
+    setHablantes,
+    hablantesRef,
+    captionsRef,
+    setCaptions,
+    pushHistorial,
+  });
   const playheadFrameSkipRef = useRef(0);
   const dragScrollVelocityRef = useRef(0);
   // Auto-scroll vertical del trackArea durante el marquee (px/s). El pan
@@ -1883,15 +1894,6 @@ function App() {
         : -1,
     [captions, currentCaption],
   );
-  const speakerMap = useMemo(() => {
-    const map = new Map<string, Hablante>();
-    for (const h of hablantes) {
-      map.set(h.id, h);
-    }
-    speakerMapRef.current = map;
-    return map;
-  }, [hablantes]);
-
   // Live preview sobre el video: una línea por caption activo en el
   // playhead (solapes incluidos), cada una con su preset — igual que
   // fusionarLineas al exportar. El contenedor toma alineación/márgenes del
@@ -1994,67 +1996,6 @@ function App() {
       }
     }
   });
-
-  const agregarHablante = useCallback(() => {
-    pushHistorial();
-    setHablantes((prev) => {
-      if (prev.length >= 9) return prev;
-      const usadas = new Set(prev.map((h) => h.tecla));
-      let tecla = "1";
-      for (let i = 1; i <= 9; i++) {
-        if (!usadas.has(String(i))) {
-          tecla = String(i);
-          break;
-        }
-      }
-      const nuevo: Hablante = {
-        id: `sp-${Date.now()}`,
-        nombre: "",
-        tecla,
-        color: PALETA[prev.length % PALETA.length],
-      };
-      return [...prev, nuevo];
-    });
-  }, [pushHistorial, setHablantes]);
-
-  const actualizarHablante = useCallback(
-    (id: string, campo: keyof Hablante, valor: string) => {
-      setHablantes((prev) => {
-        const newHablantes = prev.map((h) =>
-          h.id === id ? { ...h, [campo]: valor } : h,
-        );
-        hablantesRef.current = newHablantes;
-        return newHablantes;
-      });
-    },
-    [setHablantes],
-  );
-
-  const cambiarColorHablante = useCallback(
-    (id: string, color: string) => {
-      pushHistorial();
-      setHablantes((prev) => {
-        const newHablantes = prev.map((h) =>
-          h.id === id ? { ...h, color } : h,
-        );
-        hablantesRef.current = newHablantes;
-        return newHablantes;
-      });
-    },
-    [pushHistorial, setHablantes],
-  );
-
-  const eliminarHablante = useCallback((id: string) => {
-    pushHistorial();
-    setHablantes((prev) => prev.filter((h) => h.id !== id));
-    setCaptions((prev) => {
-      const newCaptions = prev.map((c) =>
-        c.hablante_id === id ? { ...c, hablante_id: null } : c,
-      );
-      captionsRef.current = newCaptions;
-      return newCaptions;
-    });
-  }, [pushHistorial, setHablantes, setCaptions]);
 
   const matchingCaptionsRef = useRef<Caption[]>([]);
   function ciclarCaptionSimultaneo(direccion: 1 | -1) {
@@ -2393,10 +2334,10 @@ function App() {
             presets={ass.presetsAss}
             panelAbierto={panelHablantesAbierto}
             onTogglePanel={togglePanelHablantes}
-            onAgregar={agregarHablante}
-            onActualizar={actualizarHablante}
-            onCambiarColor={cambiarColorHablante}
-            onEliminar={eliminarHablante}
+            onAgregar={voces.agregarHablante}
+            onActualizar={voces.actualizarHablante}
+            onCambiarColor={voces.cambiarColorHablante}
+            onEliminar={voces.eliminarHablante}
             onCommit={pushHistorial}
           />
           <StylesPanel
@@ -2419,7 +2360,7 @@ function App() {
             onSelectCaption={handleSelectCaption}
             onEliminarCaption={eliminarCaption}
             rowRefs={rowRefs}
-            speakerMap={speakerMap}
+            speakerMap={voces.speakerMap}
           />
         </div>
       </div>
