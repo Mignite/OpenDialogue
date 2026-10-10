@@ -23,6 +23,7 @@ import {
   LERP_FACTOR,
   PALETA,
   ISLA_FALLBACK,
+  ASS_EM_PREVIEW,
 } from "./utils/constants";
 import { formatTime, parseTimeInput } from "./utils/time";
 import { buildSrt, formatSrtTimestamp } from "./utils/srt";
@@ -1903,12 +1904,32 @@ function App() {
     ass.presetsAss,
   );
   const overlayBase = overlayLineas[0]?.preset;
-  const overlayEscala = (() => {
+  // Recuadro real del video visible: con object-fit:contain y max-height el
+  // elemento deja letterbox, así que clientWidth/videoWidth infla la escala.
+  // Como libass escala por PlayResY (altura), la escala correcta es el
+  // mínimo de ambos ejes. Sin dimensiones (video sin cargar), legacy.
+  const overlayRecuadro = (() => {
     const v = videoRef.current;
-    return v && v.videoWidth ? v.clientWidth / v.videoWidth : 0.3;
+    if (!v || !v.videoWidth || !v.videoHeight) return null;
+    const escala = Math.min(
+      v.clientWidth / v.videoWidth,
+      v.clientHeight / v.videoHeight,
+    );
+    const w = v.videoWidth * escala;
+    const h = v.videoHeight * escala;
+    return {
+      escala,
+      left: (v.clientWidth - w) / 2,
+      top: (v.clientHeight - h) / 2,
+      width: w,
+      height: h,
+    };
   })();
+  const overlayEscala = overlayRecuadro?.escala ?? 0.3;
   const estiloLineaOverlay = (preset: PresetAss) => {
-    const px = Math.min(48, Math.max(10, preset.fontsize * overlayEscala));
+    // Sin clamp: en preview chico o grande el tamaño debe ser el real
+    // escalado, como en el render. ASS_EM compensa celda ASS vs em CSS.
+    const px = preset.fontsize * overlayEscala * ASS_EM_PREVIEW;
     const borde = Math.max(1, preset.outline * overlayEscala);
     return {
       fontFamily: `"${preset.fontname}", sans-serif`,
@@ -1926,14 +1947,26 @@ function App() {
       : al === 3 || al === 6 || al === 9 ? "right"
       : "center";
     return {
+      // Caja = video visible (no el elemento con letterbox); sin recuadro,
+      // vale el inset:0 del CSS. Márgenes del preset escalados, no % fijos.
+      ...(overlayRecuadro
+        ? {
+            left: overlayRecuadro.left,
+            top: overlayRecuadro.top,
+            width: overlayRecuadro.width,
+            height: overlayRecuadro.height,
+          }
+        : {}),
       justifyContent:
         horizontal === "left" ? "flex-start"
         : horizontal === "right" ? "flex-end"
         : "center",
       textAlign: horizontal as "left" | "center" | "right",
       alignItems: vertical === "top" ? "flex-start" : vertical === "middle" ? "center" : "flex-end",
-      paddingBottom: vertical === "bottom" ? Math.max(4, overlayBase.marginV * overlayEscala) : undefined,
-      paddingTop: vertical === "top" ? Math.max(4, overlayBase.marginV * overlayEscala) : undefined,
+      paddingLeft: overlayBase.marginL * overlayEscala,
+      paddingRight: overlayBase.marginR * overlayEscala,
+      paddingBottom: vertical === "bottom" ? overlayBase.marginV * overlayEscala : undefined,
+      paddingTop: vertical === "top" ? overlayBase.marginV * overlayEscala : undefined,
     } as const;
   })();
 
