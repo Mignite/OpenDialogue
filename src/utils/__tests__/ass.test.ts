@@ -13,6 +13,7 @@ import {
   parseAss,
   presetDesdeEstilos,
   presetParaExportar,
+  lineasOverlayActivas,
   ASS_STYLE_FORMAT,
   ASS_EVENTS_FORMAT,
 } from "../ass";
@@ -602,5 +603,59 @@ describe("presetDesdeEstilos", () => {
   it("devuelve null si el archivo no trae Style Default", () => {
     const sinDefault = ASS_MUESTRA.replace("Style: Default", "Style: Base");
     expect(presetDesdeEstilos(parseAss(sinDefault).styles, "x", "y")).toBeNull();
+  });
+});
+
+describe("lineasOverlayActivas", () => {
+  const p1: PresetAss = { ...DEFAULT_PRESET_ASS, id: "p1", nombre: "Uno" };
+  const p2: PresetAss = { ...DEFAULT_PRESET_ASS, id: "p2", nombre: "Dos" };
+  const habs: Hablante[] = [
+    { ...HABLANTES[0], presetId: "p2" },
+    { ...HABLANTES[1] },
+  ];
+  const cap = (
+    id: string,
+    inicio: number,
+    fin: number,
+    hablante_id: string | null,
+    texto = "x",
+  ): Caption => ({ id, inicio, fin, texto, hablante_id });
+
+  it("devuelve una línea por caption con su preset resuelto", () => {
+    const out = lineasOverlayActivas(
+      [cap("a", 0, 2, "sp1", "Hola"), cap("b", 1, 3, "sp2", "Chau")],
+      habs,
+      [p1, p2],
+    );
+    expect(out.map((l) => l.id)).toEqual(["a", "b"]);
+    expect(out[0].preset.id).toBe("p2");
+    expect(out[1].preset.id).toBe("p1");
+    expect(out[0].texto).toBe("Hola");
+  });
+
+  it("ordena por inicio como el export", () => {
+    const out = lineasOverlayActivas(
+      [cap("b", 5, 6, "sp2"), cap("a", 0, 2, "sp1")],
+      habs,
+      [p1, p2],
+    );
+    expect(out.map((l) => l.id)).toEqual(["a", "b"]);
+  });
+
+  it("sin hablante usa el primer preset", () => {
+    const out = lineasOverlayActivas([cap("a", 0, 2, null)], habs, [p1, p2]);
+    expect(out[0].preset.id).toBe("p1");
+  });
+
+  it("presetId borrado cae al primer preset", () => {
+    const habs2: Hablante[] = [{ ...habs[0], presetId: "muerto" }];
+    const out = lineasOverlayActivas([cap("a", 0, 2, "sp1")], habs2, [p1, p2]);
+    expect(out[0].preset.id).toBe("p1");
+  });
+
+  it("sin presets devuelve [] (sin overlay)", () => {
+    expect(lineasOverlayActivas([cap("a", 0, 2, "sp1")], habs, [])).toEqual(
+      [],
+    );
   });
 });

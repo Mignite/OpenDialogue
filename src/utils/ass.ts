@@ -432,3 +432,32 @@ export function presetParaExportar(
   }
   return sinHablante;
 }
+
+export interface LineaOverlay {
+  id: string;
+  texto: string;
+  preset: PresetAss;
+}
+
+/** Líneas del preview sobre el video: un renglón por caption activo en el
+ *  playhead, en orden de inicio (igual que `fusionarLineas` al exportar),
+ *  cada uno con su preset resuelto (hablante → `presetId` → fallback al
+ *  primero). Si no hay presets, devuelve [] (sin overlay, como hasta ahora).
+ *  Pura para testearla: el preview no tiene DOM testeable (sin jsdom). */
+export function lineasOverlayActivas(
+  activas: Caption[],
+  hablantes: Hablante[],
+  presets: PresetAss[],
+): LineaOverlay[] {
+  const base = presets[0];
+  if (!base) return [];
+  const porId = new Map(presets.map((p) => [p.id, p]));
+  const presetDe = (hablanteId: string | null): PresetAss => {
+    if (!hablanteId) return base;
+    const h = hablantes.find((x) => x.id === hablanteId);
+    return (h?.presetId ? porId.get(h.presetId) : undefined) ?? base;
+  };
+  return [...activas]
+    .sort((a, b) => a.inicio - b.inicio || a.fin - b.fin)
+    .map((c) => ({ id: c.id, texto: c.texto, preset: presetDe(c.hablante_id) }));
+}

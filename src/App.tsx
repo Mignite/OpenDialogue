@@ -14,6 +14,7 @@ import type {
   Hablante,
   Caption,
   Proyecto,
+  PresetAss,
 } from "./types";
 import {
   VENTANAS_POR_SEGUNDO,
@@ -44,6 +45,7 @@ import {
 } from "./utils/captions";
 import { filtrarPorMarquee, captionRowIndex, filasDestinoRelativas } from "./utils/selection";
 import { buscarFinIslaAudio, picoEnRango } from "./utils/audioIslands";
+import { lineasOverlayActivas } from "./utils/ass";
 import { cargarAjustes, guardarAjustes } from "./utils/ajustes";
 
 import { useHistory } from "./hooks/useHistory";
@@ -2135,40 +2137,49 @@ function App() {
     return map;
   }, [hablantes]);
 
-  // Live preview sobre el video: estilo del preset asignado al hablante
-  // (mismo mapeo que usa buildAss al exportar). Se recalcula en cada render,
-  // y el render ya tickea con el playhead: sin código de sync extra.
-  const overlayHablante = currentCaption?.hablante_id
-    ? speakerMap.get(currentCaption.hablante_id)
-    : undefined;
-  const overlayPreset =
-    ass.presetsAss.find((p) => p.id === overlayHablante?.presetId) ??
-    ass.presetsAss[0];
-  const overlayStyle = (() => {
-    if (!overlayPreset) return undefined;
+  // Live preview sobre el video: una línea por caption activo en el
+  // playhead (solapes incluidos), cada una con su preset — igual que
+  // fusionarLineas al exportar. El contenedor toma alineación/márgenes del
+  // preset base (primera línea). Se recalcula en cada render, y el render ya
+  // tickea con el playhead: sin código de sync extra.
+  // currentCaption sigue manejando editor/follow/lista; el overlay solo pinta.
+  const overlayLineas = lineasOverlayActivas(
+    matchingCaptions,
+    hablantes,
+    ass.presetsAss,
+  );
+  const overlayBase = overlayLineas[0]?.preset;
+  const overlayEscala = (() => {
     const v = videoRef.current;
-    const escala = v && v.videoWidth ? v.clientWidth / v.videoWidth : 0.3;
-    const px = Math.min(48, Math.max(10, overlayPreset.fontsize * escala));
-    const borde = Math.max(1, overlayPreset.outline * escala);
-    const al = overlayPreset.alignment;
+    return v && v.videoWidth ? v.clientWidth / v.videoWidth : 0.3;
+  })();
+  const estiloLineaOverlay = (preset: PresetAss) => {
+    const px = Math.min(48, Math.max(10, preset.fontsize * overlayEscala));
+    const borde = Math.max(1, preset.outline * overlayEscala);
+    return {
+      fontFamily: `"${preset.fontname}", sans-serif`,
+      fontSize: px,
+      color: preset.color,
+      textShadow: `0 0 ${borde}px ${preset.outlineColor}, 0 1px 2px rgba(0,0,0,.8)`,
+    } as const;
+  };
+  const overlayStyle = (() => {
+    if (!overlayBase) return undefined;
+    const al = overlayBase.alignment;
     const vertical = al >= 7 ? "top" : al >= 4 ? "middle" : "bottom";
     const horizontal =
       al === 1 || al === 4 || al === 7 ? "left"
       : al === 3 || al === 6 || al === 9 ? "right"
       : "center";
     return {
-      fontFamily: `"${overlayPreset.fontname}", sans-serif`,
-      fontSize: px,
-      color: overlayPreset.color,
-      textShadow: `0 0 ${borde}px ${overlayPreset.outlineColor}, 0 1px 2px rgba(0,0,0,.8)`,
       justifyContent:
         horizontal === "left" ? "flex-start"
         : horizontal === "right" ? "flex-end"
         : "center",
       textAlign: horizontal as "left" | "center" | "right",
       alignItems: vertical === "top" ? "flex-start" : vertical === "middle" ? "center" : "flex-end",
-      paddingBottom: vertical === "bottom" ? Math.max(4, overlayPreset.marginV * escala) : undefined,
-      paddingTop: vertical === "top" ? Math.max(4, overlayPreset.marginV * escala) : undefined,
+      paddingBottom: vertical === "bottom" ? Math.max(4, overlayBase.marginV * overlayEscala) : undefined,
+      paddingTop: vertical === "top" ? Math.max(4, overlayBase.marginV * overlayEscala) : undefined,
     } as const;
   })();
 
@@ -2430,9 +2441,26 @@ function App() {
                   src={videoSrc}
                   className="videoPlayer"
                 />
-                {currentCaption && overlayStyle && (
+                {overlayLineas.length > 0 && overlayStyle && (
                   <div className="videoSubOverlay" style={overlayStyle}>
-                    <span>{currentCaption.texto}</span>
+                    <div
+                      style={{
+                        width: "100%",
+                        textAlign: overlayStyle.textAlign,
+                      }}
+                    >
+                      {overlayLineas.map((l, i) => (
+                        <span key={l.id} style={estiloLineaOverlay(l.preset)}>
+                          {l.texto.split("\n").map((t, j, arr) => (
+                            <span key={j}>
+                              {t}
+                              {j < arr.length - 1 && <br />}
+                            </span>
+                          ))}
+                          {i < overlayLineas.length - 1 && <br />}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
