@@ -293,12 +293,15 @@ function App() {
   }, [captions]);
 
   useEffect(() => {
+    // OJO: `proyecto` (objeto) NO va en deps: cambia de identidad en cada
+    // render y remarcaría sucio ~10×/s con el playhead. `marcarSucio` es
+    // useCallback-estable, no se vuelve rancio.
     proyecto.marcarSucio(
       captions.length > 0 ||
         hablantes.length > 0 ||
         proyecto.rutaProyecto.length > 0,
     );
-  }, [captions, hablantes, proyecto.rutaProyecto, proyecto]);
+  }, [captions, hablantes, proyecto.rutaProyecto]);
 
   async function handleExportarSrtPorHablante() {
     if (captionsRef.current.length === 0) {
