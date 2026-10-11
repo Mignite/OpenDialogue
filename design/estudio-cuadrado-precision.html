@@ -1,0 +1,1812 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenDialogue · Estudio de Precisión Monolítica (Negro Puro & Tabs)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ===== FUENTES LOCALES CON FALLBACK ===== */
+  @font-face {
+    font-family: "Space Grotesk Local";
+    src: url("../src/assets/fonts/SpaceGrotesk-600.woff2") format("woff2");
+    font-weight: 600;
+  }
+  @font-face {
+    font-family: "JetBrains Mono Local";
+    src: url("../src/assets/fonts/JetBrainsMono-400.woff2") format("woff2");
+    font-weight: 400;
+  }
+  @font-face {
+    font-family: "JetBrains Mono Local";
+    src: url("../src/assets/fonts/JetBrainsMono-600.woff2") format("woff2");
+    font-weight: 600;
+  }
+
+  /* ===== TOKENS: NEGRO PURO TÉCNICO & SQUIRCLES 2PX ===== */
+  :root {
+    color-scheme: dark;
+
+    /* Superficies negro absoluto (OLED Studio Master) */
+    --bg-root: #000000;
+    --bg-surface: #060709;
+    --bg-elevated: #0C0E11;
+    --bg-highlight: #13161B;
+    --bg-hover: #1A1D24;
+
+    /* Hairlines de alta definición (1px ultra-fino) */
+    --border-subtle: #101216;
+    --border-base: #181B22;
+    --border-strong: #232731;
+    --border-bright: #323846;
+
+    /* Tipografía técnica */
+    --text-primary: #EDEDF0;
+    --text-secondary: #8E94A0;
+    --text-muted: #4A505D;
+    --text-ghost: #282C35;
+
+    /* Acentos & Señalización quirúrgica */
+    --accent: #E85D4E;           /* Acción primaria / Grabación */
+    --accent-glow: rgba(232, 93, 78, 0.2);
+    --accent-muted: rgba(232, 93, 78, 0.08);
+
+    --spk-1: #E85D4E;           /* H1: Coral de precisión */
+    --spk-2: #4EA8E8;           /* H2: Cobalto técnico */
+    --spk-3: #7ED957;           /* H3: Lima monitor */
+    --spk-4: #E5A93C;           /* H4: Ámbar advertencia */
+    --spk-none: #3A3E48;        /* Sin asignar */
+
+    /* Geometría unificada: Squircle técnico de 2px estricto */
+    --radius-box: 2px;
+    --radius-btn: 2px;
+    --radius-tag: 2px;
+    --radius-clip: 2px;
+
+    /* Tipos */
+    --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono Local", "JetBrains Mono", "Consolas", monospace;
+    --font-display: "Space Grotesk Local", "Space Grotesk", sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg-root);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    line-height: 1.45;
+    overflow: hidden;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Micro-scrollbars rectilíneas */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg-surface); }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-bright); }
+
+  /* ===== CONTENEDOR PRINCIPAL ===== */
+  .appShell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    border: 1px solid var(--border-base);
+    background: var(--bg-root);
+  }
+
+  /* ===== 1. BARRA SUPERIOR ===== */
+  .topBar {
+    height: 36px;
+    background: var(--bg-root);
+    border-bottom: 1px solid var(--border-base);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+
+  .brandGroup {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .recIndicator {
+    width: 7px;
+    height: 7px;
+    background: var(--accent);
+    border-radius: var(--radius-tag);
+    box-shadow: 0 0 8px var(--accent-glow);
+    display: inline-block;
+  }
+
+  .wordmark {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    color: var(--text-primary);
+    text-transform: uppercase;
+  }
+
+  .appVersion {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+    padding: 1px 4px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-tag);
+  }
+
+  .menuList {
+    display: flex;
+    gap: 1px;
+    background: var(--border-subtle);
+  }
+
+  .menuItem {
+    background: var(--bg-root);
+    color: var(--text-secondary);
+    font-size: 11px;
+    padding: 3px 10px;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+    border-radius: var(--radius-btn);
+  }
+  .menuItem:hover {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+  }
+
+  .projectMeta {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--text-muted);
+  }
+
+  .projectMeta .badge {
+    color: #7ED957;
+    background: rgba(126, 217, 87, 0.06);
+    border: 1px solid rgba(126, 217, 87, 0.22);
+    padding: 1px 5px;
+    border-radius: var(--radius-tag);
+    font-size: 9px;
+  }
+
+  /* ===== 2. CUERPO PRINCIPAL (2 COLUMNAS) ===== */
+  .mainGrid {
+    display: grid;
+    grid-template-columns: 1.35fr 1fr;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* COLUMNA IZQUIERDA: VISUALIZACIÓN + CONTROL + EDICIÓN */
+  .leftCol {
+    display: flex;
+    flex-direction: column;
+    padding: 10px 12px;
+    gap: 10px;
+    border-right: 1px solid var(--border-base);
+    overflow: hidden;
+    min-width: 0;
+    background: var(--bg-root);
+  }
+
+  /* MONITOR DE VIDEO EN NEGRO ABSOLUTO */
+  .monitorWrap {
+    background: #000000;
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-box);
+    position: relative;
+    aspect-ratio: 16 / 9;
+    max-height: 29vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .monitorGrid {
+    position: absolute;
+    inset: 12px;
+    border: 1px dashed rgba(255,255,255,0.05);
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .monitorCenterMark {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-left: 1px solid rgba(255,255,255,0.12);
+    border-top: 1px solid rgba(255,255,255,0.12);
+  }
+
+  .videoSubOverlay {
+    position: absolute;
+    bottom: 20px;
+    width: 90%;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+    color: #FFFFFF;
+    text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 2px 5px rgba(0,0,0,0.9);
+    pointer-events: none;
+    letter-spacing: -0.01em;
+  }
+  .videoSubOverlay .highlight {
+    color: var(--accent);
+  }
+
+  .monitorHUD {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: none;
+  }
+
+  .hudTag {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: rgba(255,255,255,0.45);
+    background: rgba(0, 0, 0, 0.85);
+    border: 1px solid var(--border-base);
+    padding: 2px 6px;
+    border-radius: var(--radius-tag);
+  }
+
+  .vumeterBox {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    display: flex;
+    gap: 2px;
+    background: rgba(0, 0, 0, 0.85);
+    border: 1px solid var(--border-base);
+    padding: 3px 4px;
+    border-radius: var(--radius-tag);
+  }
+  .vuChannel {
+    width: 3.5px;
+    height: 34px;
+    background: #0C0D10;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 1px;
+  }
+  .vuBar {
+    width: 100%;
+    background: var(--border-strong);
+  }
+  .vuBar.green { background: #7ED957; }
+  .vuBar.yellow { background: #E5A93C; }
+  .vuBar.red { background: var(--accent); }
+
+  /* CONSOLA DE TRANSPORTE */
+  .transportConsole {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-box);
+    padding: 5px 8px;
+    flex-shrink: 0;
+  }
+
+  .btnGroup {
+    display: flex;
+    background: var(--border-base);
+    gap: 1px;
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-btn);
+    overflow: hidden;
+  }
+
+  .sqBtn {
+    background: var(--bg-elevated);
+    border: none;
+    color: var(--text-secondary);
+    width: 27px;
+    height: 27px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+  .sqBtn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .sqBtn:active {
+    background: var(--border-base);
+  }
+
+  .sqBtn.playActive {
+    background: var(--accent);
+    color: #FFFFFF;
+    box-shadow: 0 0 10px var(--accent-glow);
+  }
+
+  .sqBtn svg {
+    width: 12px;
+    height: 12px;
+    fill: currentColor;
+  }
+
+  .tcBlock {
+    display: flex;
+    align-items: center;
+    background: var(--bg-root);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-tag);
+    padding: 0 8px;
+    height: 27px;
+    gap: 6px;
+  }
+  .tcLabel {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--text-muted);
+    font-weight: 700;
+  }
+  .tcInput {
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    font-weight: 600;
+    width: 94px;
+    outline: none;
+    text-align: center;
+  }
+
+  .speedSelector {
+    background: var(--bg-root);
+    border: 1px solid var(--border-base);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    height: 27px;
+    padding: 0 6px;
+    border-radius: var(--radius-btn);
+    outline: none;
+    cursor: pointer;
+  }
+
+  .transportSpacer { margin-left: auto; }
+
+  .fpsBadge {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--text-muted);
+    border: 1px solid var(--border-base);
+    padding: 2px 6px;
+    background: var(--bg-root);
+    border-radius: var(--radius-tag);
+  }
+
+  /* EDITOR DE DIÁLOGO */
+  .editorCard {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-box);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .editorCard:focus-within {
+    border-color: var(--border-strong);
+    box-shadow: inset 0 0 0 1px var(--border-bright);
+  }
+
+  .editorHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .speakerBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-base);
+    padding: 2px 7px 2px 4px;
+    border-radius: var(--radius-tag);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .speakerColorSquare {
+    width: 8px;
+    height: 8px;
+    background: var(--spk-1);
+    border-radius: 1px;
+  }
+
+  .editorTimingMeta {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    display: flex;
+    gap: 8px;
+  }
+  .editorTimingMeta span b {
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+
+  .editorTextarea {
+    width: 100%;
+    min-height: 48px;
+    background: var(--bg-root);
+    border: 1px solid var(--border-base);
+    border-left: 3px solid var(--spk-1);
+    border-radius: var(--radius-box);
+    padding: 8px 10px;
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: 13.5px;
+    line-height: 1.5;
+    resize: none;
+    outline: none;
+  }
+  .editorTextarea:focus {
+    border-color: var(--border-strong);
+    border-left-color: var(--spk-1);
+    background: #040507;
+  }
+
+  .editorFooter {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10.5px;
+    color: var(--text-muted);
+  }
+  .charCount {
+    font-family: var(--font-mono);
+  }
+
+  .addFragBtn {
+    background: var(--bg-surface);
+    border: 1px dashed var(--border-strong);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    border-radius: var(--radius-btn);
+    transition: all 0.12s;
+    flex-shrink: 0;
+  }
+  .addFragBtn:hover {
+    border-color: var(--accent);
+    color: var(--text-primary);
+    background: var(--accent-muted);
+  }
+
+  /* ===== COLUMNA DERECHA: TABS DE NAVEGADOR UNIFICADOS ===== */
+  .rightCol {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-root);
+    overflow: hidden;
+    min-width: 0;
+  }
+
+  /* BARRA DE TABS TIPO BROWSER INDUSTRIAL */
+  .browserTabBar {
+    height: 33px;
+    background: var(--bg-root);
+    border-bottom: 1px solid var(--border-base);
+    display: flex;
+    align-items: flex-end;
+    padding: 0 8px;
+    gap: 3px;
+    flex-shrink: 0;
+  }
+
+  .browserTab {
+    height: 29px;
+    background: var(--bg-root);
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: var(--radius-box) var(--radius-box) 0 0;
+    color: var(--text-muted);
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px;
+    cursor: pointer;
+    transition: all 0.1s ease;
+    position: relative;
+    top: 1px;
+  }
+
+  .browserTab:hover {
+    color: var(--text-secondary);
+    background: var(--bg-surface);
+  }
+
+  .browserTab.active {
+    background: var(--bg-surface);
+    border-color: var(--border-base);
+    border-top: 2px solid var(--accent);
+    color: var(--text-primary);
+    z-index: 2;
+  }
+
+  .tabCounterBadge {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    padding: 1px 4px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-tag);
+    color: var(--text-muted);
+  }
+  .browserTab.active .tabCounterBadge {
+    color: var(--text-secondary);
+    border-color: var(--border-strong);
+  }
+
+  /* CONTENIDO DE LAS PESTAÑAS */
+  .tabPaneContainer {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-surface);
+    overflow: hidden;
+  }
+
+  .tabPane {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .tabPane.active {
+    display: flex;
+  }
+
+  /* --- PESTAÑA 1: SUBTÍTULOS --- */
+  .subSearchFilterBar {
+    height: 32px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-base);
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .subSearchInput {
+    flex: 1;
+    background: var(--bg-root);
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-btn);
+    color: var(--text-primary);
+    font-size: 11.5px;
+    padding: 3px 8px;
+    outline: none;
+  }
+  .subSearchInput:focus {
+    border-color: var(--border-strong);
+  }
+
+  .listHeader {
+    height: 28px;
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border-base);
+    display: grid;
+    grid-template-columns: 80px 48px 1fr 24px;
+    align-items: center;
+    padding: 0 12px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  .captionListWrap {
+    flex: 1;
+    overflow-y: auto;
+    background: var(--bg-surface);
+  }
+
+  .capItemRow {
+    display: grid;
+    grid-template-columns: 80px 48px 1fr 24px;
+    align-items: center;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 12.5px;
+    cursor: pointer;
+    transition: background 0.08s;
+    border-left: 2px solid transparent;
+  }
+  .capItemRow:hover {
+    background: var(--bg-elevated);
+  }
+  .capItemRow.active {
+    background: var(--bg-highlight);
+    border-left-color: var(--accent);
+  }
+
+  .capTimeCol {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .capItemRow.active .capTimeCol {
+    color: var(--text-primary);
+  }
+
+  .capSpeakerPill {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 1px 5px;
+    display: inline-block;
+    width: fit-content;
+    border-radius: var(--radius-tag);
+  }
+
+  .capTextCol {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 8px;
+    color: var(--text-secondary);
+  }
+  .capItemRow.active .capTextCol {
+    color: var(--text-primary);
+  }
+
+  /* --- PESTAÑA 2: HABLANTES --- */
+  .paneHeaderAction {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-base);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-surface);
+  }
+  .paneTitle {
+    font-family: var(--font-display);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .miniActionBtn {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-base);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    cursor: pointer;
+    border-radius: var(--radius-btn);
+  }
+  .miniActionBtn:hover {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+  }
+
+  .speakersScrollList {
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .speakerCardRow {
+    display: grid;
+    grid-template-columns: 18px 1fr 24px 105px 24px;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    background: var(--bg-root);
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-box);
+  }
+  .speakerCardRow:hover {
+    border-color: var(--border-strong);
+  }
+
+  .speakerColorSquareInteractive {
+    width: 14px;
+    height: 14px;
+    border-radius: var(--radius-tag);
+    cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.18);
+  }
+
+  .speakerNameInput {
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 500;
+    outline: none;
+  }
+
+  .speakerKeyBadge {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-base);
+    text-align: center;
+    padding: 2px 0;
+    border-radius: var(--radius-tag);
+  }
+
+  .speakerStyleSelect {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-base);
+    color: var(--text-secondary);
+    font-size: 11px;
+    padding: 3px 4px;
+    outline: none;
+    border-radius: var(--radius-btn);
+  }
+
+  .speakerDelBtn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .speakerDelBtn:hover { color: var(--accent); }
+
+  /* --- PESTAÑA 3: ESTILOS ASS --- */
+  .stylesLayout {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 12px;
+    gap: 12px;
+  }
+
+  .presetsListSelector {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: var(--bg-root);
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-box);
+    padding: 4px;
+  }
+
+  .presetItem {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    background: transparent;
+    border-radius: var(--radius-btn);
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary);
+    border-left: 2px solid transparent;
+  }
+  .presetItem:hover {
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+  }
+  .presetItem.active {
+    background: var(--bg-highlight);
+    border-left-color: var(--accent);
+    color: var(--text-primary);
+  }
+  .presetItem .presetFontInfo {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  /* Formulario Inspector de Estilo ASS */
+  .styleInspectorBox {
+    background: var(--bg-root);
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-box);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .inspectorSectionLabel {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 4px;
+  }
+
+  .stylePropGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .fieldGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .fieldLabel {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--text-muted);
+  }
+  .fieldInput, .fieldSelect {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-base);
+    color: var(--text-primary);
+    font-size: 11.5px;
+    padding: 4px 6px;
+    border-radius: var(--radius-btn);
+    outline: none;
+  }
+  .fieldInput:focus, .fieldSelect:focus {
+    border-color: var(--border-strong);
+  }
+
+  /* Alineación NumPad 3x3 estilo ASS */
+  .numpadAlignMatrix {
+    display: grid;
+    grid-template-columns: repeat(3, 24px);
+    grid-template-rows: repeat(3, 22px);
+    gap: 2px;
+    background: var(--border-base);
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-btn);
+    width: fit-content;
+    padding: 1px;
+  }
+  .numBtn {
+    background: var(--bg-elevated);
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .numBtn:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+  .numBtn.selected {
+    background: var(--accent);
+    color: #FFFFFF;
+  }
+
+  /* Tira de Preview de Estilo */
+  .stylePreviewBox {
+    background: #000000;
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-box);
+    padding: 14px 10px;
+    text-align: center;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 17px;
+    font-weight: 600;
+    color: #FFFFFF;
+    text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0 2px 4px rgba(0,0,0,0.9);
+  }
+
+  /* ===== 3. DOCK INFERIOR: TIMELINE ===== */
+  .timelineDock {
+    background: var(--bg-root);
+    border-top: 1px solid var(--border-base);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    height: 196px;
+    position: relative;
+  }
+
+  .dockResizeHandle {
+    height: 6px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-base);
+    cursor: ns-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .dockResizeLine {
+    width: 32px;
+    height: 2px;
+    background: var(--border-strong);
+    border-radius: 1px;
+  }
+  .dockResizeHandle:hover .dockResizeLine {
+    background: var(--accent);
+  }
+
+  .rulerBar {
+    height: 22px;
+    background: var(--bg-root);
+    border-bottom: 1px solid var(--border-base);
+    position: relative;
+    display: flex;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--text-muted);
+  }
+
+  .rulerTicks {
+    position: absolute;
+    left: 56px;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    overflow: hidden;
+  }
+
+  .rulerMark {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-left: 1px solid var(--border-strong);
+    padding-left: 4px;
+    padding-top: 2px;
+  }
+
+  .rulerSubtick {
+    position: absolute;
+    bottom: 0;
+    height: 5px;
+    border-left: 1px solid var(--border-base);
+  }
+
+  .waveCanvasWrap {
+    height: 48px;
+    background: #020203;
+    border-bottom: 1px solid var(--border-base);
+    position: relative;
+    overflow: hidden;
+  }
+
+  #waveformCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .lanesContainer {
+    flex: 1;
+    overflow-y: auto;
+    position: relative;
+    background: var(--bg-root);
+  }
+
+  .trackRow {
+    height: 24px;
+    display: flex;
+    border-bottom: 1px solid var(--border-subtle);
+    position: relative;
+  }
+
+  .trackSideLabel {
+    width: 56px;
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border-base);
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    gap: 5px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    z-index: 3;
+    flex-shrink: 0;
+  }
+
+  .trackContentArea {
+    flex: 1;
+    position: relative;
+    min-width: 0;
+  }
+
+  .subClip {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    border-radius: var(--radius-clip);
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 500;
+    color: #0E0F12;
+    padding: 0 6px;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: grab;
+    border: 1px solid rgba(0,0,0,0.35);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+    transition: filter 0.1s;
+  }
+  .subClip:hover {
+    filter: brightness(1.2);
+  }
+
+  .subClipHandle {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 3.5px;
+    background: rgba(0,0,0,0.3);
+    cursor: ew-resize;
+  }
+  .subClipHandle.left { left: 0; }
+  .subClipHandle.right { right: 0; }
+
+  .subClip.selected {
+    outline: 2px solid #FFFFFF;
+    outline-offset: -1px;
+    z-index: 5;
+  }
+
+  .needlePlayhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 42%;
+    width: 1px;
+    background: var(--accent);
+    box-shadow: 0 0 8px 1px var(--accent-glow);
+    z-index: 10;
+    pointer-events: none;
+  }
+  .needleHeadCap {
+    position: absolute;
+    top: 0;
+    left: -4px;
+    width: 9px;
+    height: 7px;
+    background: var(--accent);
+    clip-path: polygon(0 0, 100 0, 50% 100%);
+  }
+
+  .timelineFooter {
+    height: 26px;
+    background: var(--bg-root);
+    border-top: 1px solid var(--border-base);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 12px;
+  }
+
+  .zoomCtrl {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  .timelineMiniScrollbar {
+    flex: 1;
+    height: 5px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-base);
+    position: relative;
+    border-radius: var(--radius-tag);
+  }
+  .miniScrollThumb {
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 25%;
+    width: 35%;
+    background: var(--border-strong);
+    border-radius: var(--radius-tag);
+    cursor: grab;
+  }
+
+  .followToggle {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-base);
+    color: var(--text-muted);
+    padding: 2px 7px;
+    cursor: pointer;
+    border-radius: var(--radius-btn);
+  }
+  .followToggle.on {
+    color: #4EA8E8;
+    border-color: #4EA8E8;
+    background: rgba(78, 168, 232, 0.08);
+  }
+
+  /* ===== 4. STATUS BAR ===== */
+  .statusBar {
+    height: 24px;
+    background: var(--bg-root);
+    border-top: 1px solid var(--border-base);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--text-muted);
+    gap: 16px;
+    flex-shrink: 0;
+  }
+
+  .statusSaved {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #7ED957;
+  }
+  .statusSaved .sqDot {
+    width: 5px;
+    height: 5px;
+    background: #7ED957;
+    border-radius: var(--radius-tag);
+  }
+
+  .statusItem {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .statusKeyHint {
+    margin-left: auto;
+    color: var(--text-ghost);
+  }
+</style>
+</head>
+<body>
+
+<div class="appShell">
+
+  <!-- 1. BARRA SUPERIOR -->
+  <header class="topBar">
+    <div class="brandGroup">
+      <span class="recIndicator" title="En línea"></span>
+      <span class="wordmark">OpenDialogue</span>
+      <span class="appVersion">v1.3.0</span>
+    </div>
+
+    <nav class="menuList">
+      <div class="menuItem">Archivo</div>
+      <div class="menuItem">Edición</div>
+      <div class="menuItem">Subtítulos</div>
+      <div class="menuItem">Exportar ASS</div>
+      <div class="menuItem">Ayuda</div>
+    </nav>
+
+    <div class="projectMeta">
+      <span class="badge">SRT + ASS</span>
+      <span>entrevista_central_final.mp4</span>
+    </div>
+  </header>
+
+  <!-- 2. MAIN GRID (2 COLUMNAS) -->
+  <div class="mainGrid">
+
+    <!-- COLUMNA IZQUIERDA -->
+    <section class="leftCol">
+      <!-- MONITOR DE VIDEO -->
+      <div class="monitorWrap">
+        <div class="monitorHUD">
+          <span class="hudTag">1920×1080 · 24.00 FPS</span>
+          <span class="hudTag">TRACK 0: AUDIO DIRECTO</span>
+        </div>
+        <div class="monitorGrid">
+          <div class="monitorCenterMark"></div>
+        </div>
+
+        <div class="videoSubOverlay" id="videoSubtitle">
+          ¿Y entonces el sistema aguantó <span class="highlight">tres semanas</span> sin reinicios?
+        </div>
+
+        <div class="vumeterBox" title="Nivel de salida">
+          <div class="vuChannel">
+            <div class="vuBar green" style="height: 18px;"></div>
+            <div class="vuBar yellow" style="height: 8px;"></div>
+            <div class="vuBar red" style="height: 2px;"></div>
+          </div>
+          <div class="vuChannel">
+            <div class="vuBar green" style="height: 16px;"></div>
+            <div class="vuBar yellow" style="height: 7px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONSOLA DE TRANSPORTE MODULAR -->
+      <div class="transportConsole">
+        <div class="btnGroup">
+          <button class="sqBtn" title="Saltar al inicio (Home)">
+            <svg viewBox="0 0 16 16"><path d="M3 2h2v12H3zM13 2v12L6 8z"/></svg>
+          </button>
+          <button class="sqBtn" title="Anterior caption (Alt+Izquierda)">
+            <svg viewBox="0 0 16 16"><path d="M11 2v12L4 8z"/></svg>
+          </button>
+          <button class="sqBtn playActive" id="playToggleBtn" onclick="togglePlay()" title="Reproducir / Pausar (Espacio)">
+            <svg viewBox="0 0 16 16" id="playIconSvg"><path d="M4 2l9 6-9 6z"/></svg>
+          </button>
+          <button class="sqBtn" title="Siguiente caption (Alt+Derecha)">
+            <svg viewBox="0 0 16 16"><path d="M5 2v12l7-6z"/></svg>
+          </button>
+          <button class="sqBtn" title="Saltar al final (End)">
+            <svg viewBox="0 0 16 16"><path d="M11 2h2v12h-2zM3 2v12l7-6z"/></svg>
+          </button>
+        </div>
+
+        <div class="tcBlock">
+          <span class="tcLabel">TC</span>
+          <input class="tcInput" id="mainTimecode" value="00:18:07.40" spellcheck="false" readonly>
+        </div>
+
+        <select class="speedSelector" title="Velocidad de reproducción">
+          <option>0.50×</option>
+          <option>0.75×</option>
+          <option selected>1.00×</option>
+          <option>1.25×</option>
+          <option>1.50×</option>
+          <option>2.00×</option>
+        </select>
+
+        <div class="transportSpacer"></div>
+        <span class="fpsBadge">SMPTE DROP 24</span>
+      </div>
+
+      <!-- EDITOR DE SUBTÍTULO / DIÁLOGO -->
+      <div class="editorCard">
+        <div class="editorHeader">
+          <div class="speakerBadge">
+            <span class="speakerColorSquare" id="activeSpeakerDot" style="background: var(--spk-1);"></span>
+            <span id="activeSpeakerText">H1 · Mariana (Tecla 1)</span>
+          </div>
+          <div class="editorTimingMeta">
+            <span>IN: <b>00:18:07.40</b></span>
+            <span>OUT: <b>00:18:11.20</b></span>
+            <span>DUR: <b>3.80s</b></span>
+          </div>
+        </div>
+
+        <textarea class="editorTextarea" id="captionTextarea" rows="2" spellcheck="false" oninput="updateActiveSub(this.value)">¿Y entonces el sistema aguantó tres semanas sin reinicios?</textarea>
+
+        <div class="editorFooter">
+          <span>Presiona <kbd style="color:var(--text-primary);font-family:var(--font-mono)">Enter</kbd> para fijar · <kbd style="color:var(--text-primary);font-family:var(--font-mono)">E</kbd> enfocar editor</span>
+          <span class="charCount" id="charCountLabel">56 caracteres · 14.7 cps</span>
+        </div>
+      </div>
+
+      <button class="addFragBtn" onclick="simularNuevoFragmento()">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2"/></svg>
+        [A] CREAR FRAGMENTO EN PLAYHEAD (ISLA ADAPTATIVA)
+      </button>
+    </section>
+
+    <!-- COLUMNA DERECHA: PESTAÑAS TIPO BROWSER -->
+    <aside class="rightCol">
+
+      <!-- BARRA DE TABS DE NAVEGADOR -->
+      <div class="browserTabBar">
+        <div class="browserTab active" id="tabBtnSubs" onclick="switchTab('subs')">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="opacity:0.7"><path d="M2 3h12v2H2zm0 4h12v2H2zm0 4h8v2H2z"/></svg>
+          <span>Subtítulos</span>
+          <span class="tabCounterBadge">48</span>
+        </div>
+
+        <div class="browserTab" id="tabBtnSpeakers" onclick="switchTab('speakers')">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="opacity:0.7"><path d="M8 8a3 3 0 100-6 3 3 0 000 6zm-5 7a5 5 0 0110 0H3z"/></svg>
+          <span>Hablantes</span>
+          <span class="tabCounterBadge">3</span>
+        </div>
+
+        <div class="browserTab" id="tabBtnStyles" onclick="switchTab('styles')">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="opacity:0.7"><path d="M4 2h8l-1 5H5L4 2zm-1 7h10l-1 5H4L3 9z"/></svg>
+          <span>Estilos ASS</span>
+          <span class="tabCounterBadge">4</span>
+        </div>
+      </div>
+
+      <!-- CONTENEDOR DE PESTAÑAS -->
+      <div class="tabPaneContainer">
+
+        <!-- ===== TAB 1: LISTA DE SUBTÍTULOS ===== -->
+        <div class="tabPane active" id="paneSubs">
+          <div class="subSearchFilterBar">
+            <input class="subSearchInput" placeholder="Filtrar subtítulos por texto o tiempo..." spellcheck="false">
+          </div>
+
+          <div class="listHeader">
+            <span>Tiempo</span>
+            <span>Hab.</span>
+            <span>Texto</span>
+            <span>#</span>
+          </div>
+
+          <div class="captionListWrap">
+            <div class="capItemRow" onclick="selectRow(this, 1, 'Mariana', 'var(--spk-1)', 'Mira, te cuento todo desde el principio...', '00:17:55.00')">
+              <span class="capTimeCol">17:55.00</span>
+              <span><span class="capSpeakerPill" style="background: rgba(232,93,78,0.12); color: var(--spk-1); border: 1px solid var(--spk-1);">H1</span></span>
+              <span class="capTextCol">Mira, te cuento todo desde el principio...</span>
+              <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-ghost)">47</span>
+            </div>
+            <div class="capItemRow" onclick="selectRow(this, 2, 'Tomás', 'var(--spk-2)', 'El café ya no hacía ningún efecto a esas alturas.', '00:17:59.80')">
+              <span class="capTimeCol">17:59.80</span>
+              <span><span class="capSpeakerPill" style="background: rgba(78,168,232,0.12); color: var(--spk-2); border: 1px solid var(--spk-2);">H2</span></span>
+              <span class="capTextCol">El café ya no hacía ningún efecto a esas alturas.</span>
+              <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-ghost)">48</span>
+            </div>
+            <div class="capItemRow" onclick="selectRow(this, 3, 'Lucía', 'var(--spk-3)', 'Tres semanas completas, te lo juro por mi vida.', '00:18:04.20')">
+              <span class="capTimeCol">18:04.20</span>
+              <span><span class="capSpeakerPill" style="background: rgba(126,217,87,0.12); color: var(--spk-3); border: 1px solid var(--spk-3);">H3</span></span>
+              <span class="capTextCol">Tres semanas completas, te lo juro por mi vida.</span>
+              <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-ghost)">49</span>
+            </div>
+            <div class="capItemRow active" onclick="selectRow(this, 1, 'Mariana', 'var(--spk-1)', '¿Y entonces el sistema aguantó tres semanas sin reinicios?', '00:18:07.40')">
+              <span class="capTimeCol">18:07.40</span>
+              <span><span class="capSpeakerPill" style="background: rgba(232,93,78,0.12); color: var(--spk-1); border: 1px solid var(--spk-1);">H1</span></span>
+              <span class="capTextCol">¿Y entonces el sistema aguantó tres semanas sin reinicios?</span>
+              <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-ghost)">50</span>
+            </div>
+            <div class="capItemRow" onclick="selectRow(this, 2, 'Tomás', 'var(--spk-2)', '...y ahí fue justo cuando los discos se sincronizaron.', '00:18:12.10')">
+              <span class="capTimeCol">18:12.10</span>
+              <span><span class="capSpeakerPill" style="background: rgba(78,168,232,0.12); color: var(--spk-2); border: 1px solid var(--spk-2);">H2</span></span>
+              <span class="capTextCol">...y ahí fue justo cuando los discos se sincronizaron.</span>
+              <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-ghost)">51</span>
+            </div>
+            <div class="capItemRow" onclick="selectRow(this, 3, 'Lucía', 'var(--spk-3)', 'Nadie esperaba que el clúster respondiera tan bien.', '00:18:16.80')">
+              <span class="capTimeCol">18:16.80</span>
+              <span><span class="capSpeakerPill" style="background: rgba(126,217,87,0.12); color: var(--spk-3); border: 1px solid var(--spk-3);">H3</span></span>
+              <span class="capTextCol">Nadie esperaba que el clúster respondiera tan bien.</span>
+              <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-ghost)">52</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== TAB 2: HABLANTES ===== -->
+        <div class="tabPane" id="paneSpeakers">
+          <div class="paneHeaderAction">
+            <span class="paneTitle">Configuración de Voces</span>
+            <button class="miniActionBtn" onclick="alert('Nuevo hablante agregado')">+ Agregar (H)</button>
+          </div>
+
+          <div class="speakersScrollList">
+            <div class="speakerCardRow">
+              <div class="speakerColorSquareInteractive" style="background: var(--spk-1);" title="Color del carril"></div>
+              <input class="speakerNameInput" value="Mariana" spellcheck="false">
+              <span class="speakerKeyBadge">1</span>
+              <select class="speakerStyleSelect">
+                <option>Principal ASS</option>
+                <option>Énfasis Coral</option>
+              </select>
+              <button class="speakerDelBtn" title="Eliminar">×</button>
+            </div>
+
+            <div class="speakerCardRow">
+              <div class="speakerColorSquareInteractive" style="background: var(--spk-2);" title="Color del carril"></div>
+              <input class="speakerNameInput" value="Tomás" spellcheck="false">
+              <span class="speakerKeyBadge">2</span>
+              <select class="speakerStyleSelect">
+                <option>Secundario Azul</option>
+                <option>Principal ASS</option>
+              </select>
+              <button class="speakerDelBtn" title="Eliminar">×</button>
+            </div>
+
+            <div class="speakerCardRow">
+              <div class="speakerColorSquareInteractive" style="background: var(--spk-3);" title="Color del carril"></div>
+              <input class="speakerNameInput" value="Lucía" spellcheck="false">
+              <span class="speakerKeyBadge">3</span>
+              <select class="speakerStyleSelect">
+                <option>Verde Suave</option>
+              </select>
+              <button class="speakerDelBtn" title="Eliminar">×</button>
+            </div>
+
+            <div style="margin-top: auto; padding: 10px 0; border-top: 1px solid var(--border-base); font-family:var(--font-mono); font-size:10px; color:var(--text-muted);">
+              Atajos directos 1..9 para asignar hablante al subtítulo bajo el cabezal o a los clips seleccionados.
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== TAB 3: ESTILOS ASS ===== -->
+        <div class="tabPane" id="paneStyles">
+          <div class="paneHeaderAction">
+            <span class="paneTitle">Presets de Estilos ASS</span>
+            <button class="miniActionBtn" onclick="alert('Nuevo preset creado')">+ Nuevo Preset</button>
+          </div>
+
+          <div class="stylesLayout">
+            <!-- Selector de Presets -->
+            <div class="presetsListSelector">
+              <div class="presetItem active">
+                <span>Principal ASS</span>
+                <span class="presetFontInfo">Space Grotesk · 24pt</span>
+              </div>
+              <div class="presetItem">
+                <span>Énfasis Coral</span>
+                <span class="presetFontInfo">JetBrains Mono · 26pt</span>
+              </div>
+              <div class="presetItem">
+                <span>Secundario Azul</span>
+                <span class="presetFontInfo">Inter · 22pt</span>
+              </div>
+              <div class="presetItem">
+                <span>Amarillo Cartelera</span>
+                <span class="presetFontInfo">Bebas Neue · 28pt</span>
+              </div>
+            </div>
+
+            <!-- Inspector de propiedades ASS -->
+            <div class="styleInspectorBox">
+              <div class="inspectorSectionLabel">Tipografía & Dimensiones</div>
+              <div class="stylePropGrid">
+                <div class="fieldGroup">
+                  <span class="fieldLabel">Fuente</span>
+                  <select class="fieldSelect">
+                    <option selected>Space Grotesk</option>
+                    <option>Inter</option>
+                    <option>JetBrains Mono</option>
+                    <option>Arial</option>
+                  </select>
+                </div>
+                <div class="fieldGroup">
+                  <span class="fieldLabel">Tamaño</span>
+                  <input class="fieldInput" type="number" value="24">
+                </div>
+              </div>
+
+              <div class="inspectorSectionLabel" style="margin-top:4px">Colores BGR & Borde</div>
+              <div class="stylePropGrid">
+                <div class="fieldGroup">
+                  <span class="fieldLabel">Primario</span>
+                  <div style="display:flex;gap:4px">
+                    <div style="width:18px;height:22px;background:#FFFFFF;border:1px solid var(--border-base);border-radius:2px"></div>
+                    <input class="fieldInput" value="#FFFFFF" style="flex:1;font-family:var(--font-mono)">
+                  </div>
+                </div>
+                <div class="fieldGroup">
+                  <span class="fieldLabel">Grosor Borde</span>
+                  <input class="fieldInput" type="number" value="2.5" step="0.5">
+                </div>
+              </div>
+
+              <div class="inspectorSectionLabel" style="margin-top:4px">Alineación NumPad (1..9)</div>
+              <div style="display:flex;align-items:center;gap:12px">
+                <div class="numpadAlignMatrix">
+                  <button class="numBtn">7</button><button class="numBtn">8</button><button class="numBtn">9</button>
+                  <button class="numBtn">4</button><button class="numBtn">5</button><button class="numBtn">6</button>
+                  <button class="numBtn">1</button><button class="numBtn selected">2</button><button class="numBtn">3</button>
+                </div>
+                <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted)">
+                  Alineación 2:<br>Inferior centrado
+                </span>
+              </div>
+            </div>
+
+            <!-- Preview del Preset seleccionado -->
+            <div class="stylePreviewBox">
+              Texto de ejemplo en ASS
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- 3. TIMELINE INDUSTRIAL -->
+  <footer class="timelineDock">
+    <div class="dockResizeHandle">
+      <div class="dockResizeLine"></div>
+    </div>
+
+    <!-- REGLA DE TIEMPO -->
+    <div class="rulerBar">
+      <span style="width:56px;padding-left:8px;color:var(--text-ghost)">TC RULER</span>
+      <div class="rulerTicks">
+        <div class="rulerMark" style="left: 0%;">18:00.00</div>
+        <div class="rulerSubtick" style="left: 8.3%;"></div>
+        <div class="rulerSubtick" style="left: 16.6%;"></div>
+        <div class="rulerMark" style="left: 25%;">18:05.00</div>
+        <div class="rulerSubtick" style="left: 33.3%;"></div>
+        <div class="rulerSubtick" style="left: 41.6%;"></div>
+        <div class="rulerMark" style="left: 50%;">18:10.00</div>
+        <div class="rulerSubtick" style="left: 58.3%;"></div>
+        <div class="rulerSubtick" style="left: 66.6%;"></div>
+        <div class="rulerMark" style="left: 75%;">18:15.00</div>
+        <div class="rulerSubtick" style="left: 83.3%;"></div>
+        <div class="rulerSubtick" style="left: 91.6%;"></div>
+      </div>
+    </div>
+
+    <!-- WAVEFORM -->
+    <div class="waveCanvasWrap">
+      <canvas id="waveformCanvas"></canvas>
+    </div>
+
+    <!-- CARRILES -->
+    <div class="lanesContainer" id="lanesContainer">
+      <div class="trackRow">
+        <div class="trackSideLabel">
+          <span style="width:6px;height:6px;background:var(--spk-1);border-radius:1px"></span>
+          <span>H1</span>
+        </div>
+        <div class="trackContentArea">
+          <div class="subClip" style="left: 5%; width: 15%; background: var(--spk-1);">
+            <div class="subClipHandle left"></div>
+            Mira, te cuento todo...
+            <div class="subClipHandle right"></div>
+          </div>
+          <div class="subClip selected" style="left: 38%; width: 20%; background: var(--spk-1);" id="activeClipEl">
+            <div class="subClipHandle left"></div>
+            ¿Y entonces el sistema aguantó tres semanas...
+            <div class="subClipHandle right"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="trackRow">
+        <div class="trackSideLabel">
+          <span style="width:6px;height:6px;background:var(--spk-2);border-radius:1px"></span>
+          <span>H2</span>
+        </div>
+        <div class="trackContentArea">
+          <div class="subClip" style="left: 22%; width: 14%; background: var(--spk-2);">
+            <div class="subClipHandle left"></div>
+            El café ya no hacía...
+            <div class="subClipHandle right"></div>
+          </div>
+          <div class="subClip" style="left: 60%; width: 18%; background: var(--spk-2);">
+            <div class="subClipHandle left"></div>
+            ...y ahí fue justo cuando...
+            <div class="subClipHandle right"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="trackRow">
+        <div class="trackSideLabel">
+          <span style="width:6px;height:6px;background:var(--spk-3);border-radius:1px"></span>
+          <span>H3</span>
+        </div>
+        <div class="trackContentArea">
+          <div class="subClip" style="left: 31%; width: 12%; background: var(--spk-3);">
+            <div class="subClipHandle left"></div>
+            Tres semanas completas...
+            <div class="subClipHandle right"></div>
+          </div>
+          <div class="subClip" style="left: 79%; width: 16%; background: var(--spk-3);">
+            <div class="subClipHandle left"></div>
+            Nadie esperaba que el clúster...
+            <div class="subClipHandle right"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="needlePlayhead" id="needlePlayhead">
+        <div class="needleHeadCap"></div>
+      </div>
+    </div>
+
+    <!-- FOOTER TIMELINE -->
+    <div class="timelineFooter">
+      <div class="zoomCtrl">
+        <span>ZOOM</span>
+        <span style="color:var(--text-primary)">10.0s VISIBLES</span>
+      </div>
+      <div class="timelineMiniScrollbar">
+        <div class="miniScrollThumb"></div>
+      </div>
+      <button class="followToggle on" id="followToggleBtn" onclick="this.classList.toggle('on')">SEGUIR CABEZAL [AUTO]</button>
+    </div>
+  </footer>
+
+  <!-- 4. STATUS BAR -->
+  <div class="statusBar">
+    <div class="statusSaved">
+      <span class="sqDot"></span>
+      <span>GUARDADO EN DISCO</span>
+    </div>
+    <div class="statusItem">
+      <span>PROYECTO:</span>
+      <span style="color:var(--text-secondary)">entrevista_colordubber.odproj</span>
+    </div>
+    <div class="statusItem">
+      <span>48 SUBTÍTULOS</span>
+    </div>
+    <div class="statusItem">
+      <span>LATENCIA: 0 ms</span>
+    </div>
+    <div class="statusKeyHint">
+      Shift+Scroll: Zoom · Scroll: Pan · Ctrl+Click: Snap off · ¿ Ayuda
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Control de pestañas del navegador en la columna derecha
+  function switchTab(tabId) {
+    // Desactivar todos los botones de tab
+    document.getElementById('tabBtnSubs').classList.toggle('active', tabId === 'subs');
+    document.getElementById('tabBtnSpeakers').classList.toggle('active', tabId === 'speakers');
+    document.getElementById('tabBtnStyles').classList.toggle('active', tabId === 'styles');
+
+    // Cambiar paneles
+    document.getElementById('paneSubs').classList.toggle('active', tabId === 'subs');
+    document.getElementById('paneSpeakers').classList.toggle('active', tabId === 'speakers');
+    document.getElementById('paneStyles').classList.toggle('active', tabId === 'styles');
+  }
+
+  // Dibujar forma de onda sintética realista en canvas
+  const canvas = document.getElementById('waveformCanvas');
+  const ctx = canvas.getContext('2d');
+
+  function resizeWave() {
+    canvas.width = canvas.parentElement.clientWidth * window.devicePixelRatio;
+    canvas.height = canvas.parentElement.clientHeight * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    drawWave();
+  }
+
+  function drawWave() {
+    const w = canvas.parentElement.clientWidth;
+    const h = canvas.parentElement.clientHeight;
+    ctx.clearRect(0, 0, w, h);
+
+    // Fondo negro puro
+    ctx.fillStyle = "#020203";
+    ctx.fillRect(0, 0, w, h);
+
+    // Línea central de audio (0 dB)
+    ctx.strokeStyle = "#14171E";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(56, h / 2);
+    ctx.lineTo(w, h / 2);
+    ctx.stroke();
+
+    const step = 3;
+    const offsetLeft = 56;
+
+    for (let x = offsetLeft; x < w; x += step) {
+      const rel = (x - offsetLeft) / (w - offsetLeft);
+      const voiceBand = Math.sin(rel * 28) * Math.cos(rel * 7);
+      const amp = Math.max(0.08, Math.abs(voiceBand) * 0.85);
+
+      const barH = amp * (h * 0.76);
+      const y = (h - barH) / 2;
+
+      if (amp > 0.65) {
+        ctx.fillStyle = "rgba(232, 93, 78, 0.75)";
+      } else {
+        ctx.fillStyle = "rgba(78, 168, 232, 0.4)";
+      }
+
+      ctx.fillRect(x, y, 1.5, barH);
+    }
+  }
+
+  window.addEventListener('resize', resizeWave);
+  setTimeout(resizeWave, 50);
+
+  // Simulación de reproducción
+  let isPlaying = false;
+  let playheadPos = 42;
+
+  function togglePlay() {
+    isPlaying = !isPlaying;
+    const btn = document.getElementById('playToggleBtn');
+    const svg = document.getElementById('playIconSvg');
+    if (isPlaying) {
+      btn.style.background = "#7ED957";
+      svg.innerHTML = '<path d="M4 2h3v12H4zM9 2h3v12H9z"/>';
+      requestAnimationFrame(runPlayhead);
+    } else {
+      btn.style.background = "var(--accent)";
+      svg.innerHTML = '<path d="M4 2l9 6-9 6z"/>';
+    }
+  }
+
+  function runPlayhead() {
+    if (!isPlaying) return;
+    playheadPos += 0.08;
+    if (playheadPos > 96) playheadPos = 10;
+    document.getElementById('needlePlayhead').style.left = playheadPos + '%';
+
+    const secs = 18 * 60 + 7.4 + (playheadPos - 42) * 0.2;
+    const m = Math.floor(secs / 60);
+    const s = (secs % 60).toFixed(2).padStart(5, '0');
+    document.getElementById('mainTimecode').value = `00:${m}:${s}`;
+
+    requestAnimationFrame(runPlayhead);
+  }
+
+  // Sincronización en vivo de selección
+  function selectRow(rowEl, spkNum, spkName, spkColor, text, tc) {
+    document.querySelectorAll('.capItemRow').forEach(r => r.classList.remove('active'));
+    rowEl.classList.add('active');
+
+    document.getElementById('activeSpeakerDot').style.background = spkColor;
+    document.getElementById('activeSpeakerText').innerText = `H${spkNum} · ${spkName} (Tecla ${spkNum})`;
+    document.getElementById('captionTextarea').value = text;
+    document.getElementById('captionTextarea').style.borderLeftColor = spkColor;
+    document.getElementById('videoSubtitle').innerText = text;
+    document.getElementById('mainTimecode').value = tc;
+    document.getElementById('charCountLabel').innerText = `${text.length} caracteres · ${(text.length / 3.8).toFixed(1)} cps`;
+  }
+
+  function updateActiveSub(val) {
+    document.getElementById('videoSubtitle').innerText = val;
+    document.getElementById('charCountLabel').innerText = `${val.length} caracteres · ${(val.length / 3.8).toFixed(1)} cps`;
+    const activeRow = document.querySelector('.capItemRow.active .capTextCol');
+    if (activeRow) activeRow.innerText = val;
+  }
+
+  function simularNuevoFragmento() {
+    alert("Fragmento creado con precisión en t=" + document.getElementById('mainTimecode').value + " con detección de isla de audio adaptativa.");
+  }
+</script>
+
+</body>
+</html>
