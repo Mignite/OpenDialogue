@@ -372,6 +372,45 @@ fn escribir_archivo_texto(ruta: String, contenido: String) -> Result<(), String>
     escribir_atomico(std::path::Path::new(&ruta), contenido.as_bytes())
 }
 
+// Recovery ante crash: copia automática del proyecto en appConfigDir. Si el
+// proceso muere, al arrancar se lee esto y se ofrece recuperar. El contenido
+// (validación, vigencia) es de `utils/recovery.ts`; aquí solo el I/O atómico.
+
+fn ruta_recovery(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    Ok(dir.join("recovery.json"))
+}
+
+/// Escribe (o borra, con `contenido = None`) el recovery. Atómico como el
+/// resto: un crash a mitad no deja un recovery corrupto que rompa el arranque.
+#[tauri::command]
+async fn guardar_recovery(app: tauri::AppHandle, contenido: Option<String>) -> Result<(), String> {
+    let path = ruta_recovery(&app)?;
+    tauri::async_runtime::spawn_blocking(move || match contenido {
+        Some(texto) => escribir_atomico(&path, texto.as_bytes()),
+        None => match std::fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            // Ya no estaba: nada que borrar.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e.to_string()),
+        },
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn leer_recovery(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let path = ruta_recovery(&app)?;
+    tauri::async_runtime::spawn_blocking(move || match std::fs::read_to_string(&path) {
+        Ok(texto) => Ok(Some(texto)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.to_string()),
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// Nombres de las familias instaladas, para el selector de fuente del preset
 /// .ass.
 ///
@@ -490,6 +529,8 @@ pub fn run() {
             existe_cache_volumen,
             cargar_cache_volumen,
             listar_fuentes_sistema,
+            guardar_recovery,
+            leer_recovery,
         ])
         .setup(|app| {
             let nuevo = MenuItemBuilder::new("Nuevo proyecto")

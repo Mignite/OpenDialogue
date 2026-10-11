@@ -50,6 +50,7 @@ import { lineasOverlayActivas } from "./utils/ass";
 import { cargarAjustes, guardarAjustes, type Ajustes } from "./utils/ajustes";
 
 import { useAssEstilos } from "./hooks/useAssEstilos";
+import { useRecovery } from "./hooks/useRecovery";
 import { useCaptions } from "./hooks/useCaptions";
 import { useTransporte } from "./hooks/useTransporte";
 import { useHablantes } from "./hooks/useHablantes";
@@ -478,6 +479,52 @@ function App() {
       updateScrollbarThumb,
     },
   );
+
+  // Recovery ante crash: copia automática periódica + pregunta al arrancar.
+  // Va después de useProyecto porque necesita su isDirtyRef y su
+  // rutaProyectoRef. Todo el efecto vive dentro del hook: no hay valor que
+  // usar acá (los timers y la pregunta de arranque son internos).
+  useRecovery({
+    captionsRef: caps.captionsRef,
+    hablantesRef,
+    rutaVideoRef: videoPathRef,
+    rutaProyectoRef: proyecto.rutaProyectoRef,
+    videoRef,
+    isDirtyRef: proyecto.isDirtyRef,
+    alRecuperar: (ruta, datos) => {
+      // Carga en memoria y marca sucio: el recovery NO pisa el archivo del
+      // proyecto, así que el usuario decide si guardar (Ctrl+S) o descartar.
+      proyecto.limpiarBanderas();
+      proyecto.rutaProyectoRef.current = ruta;
+      proyecto.setRutaProyecto(ruta);
+      setHablantes(datos.hablantes);
+      caps.setCaptions(datos.captions);
+      caps.setSelectedCaptionIds([]);
+      playheadPendienteRef.current = datos.playhead ?? 0;
+      videoPathRef.current = datos.ruta_video;
+      setVideoPath(datos.ruta_video);
+      // Se comprueba la existencia del video como al cargar un proyecto: si no
+      // está, el panel de "video no encontrado" ofrece seguir sin él. Sin
+      // backend el invoke falla y cae al mismo panel, sin romper nada.
+      void invoke<boolean>("existe_archivo", { ruta: datos.ruta_video })
+        .then((ok) => {
+          if (ok) cargarVideoDesdeRuta(datos.ruta_video);
+          else {
+            setRutaFaltante(datos.ruta_video);
+            setVideoNoEncontrado(true);
+          }
+        })
+        .catch(() => {
+          setRutaFaltante(datos.ruta_video);
+          setVideoNoEncontrado(true);
+        });
+    },
+    preguntarRecuperar: (resumen) =>
+      ask(t("recovery.question", { resumen }), {
+        title: t("recovery.title"),
+        kind: "warning",
+      }),
+  });
 
   useEffect(() => {
     selectedCaptionIdsRef.current = selectedCaptionIds;

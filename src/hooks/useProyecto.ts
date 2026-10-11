@@ -462,9 +462,11 @@ export function useProyecto(
   return {
     rutaProyecto,
     rutaProyectoRef,
+    setRutaProyecto,
     hayCambios,
     isDirtyRef,
     marcarSucio,
+    limpiarBanderas,
     cargarSrtDesdeRuta,
     handleAbrirVideo,
     handleAbrirSrt,
