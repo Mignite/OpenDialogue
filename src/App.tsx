@@ -30,6 +30,7 @@ import {
   BuildOverlapReport,
   FormatOverlapReport,
   findSnapTime,
+  findSnapBlockDelta,
 } from "./utils/captions";
 import { filtrarPorMarquee, captionRowIndex, filasDestinoRelativas } from "./utils/selection";
 import { picoEnRango } from "./utils/audioIslands";
@@ -613,8 +614,30 @@ function App() {
     if (!lead) return;
     let leadNuevo = ws + ((clientX - rect.left - TRACK_LABEL_W) / areaWidth) * wSec;
     if (!ctrlKey) {
-      const snap = findSnapTime(leadNuevo, bd.ids, captionsRef.current);
-      if (snap !== null) leadNuevo = snap;
+      // Snap de bloque (estilo Premiere/filmcraft): se prueban AMBOS extremos
+      // del bloque ya desplazado (inicio mín + fin máx del set) y gana el imán
+      // más cercano (bordes vecinos + playhead). Antes solo el inicio del lead
+      // snapeaba: arrastrar a la derecha nunca pegaba.
+      const tMin0 = Math.min(
+        ...bd.ids.map(
+          (id) => captionsRef.current.find((c) => c.id === id)?.inicio ?? Infinity,
+        ),
+      );
+      const tMax0 = Math.max(
+        ...bd.ids.map(
+          (id) => captionsRef.current.find((c) => c.id === id)?.fin ?? -Infinity,
+        ),
+      );
+      const base = leadNuevo - lead.inicio;
+      const playhead = videoRef.current?.currentTime ?? null;
+      const deltaSnap = findSnapBlockDelta(
+        tMin0 + base,
+        tMax0 + base,
+        bd.ids,
+        captionsRef.current,
+        playhead,
+      );
+      leadNuevo += deltaSnap;
     }
     let deltaT = leadNuevo - lead.inicio;
     if (deltaT < -lead.inicio) deltaT = -lead.inicio;
@@ -1094,9 +1117,13 @@ function App() {
         let newTime = Math.max(0, time);
         const cap = captionsRef.current.find((c) => c.id === captionId);
         if (cap) {
+          // Playhead como target extra (estilo filmcraft). -1 cuando no hay
+          // video: fuera del threshold, nunca snapea.
           const snap = e.ctrlKey
             ? null
-            : findSnapTime(newTime, captionId, captionsRef.current);
+            : findSnapTime(newTime, captionId, captionsRef.current, [
+                videoRef.current?.currentTime ?? -1,
+              ]);
           if (snap !== null) newTime = snap;
           if (edge === "start") {
             dragCurrentTimeRef.current = Math.min(newTime, cap.fin - 0.1);
@@ -1226,7 +1253,9 @@ function App() {
           if (cap && finalTime >= 0) {
             const snap = _e.ctrlKey
               ? null
-              : findSnapTime(finalTime, captionId, captionsRef.current);
+              : findSnapTime(finalTime, captionId, captionsRef.current, [
+                  videoRef.current?.currentTime ?? -1,
+                ]);
             if (snap !== null) finalTime = snap;
             if (edge === "start") {
               const clampedTime = Math.min(finalTime, cap.fin - 0.1);

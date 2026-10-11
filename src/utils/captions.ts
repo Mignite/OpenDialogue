@@ -48,20 +48,57 @@ export function findSnapTime(
   time: number,
   excludeIds: string | string[],
   caps: Caption[],
+  extraTargets: number[] = [],
 ): number | null {
   const exclude =
     typeof excludeIds === "string" ? new Set([excludeIds]) : new Set(excludeIds);
   let best: number | null = null;
   let bestDist = SNAP_THRESHOLD;
+  const considerar = (t: number) => {
+    const dist = Math.abs(time - t);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = t;
+    }
+  };
   for (const cap of caps) {
     if (exclude.has(cap.id)) continue;
-    for (const t of [cap.inicio, cap.fin]) {
-      const dist = Math.abs(time - t);
+    considerar(cap.inicio);
+    considerar(cap.fin);
+  }
+  for (const t of extraTargets) considerar(t);
+  return best;
+}
+
+// Snap de bloque (body drag, estilo Premiere): prueba AMBOS extremos del
+// bloque ya desplazado (tMin/tMax) contra bordes vecinos + playhead y
+// devuelve el delta del imán más cercano (0 si ninguno). Con un clip,
+// tMin == lead.inicio y equivale al snap simple de antes.
+export function findSnapBlockDelta(
+  tMin: number,
+  tMax: number,
+  excludeIds: string | string[],
+  caps: Caption[],
+  playhead: number | null,
+): number {
+  const exclude =
+    typeof excludeIds === "string" ? new Set([excludeIds]) : new Set(excludeIds);
+  let bestDelta = 0;
+  let bestDist = SNAP_THRESHOLD;
+  const considerar = (t: number) => {
+    for (const bound of [tMin, tMax]) {
+      const dist = Math.abs(bound - t);
       if (dist < bestDist) {
         bestDist = dist;
-        best = t;
+        bestDelta = t - bound;
       }
     }
+  };
+  for (const cap of caps) {
+    if (exclude.has(cap.id)) continue;
+    considerar(cap.inicio);
+    considerar(cap.fin);
   }
-  return best;
+  if (playhead !== null) considerar(playhead);
+  return bestDelta;
 }
