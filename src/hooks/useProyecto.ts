@@ -121,6 +121,28 @@ export function useProyecto(
     setHayCambios(false);
   }, []);
 
+  // Una carga de CONTENIDO (SRT, auto-subs, .ass) no es abrir otro proyecto:
+  // reemplaza los captions del proyecto actual, así que la memoria pasa a
+  // divergir del archivo en disco. Eso es un cambio sin guardar real, y
+  // limpiarlo dejaba dos trampas: cargar un SRT sobre un proyecto guardado
+  // descartaba tanto el SRT recién cargado como las ediciones previas sin que
+  // al cerrar la app apareciera aviso alguno. El undo recuperaba el estado
+  // anterior, pero solo mientras la app siguiera abierta. Marcarlo sucio
+  // mantiene ese aviso.
+  //
+  // Sin proyecto guardado no hay archivo con el cual divergir, así que el
+  // proyecto queda limpio (el statusBar ya muestra "Proyecto sin guardar").
+  const limpiarBanderasTrasCarga = useCallback(() => {
+    ignoreNextChangeRef.current = true;
+    if (rutaProyectoRef.current) {
+      isDirtyRef.current = true;
+      setHayCambios(true);
+    } else {
+      isDirtyRef.current = false;
+      setHayCambios(false);
+    }
+  }, []);
+
   const cargarSrtDesdeRuta = useCallback(
     async (path: string) => {
       try {
@@ -129,14 +151,14 @@ export function useProyecto(
         });
         const parsed = parseSrt(contenido);
         pushHistorial();
-        limpiarBanderas();
+        limpiarBanderasTrasCarga();
         setCaptions(parsed);
       } catch (err) {
         console.error("Error cargando SRT:", err);
         notify(t("err.loadSrt", { error: String(err) }));
       }
     },
-    [pushHistorial, limpiarBanderas, setCaptions, notify],
+    [pushHistorial, limpiarBanderasTrasCarga, setCaptions, notify],
   );
 
   const handleAbrirVideo = useCallback(async () => {
@@ -210,7 +232,7 @@ export function useProyecto(
         hablantes.map((h) => [h.nombre.replace(/^Hablante /, ""), h.id]),
       );
       pushHistorial();
-      limpiarBanderas();
+      limpiarBanderasTrasCarga();
       setHablantes(hablantes);
       setCaptions(
         cues.map((c, i) => ({
@@ -223,7 +245,7 @@ export function useProyecto(
       console.error("Error importando auto-subs:", err);
       notify(t("err.importAutosubs", { error: String(err) }));
     }
-  }, [pushHistorial, limpiarBanderas, setHablantes, setCaptions, setSelectedCaptionIds, notify]);
+  }, [pushHistorial, limpiarBanderasTrasCarga, setHablantes, setCaptions, setSelectedCaptionIds, notify]);
 
   const guardarProyectoEnRuta = useCallback(
     async (path: string) => {
@@ -404,7 +426,11 @@ export function useProyecto(
       );
 
       // Mismo patrón que cargarSrtDesdeRuta: la carga deja el proyecto limpio.
-      limpiarBanderas();
+      // El push va ANTES de limpiarBanderas para que el snapshot capture el
+      // estado previo al import: sin él el Ctrl+Z saltaba a un snapshot más
+      // viejo y el import de .ass no era deshacible.
+      pushHistorial();
+      limpiarBanderasTrasCarga();
       setHablantes(resultado.hablantes);
       setCaptions(resultado.captions);
       setSelectedCaptionIds([]);
@@ -422,7 +448,8 @@ export function useProyecto(
     }
   }, [
     persistirPresetsAss,
-    limpiarBanderas,
+    pushHistorial,
+    limpiarBanderasTrasCarga,
     setHablantes,
     setCaptions,
     setSelectedCaptionIds,

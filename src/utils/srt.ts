@@ -68,6 +68,21 @@ export function buildSrt(caps: Caption[]): string {
     .join("\n");
 }
 
+// Nombres de dispositivo reservados por Windows: no se debería crear un
+// archivo con ninguno de ellos, y añadirles ".srt" NO los vuelve legales
+// (NUL.txt es equivalente a NUL). Windows además trata los dígitos
+// superíndice ¹²³ como dígitos, así que COM¹ también está reservado.
+// El rango documentado es COM1-9 / LPT1-9: COM0 y LPT0 NO están reservados.
+// Solo cuenta el nombre completo anterior al primer punto: "CONyecto" o
+// "COM10" son legales.
+//
+// OJO: en Windows 11 reciente (medido en 10.0.26300) escribir "CON.srt" o
+// incluso "NUL" con las APIs anchas SÍ funciona; el comportamiento cambió por
+// versión y sigue variando según el método de acceso (SMB las rechaza). El
+// prefijo "_" es inofensivo donde no hace falta y evita el fallo donde sí.
+const RESERVADOS_WINDOWS =
+  /^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])$/i;
+
 // Nombre del .srt de un hablante en el export por hablante. Sustituye los
 // caracteres prohibidos por "_" y, si el resultado ya se usó, anexa _2, _3...
 // Sin esto dos hablantes homónimos (o "A/B" y "A:B", que sanitan al mismo
@@ -76,9 +91,19 @@ export function nombreArchivoHablanteUnico(
   nombre: string,
   usados: string[],
 ): string {
-  const base = nombre.replace(/[\\/:*?"<>|]/g, "_");
-  if (!usados.includes(`${base}.srt`)) return `${base}.srt`;
+  let base = nombre.replace(/[\\/:*?"<>|]/g, "_");
+  // Prefijo antes de deduplicar: el nombre reservado debe compararse ya
+  // saneado, o "NUL" y "_NUL" no se detectarían como el mismo archivo.
+  const antesDelPunto = base.split(".")[0].replace(/[ .]+$/, "");
+  if (RESERVADOS_WINDOWS.test(antesDelPunto)) base = `_${base}`;
+  // La comparación es case-insensitive: Windows y macOS tratan el filesystem
+  // así, así que "Ana.srt" y "ana.srt" son el mismo archivo y la segunda
+  // escritura pisaba a la primera. El nombre devuelto conserva las
+  // mayúsculas del hablante.
+  const usadosLower = usados.map((u) => u.toLowerCase());
+  const libre = (n: string) => !usadosLower.includes(n.toLowerCase());
+  if (libre(`${base}.srt`)) return `${base}.srt`;
   let n = 2;
-  while (usados.includes(`${base}_${n}.srt`)) n++;
+  while (!libre(`${base}_${n}.srt`)) n++;
   return `${base}_${n}.srt`;
 }

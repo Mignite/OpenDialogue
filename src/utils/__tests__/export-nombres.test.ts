@@ -117,4 +117,51 @@ describe("nombreArchivoHablanteUnico", () => {
   it("no confunde nombres que solo se parecen", () => {
     expect(nombreArchivoHablanteUnico("Ana", ["Ana_2.srt"])).toBe("Ana.srt");
   });
+
+  // Windows (y macOS por defecto) tratan el filesystem como case-insensitive:
+  // "Ana.srt" y "ana.srt" son el MISMO archivo. Comparar con includes() las
+  // daba por distintas y la segunda pisaba a la primera.
+  it("colisiona cuando solo difieren en mayúsculas", () => {
+    const usados: string[] = [];
+    const a = nombreArchivoHablanteUnico("Ana", usados);
+    usados.push(a);
+    const b = nombreArchivoHablanteUnico("ana", usados);
+    expect(a).toBe("Ana.srt");
+    expect(b).toBe("ana_2.srt");
+  });
+
+  it("la comparación sin distinguir mayúsculas cubre también el sufijo", () => {
+    expect(nombreArchivoHablanteUnico("ana", ["ANA.srt", "ana_2.srt"])).toBe(
+      "ana_3.srt",
+    );
+  });
+
+  // Nombres de dispositivo reservados: CON, PRN, AUX, NUL, COM1-9, LPT1-9
+  // (más los dígitos superíndice ¹²³, que Windows trata como dígitos). No se
+  // puede crear un archivo con ninguno de ellos, y añadirlos ".srt" tampoco
+  // los vuelve legales. Se prefijan con "_" para que el export no falle.
+  it("prefija con _ los nombres reservados de Windows", () => {
+    for (const base of [
+      "CON", "PRN", "AUX", "NUL",
+      "COM1", "COM9", "LPT1", "LPT9",
+      "con", "nul", "com1",
+      "COM¹", "LPT²",
+    ]) {
+      expect(nombreArchivoHablanteUnico(base, [])).toBe(`_${base}.srt`);
+    }
+  });
+
+  it("NO reserva nombres que solo empiezan como uno reservado", () => {
+    // Solo es reservado el nombre completo antes del primer punto.
+    for (const base of ["CONyecto", "NULO", "COM10", "LPT0", "CONSORCIO"]) {
+      expect(nombreArchivoHablanteUnico(base, [])).toBe(`${base}.srt`);
+    }
+  });
+
+  it("el prefijo _ también pasa por la deduplicación", () => {
+    const usados: string[] = [];
+    usados.push(nombreArchivoHablanteUnico("NUL", usados));
+    usados.push(nombreArchivoHablanteUnico("NUL", usados));
+    expect(usados).toEqual(["_NUL.srt", "_NUL_2.srt"]);
+  });
 });
