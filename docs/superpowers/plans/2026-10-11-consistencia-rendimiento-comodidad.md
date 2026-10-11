@@ -1,50 +1,57 @@
-# Plan — Consistencia, rendimiento y comodidad (OpenDialogue)
+# Plan — Consistencia, rendimiento y comodidad (OpenDialogue) — COMPLETADO
 
 Objetivo del usuario: "que sea una app útil, cómoda y rápida"; prioridad a consistencia,
 todo el código en el repo, que compile sólido, más beneficios que pérdidas.
 
-Orden decidido (beneficio/riesgo):
+Estado: **las 5 fases completas**. 276 vitest + 14 Rust, clippy/fmt/build en verde.
 
-## Fase 1 — Fuentes con `fontdb` (consistencia multiplataforma) — HECHO
-- [x] 1.1 `fontdb = "0.24"` en Cargo.toml
-- [x] 1.2 Tests Rust de `normalizar_familias` (3): dedup+orden, vacíos, inválidos
-- [x] 1.3 `listar_fuentes_sistema` con `fontdb`, sin `#[cfg]` por plataforma
-- [x] 1.4 Borrados `familias_fc_list`, `familias_del_registro`, rama PowerShell, `comando_oculto`
-- [x] 1.5 Comentarios de `fuentes.ts` actualizados
-- [x] 1.6 Gates: 220 vitest + 14 Rust + clippy + fmt + build, todo verde
-- [x] 1.7 Bold/Italic (aprobado a mitad de fase): 6 tests ass + 3 tests assPresets
+## Fase 1 — Fuentes con `fontdb` (consistencia multiplataforma) — HECHO (88a0f56)
+- `fontdb = "0.24"`; `normalizar_familias` (puro, 3 tests); `listar_fuentes_sistema`
+  sin `#[cfg]` por plataforma.
+- Fuera `familias_fc_list`, `familias_del_registro`, la rama PowerShell y `comando_oculto`.
+- Bold/Italic agregados a los presets (antes se escribían fijos en 0 = imposibles).
+- Medido: 136 familias canónicas vs 265 de `fc-list` (la diferencia son variantes de
+  peso, que en .ass van en el campo Bold). La app ya no shellea ningún proceso hijo.
 
-### Medido
-- 136 familias canónicas vs 265 de `fc-list` (las 129 de diferencia son
-  variantes de peso, que en .ass van en el campo Bold, no en el Fontname).
-- fontdb agrupa pesos bajo la familia base: "Cantarell Light"/"Cantarell Bold"
-  reportan `Cantarell`. Carga en frío ~140 ms.
-- La app ya no shellea ningún proceso hijo (ni powershell, ni reg, ni fc-list).
+## Fase 2 — Rendimiento (6f8041c)
+- `agruparCaptionsPorCarril` (5 tests): una pasada en vez de S+1 filter.
+  Medido 1.04 ms → 0.34 ms por render (2000 captions, 9 hablantes).
+- `matchingCaptions` en useMemo.
+- `Set` en vez de `Array.includes()` en 4 mutaciones (O(n·k) → O(n)).
+- ResizeObserver cachea medidas del <video> en un ref (fin del layout thrash).
+- Color del waveform cacheado por cubo (48k template-literals/s → ~256/frame).
 
-## Fase 2 — Rendimiento (bajo riesgo, alto impacto)
-- [ ] 2.1 `useMemo` en `trackRows` (App.tsx) — O(n·S) por render
-- [ ] 2.2 `useMemo` en `matchingCaptions` (App.tsx)
-- [ ] 2.3 `Set` en vez de `Array.includes()` en mutaciones (useCaptions.ts, App.tsx)
-- [ ] 2.4 Cachear color del canvas por cubos (48k literals/frame)
-- [ ] 2.5 Sacar lectura de `clientWidth` del render → ResizeObserver/ref (layout thrash)
+## Fase 3 — Estabilidad (90e828c)
+- `hooks/debounce.ts` (6 tests): flush del auto-guardado de presets al desmontar
+  (se perdía el último cambio al cerrar dentro de los 400 ms).
+- Los 5 `setTimeout` crudos → `notify` (un solo mecanismo de mensaje en statusBar).
+- `playheadPendienteRef` solo se setea si el video existe (contaminaba el flujo
+  "seguir sin video").
+- El `setTimeout` de 50 ms al reanudar comprueba que el <video> sea el mismo.
+- Timer del focus automático del editor rastreado y limpiado.
 
-## Fase 3 — Estabilidad
-- [ ] 3.1 Autosave debounced + recovery file al arrancar (hoy NO existe)
-- [ ] 3.2 Limpiar los 5 `setTimeout` crudos → un solo mecanismo `notify`
-- [ ] 3.3 `clearTimeout` en debounce de estilos (pierde último cambio al cerrar <400ms)
-- [ ] 3.4 Guardar `playheadPendienteRef` solo si el video existe (contamina el flujo "seguir sin video")
+## Fase 4 — Comodidad (ee04b7b)
+- Portapapeles real del SO en Ctrl+C/V (antes era interno: no se podía copiar a
+  un editor externo ni pegar de otro programa). `utils/clipboard.ts`, 8 tests.
+- Editor numérico de inicio/fin del caption. `clampCaptionTiempos` (7 tests) es
+  ahora la ÚNICA regla de clamp (antes había dos distintas).
+- Shift+←/→ = 0,1 s; Ctrl+Shift+←/→ mueve el caption seleccionado.
 
-## Fase 4 — Comodidad
-- [ ] 4.1 Portapapeles real del SO (Ctrl+C/V cruzan con otras apps)
-- [ ] 4.2 Editor numérico inicio/fin del caption + Shift+←/→ frame-step
-- [ ] 4.3 Resolver video por ruta relativa al `.json` (portabilidad entre máquinas/OS)
+## Fase 5 — Portabilidad + pulido (177d0a4)
+- `ruta_video` relativa al .cdp cuando el video cuelga de su carpeta → el proyecto
+  cruza máquinas y SO. Backward-compatible (`utils/rutaVideo.ts`, 11 tests).
+- i18n: 9 etiquetas de alineación + 3 errores que estaban hardcodeados en español.
+  151 claves es/en con paridad.
 
-## Fase 5 — Pulido
-- [ ] 5.1 Traducir `ALINEACIONES` + 3 strings de error hardcodeados
-- [ ] 5.2 Actualizar README (conteo de tests, estructura)
+## Commits
+88a0f56 · 6f8041c · 90e828c · e3224b8 · ee04b7b · 177d0a4
 
-## Reglas
-- TDD en cada cambio de comportamiento: test falla primero, se ve fallar, código mínimo.
-- Gates tras cada fase: `cargo test`, `cargo clippy -- -D warnings`, `cargo fmt --check`,
-  `npm run build`, `npm test`.
-- Un cambio a la vez; nada de "ya que estás" mezclado.
+## Ideas que quedaron fuera (a propósito)
+- `useTimelineVista` / `useTimelineGestos`: App.tsx sigue grande (~2900 líneas) pero
+  partirlos es refactor puro, sin ganancia medible; la matemática del body-drag ya
+  está extraída y testeada (`findSnapBlockDelta`, `filasDestinoRelativas`,
+  `agruparCaptionsPorCarril`, `clampCaptionTiempos`).
+- `Ctrl+A` / `Ctrl+D` / `Tab` entre captions: atajos válidos, pero sin hueco medido
+  frente a los que sí se agregaron.
+- Snap a picos de audio: sigue en la lista de ideas futuras (no era parte de este
+  encargo).
