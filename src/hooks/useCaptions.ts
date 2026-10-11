@@ -82,6 +82,22 @@ export function useCaptions({
     });
   }
 
+  // Variante en bloque del actualizarTextoCaption para el buscar-y-reemplazar:
+  // un solo setCaptions (un render) y un solo pushHistorial desde el llamador.
+  // cambios trae el TEXTO NUEVO ya computado por el caller.
+  function actualizarTextos(cambios: Array<{ id: string; texto: string }>) {
+    if (cambios.length === 0) return;
+    const porId = new Map(cambios.map((c) => [c.id, c.texto]));
+    setCaptions((prev) => {
+      const copy = prev.map((c) => {
+        const nuevo = porId.get(c.id);
+        return nuevo === undefined ? c : { ...c, texto: nuevo };
+      });
+      captionsRef.current = copy;
+      return copy;
+    });
+  }
+
   // Duración de un fragmento nuevo: usa la isla de audio (fin del diálogo
   // bajo el playhead) si hay análisis de volumen; fallback a ISLA_FALLBACK.
   function duracionFragmento(inicio: number): number {
@@ -341,6 +357,7 @@ export function useCaptions({
     limpiarHistorial,
     asignarHablante,
     actualizarTextoCaption,
+    actualizarTextos,
     duracionFragmento,
     agregarFragmento,
     pegarFragmento,

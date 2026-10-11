@@ -116,5 +116,14 @@
   "assExport.unassigned": "Unassigned",
   "assExport.fontsLoading": "Loading system fonts...",
   "assExport.fontPicker": "Show installed fonts",
-  "assExport.fontsEmpty": "No font matches"
+  "assExport.fontsEmpty": "No font matches",
+  "app.transport.speed": "Playback speed",
+  "app.help.rowSpeed": "Playback speed: faster / slower",
+  "app.help.rowSearch": "Find & replace",
+  "app.search.open": "Find & replace (Ctrl+F)",
+  "app.search.placeholder": "Search",
+  "app.search.replacePlaceholder": "Replace with",
+  "app.search.matchCase": "Match case",
+  "app.search.replace": "Replace",
+  "app.search.replaceAll": "Replace all"
 }

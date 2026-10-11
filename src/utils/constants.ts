@@ -27,6 +27,10 @@ export const PALETA = [
 ];
 export const HISTORY_LIMIT = 50;
 
+// ==== Velocidad de reproducción ====
+// Opciones del selector (y únicos valores que se persisten en ajustes.json).
+export const VELOCIDADES_REPRODUCCION = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
 // ==== Islas de audio (duración inteligente de fragmentos) ====
 export const ISLA_VENTANA_FONDO_SEG = 2;
 export const ISLA_FACTOR_UMBRAL = 2.5;

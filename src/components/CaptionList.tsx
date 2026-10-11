@@ -1,6 +1,7 @@
 import { memo, useRef, useState, useCallback, useLayoutEffect, useEffect } from "react";
 import type { Caption, Hablante } from "../types";
 import { formatTime } from "../utils/time";
+import { partirResaltado } from "../utils/busqueda";
 import { useLocale } from "../i18n";
 
 const ROW_HEIGHT = 68;
@@ -16,6 +17,11 @@ interface Props {
   onEliminarCaption: (id: string) => void;
   rowRefs?: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
   speakerMap: Map<string, Hablante>;
+  // Buscar-y-reemplazar: resalta el término dentro de captionText. Sin
+  // termino (o vacío) el render es el de siempre.
+  terminoResaltado?: string;
+  coincidirMayus?: boolean;
+  idCoincidenciaActiva?: string;
 }
 
 function CaptionList({
@@ -26,6 +32,9 @@ function CaptionList({
   onEliminarCaption,
   rowRefs,
   speakerMap,
+  terminoResaltado = "",
+  coincidirMayus = false,
+  idCoincidenciaActiva,
 }: Props) {
   const { t } = useLocale();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -129,7 +138,23 @@ function CaptionList({
                       </svg>
                     </button>
                   </div>
-                  <div className="captionText">{c.texto}</div>
+                  <div className="captionText">
+                    {terminoResaltado
+                      ? partirResaltado(c.texto, terminoResaltado, coincidirMayus).map(
+                          (seg, j) =>
+                            seg.coincide ? (
+                              <mark
+                                key={j}
+                                className={`captionMark ${c.id === idCoincidenciaActiva ? "active" : ""}`}
+                              >
+                                {seg.texto}
+                              </mark>
+                            ) : (
+                              <span key={j}>{seg.texto}</span>
+                            ),
+                        )
+                      : c.texto}
+                  </div>
                 </div>
               );
             })}

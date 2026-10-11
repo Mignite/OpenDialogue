@@ -12,7 +12,7 @@ jobs:
   check:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Instala deps del WebView (cargo check las necesita)
         run: >
@@ -21,7 +21,7 @@ jobs:
           libwebkit2gtk-4.1-dev build-essential curl wget file
           libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
@@ -62,7 +62,7 @@ jobs:
             bundles: deb,appimage
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Instala deps del WebView (Linux)
         if: runner.os == 'Linux'
@@ -85,7 +85,7 @@ jobs:
           gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
           gstreamer1.0-libav
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm

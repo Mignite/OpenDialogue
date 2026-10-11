@@ -22,8 +22,14 @@ import {
   NEW_MARGIN,
   LERP_FACTOR,
   ASS_EM_PREVIEW,
+  VELOCIDADES_REPRODUCCION,
 } from "./utils/constants";
 import { formatTime, parseTimeInput } from "./utils/time";
+import {
+  coincide,
+  normalizarTermino,
+  reemplazarTodos,
+} from "./utils/busqueda";
 import { buildSrt, formatSrtTimestamp, nombreArchivoHablanteUnico } from "./utils/srt";
 import { AssExportModal } from "./components/AssExportModal";
 import {
@@ -36,7 +42,7 @@ import {
 import { filtrarPorMarquee, captionRowIndex, filasDestinoRelativas } from "./utils/selection";
 import { picoEnRango } from "./utils/audioIslands";
 import { lineasOverlayActivas } from "./utils/ass";
-import { cargarAjustes, guardarAjustes } from "./utils/ajustes";
+import { cargarAjustes, guardarAjustes, type Ajustes } from "./utils/ajustes";
 
 import { useAssEstilos } from "./hooks/useAssEstilos";
 import { useCaptions } from "./hooks/useCaptions";
@@ -189,6 +195,45 @@ function App() {
     mensajeTimerRef.current = window.setTimeout(() => setExportMensaje(""), 5000);
   }, []);
   const cerrarAssModal = useCallback(() => setAssModalAbierto(false), []);
+
+  // ==== Velocidad de reproducción ====
+  // Dual ref+state (patrón #1): el keydown global (deps []) lee la ref, el
+  // <select> renderiza el state. playbackRate se re-aplica en loadedmetadata
+  // porque el <video> lo resetea a 1 al cargar otro archivo.
+  const [velocidad, setVelocidad] = useState(1);
+  const velocidadRef = useRef(1);
+  // Últimos ajustes conocidos: cambiarIdioma y cambiarVelocidad mergean sobre
+  // esto (guardarAjustes escribe el objeto completo, sin merge pisan campos).
+  const ajustesRef = useRef<Ajustes>({});
+  const persistirAjustes = useCallback((parcial: Ajustes) => {
+    ajustesRef.current = { ...ajustesRef.current, ...parcial };
+    void guardarAjustes(ajustesRef.current);
+  }, []);
+  const cambiarVelocidad = useCallback(
+    (v: number) => {
+      velocidadRef.current = v;
+      setVelocidad(v);
+      const video = videoRef.current;
+      if (video) video.playbackRate = v;
+      persistirAjustes({ velocidad: v });
+    },
+    [persistirAjustes],
+  );
+  const pasoVelocidad = useCallback(
+    (dir: 1 | -1) => {
+      const idx = VELOCIDADES_REPRODUCCION.findIndex(
+        (v) => Math.abs(v - velocidadRef.current) < 0.001,
+      );
+      const actual = idx === -1 ? VELOCIDADES_REPRODUCCION.indexOf(1) : idx;
+      const nuevo = Math.min(
+        VELOCIDADES_REPRODUCCION.length - 1,
+        Math.max(0, actual + dir),
+      );
+      cambiarVelocidad(VELOCIDADES_REPRODUCCION[nuevo]);
+    },
+    [cambiarVelocidad],
+  );
+
   // Slice 2 del monolito: waveform (análisis + caché).
   const onda = useWaveform(notify);
 
@@ -215,6 +260,7 @@ function App() {
     rehacer,
     asignarHablante,
     actualizarTextoCaption,
+    actualizarTextos,
     agregarFragmento,
     pegarFragmento,
     eliminarCaption,
@@ -232,6 +278,110 @@ function App() {
   const selectedCaptionId = selectedCaptionIds.length
     ? selectedCaptionIds[selectedCaptionIds.length - 1]
     : null;
+
+  // ==== Buscar y reemplazar ====
+  // Panel propio de la columna derecha; no filtra la lista (solo resalta y
+  // navega), así la virtualización y el orden visual quedan intactos.
+  const [busquedaAbierta, setBusquedaAbierta] = useState(false);
+  const [terminoBusqueda, setTerminoBusqueda] = useState("");
+  const [coincidirMayus, setCoincidirMayus] = useState(false);
+  const [terminoReemplazo, setTerminoReemplazo] = useState("");
+  const [indiceCoincidencia, setIndiceCoincidencia] = useState(0);
+  const busquedaInputRef = useRef<HTMLInputElement>(null);
+  const terminoLimpio = normalizarTermino(terminoBusqueda);
+  const coincidencias = useMemo(() => {
+    if (!busquedaAbierta || terminoLimpio.length === 0) return [];
+    return captions.filter((c) =>
+      coincide(c.texto, terminoLimpio, coincidirMayus),
+    );
+  }, [captions, terminoLimpio, coincidirMayus, busquedaAbierta]);
+  const coincidenciaActiva = coincidencias[indiceCoincidencia] ?? null;
+
+  // Nuevo término / nuevo case / panel reabierto: la navegación arranca de 0.
+  useEffect(() => {
+    setIndiceCoincidencia(0);
+  }, [terminoBusqueda, coincidirMayus, busquedaAbierta]);
+  // Tras un reemplazo la lista se achica: el índice puede quedar fuera.
+  useEffect(() => {
+    if (indiceCoincidencia > 0 && indiceCoincidencia >= coincidencias.length) {
+      setIndiceCoincidencia(0);
+    }
+  }, [coincidencias.length, indiceCoincidencia]);
+  // El input no existe si el panel estaba cerrado: el focus va en el effect.
+  useEffect(() => {
+    if (busquedaAbierta) busquedaInputRef.current?.focus();
+  }, [busquedaAbierta]);
+
+  const navegarCoincidencia = useCallback(
+    (dir: 1 | -1) => {
+      const total = coincidencias.length;
+      if (total === 0) return;
+      const nuevo = (indiceCoincidencia + dir + total) % total;
+      setIndiceCoincidencia(nuevo);
+      const cap = coincidencias[nuevo];
+      if (cap) handleSelectCaption(cap.id, false, false);
+    },
+    [coincidencias, indiceCoincidencia, handleSelectCaption],
+  );
+
+  // Reemplaza en la coincidencia activa. La lista se recalcula sola: el
+  // caption reemplazado deja de matchear y el índice queda apuntando al
+  // siguiente match (los posteriores corren un lugar).
+  const reemplazarCoincidencia = useCallback(() => {
+    const cap = coincidencias[indiceCoincidencia];
+    if (!cap) return;
+    const nuevoTexto = reemplazarTodos(
+      cap.texto,
+      terminoLimpio,
+      terminoReemplazo,
+      coincidirMayus,
+    );
+    if (nuevoTexto === cap.texto) return;
+    pushHistorial();
+    actualizarTextos([{ id: cap.id, texto: nuevoTexto }]);
+  }, [
+    coincidencias,
+    indiceCoincidencia,
+    terminoLimpio,
+    terminoReemplazo,
+    coincidirMayus,
+    pushHistorial,
+    actualizarTextos,
+  ]);
+
+  const reemplazarTodas = useCallback(() => {
+    if (coincidencias.length === 0) return;
+    pushHistorial();
+    actualizarTextos(
+      coincidencias.map((c) => ({
+        id: c.id,
+        texto: reemplazarTodos(
+          c.texto,
+          terminoLimpio,
+          terminoReemplazo,
+          coincidirMayus,
+        ),
+      })),
+    );
+  }, [
+    coincidencias,
+    terminoLimpio,
+    terminoReemplazo,
+    coincidirMayus,
+    pushHistorial,
+    actualizarTextos,
+  ]);
+
+  function handleBusquedaKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      navegarCoincidencia(e.shiftKey ? -1 : 1);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      if (terminoBusqueda) setTerminoBusqueda("");
+      else setBusquedaAbierta(false);
+    }
+  }
   // Slice 1 del monolito: estilos .ass (presets + export + PlayRes).
   const ass = useAssEstilos({
     captionsRef: caps.captionsRef,
@@ -478,7 +628,7 @@ function App() {
 
   function cambiarIdioma(locale: "en" | "es") {
     setLocale(locale);
-    guardarAjustes({ locale });
+    persistirAjustes({ locale });
   }
 
   const togglePanelHablantes = useCallback(
@@ -497,8 +647,11 @@ function App() {
   useEffect(() => {
     cargarAjustes()
       .then((a) => {
+        const unificados = { ...a, locale: getLocale() };
+        ajustesRef.current = unificados;
         if (a.locale) setLocale(a.locale);
-        return guardarAjustes({ locale: getLocale() });
+        if (a.velocidad) cambiarVelocidad(a.velocidad);
+        return guardarAjustes(unificados);
       })
       .catch(() => {});
   }, []);
@@ -575,6 +728,8 @@ function App() {
     if (video) {
       const onLoadedMeta = () => {
         setVideoDuration(video.duration);
+        // El <video> resetea playbackRate a 1 con cada archivo nuevo.
+        video.playbackRate = velocidadRef.current;
         // Restaurar el playhead guardado en el proyecto (si hay uno pendiente)
         // y posicionar la ventana del timeline para que lo muestre.
         const pendiente = playheadPendienteRef.current;
@@ -1353,6 +1508,12 @@ function App() {
         return;
       }
 
+      if (e.ctrlKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        setBusquedaAbierta(true);
+        return;
+      }
+
       const target = e.target as HTMLElement;
       if (
         target.tagName === "INPUT" ||
@@ -1454,6 +1615,16 @@ function App() {
       if (e.key === "?") {
         e.preventDefault();
         setShowHelp((v) => !v);
+        return;
+      }
+      if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        pasoVelocidad(1);
+        return;
+      }
+      if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        pasoVelocidad(-1);
         return;
       }
 
@@ -2102,6 +2273,18 @@ function App() {
                   onKeyDown={handleTimeInputKeyDown}
                   title={t("app.timeInput.title")}
                 />
+                <select
+                  className="speedSelect"
+                  value={velocidad}
+                  onChange={(e) => cambiarVelocidad(Number(e.target.value))}
+                  title={t("app.transport.speed")}
+                >
+                  {VELOCIDADES_REPRODUCCION.map((v) => (
+                    <option key={v} value={v}>
+                      {v}×
+                    </option>
+                  ))}
+                </select>
               </div>
             </>
           ) : (
@@ -2196,9 +2379,77 @@ function App() {
           <div className="rightColHeader">
             <span className="rightColTitle">{t("app.rightCol.title")}</span>
             {captions.length > 0 && (
-              <span className="captionCount">{t("app.rightCol.lines", { count: captions.length })}</span>
+              <span className="rightColHeaderActions">
+                <span className="captionCount">{t("app.rightCol.lines", { count: captions.length })}</span>
+                <button
+                  className={`iconBtnSmall searchToggle ${busquedaAbierta ? "active" : ""}`}
+                  onClick={() => setBusquedaAbierta((v) => !v)}
+                  title={t("app.search.open")}
+                >
+                  <svg
+                    className="icon xs"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.6}
+                    strokeLinecap="round"
+                  >
+                    <circle cx="7" cy="7" r="4.4" />
+                    <path d="M10.4 10.4l3 3" />
+                  </svg>
+                </button>
+              </span>
             )}
           </div>
+          {busquedaAbierta && captions.length > 0 && (
+            <div className="searchBox">
+              <input
+                ref={busquedaInputRef}
+                className="searchInput"
+                placeholder={t("app.search.placeholder")}
+                value={terminoBusqueda}
+                onChange={(e) => setTerminoBusqueda(e.target.value)}
+                onKeyDown={handleBusquedaKeyDown}
+              />
+              <button
+                className={`searchToggleCase ${coincidirMayus ? "active" : ""}`}
+                onClick={() => setCoincidirMayus((v) => !v)}
+                title={t("app.search.matchCase")}
+              >
+                Aa
+              </button>
+              <span
+                className={`searchCount ${terminoLimpio && coincidencias.length === 0 ? "none" : ""}`}
+              >
+                {terminoLimpio
+                  ? coincidencias.length === 0
+                    ? "0"
+                    : `${indiceCoincidencia + 1}/${coincidencias.length}`
+                  : "\u00a0"}
+              </span>
+              <input
+                className="searchInput replace"
+                placeholder={t("app.search.replacePlaceholder")}
+                value={terminoReemplazo}
+                onChange={(e) => setTerminoReemplazo(e.target.value)}
+                onKeyDown={handleBusquedaKeyDown}
+              />
+              <button
+                className="searchBtn"
+                onClick={reemplazarCoincidencia}
+                disabled={coincidencias.length === 0}
+              >
+                {t("app.search.replace")}
+              </button>
+              <button
+                className="searchBtn"
+                onClick={reemplazarTodas}
+                disabled={coincidencias.length === 0}
+              >
+                {t("app.search.replaceAll")}
+              </button>
+            </div>
+          )}
           <CaptionList
             captions={captions}
             currentCaptionIdx={currentCaptionIdx}
@@ -2207,6 +2458,9 @@ function App() {
             onEliminarCaption={eliminarCaption}
             rowRefs={rowRefs}
             speakerMap={voces.speakerMap}
+            terminoResaltado={busquedaAbierta ? terminoLimpio : ""}
+            coincidirMayus={coincidirMayus}
+            idCoincidenciaActiva={coincidenciaActiva?.id}
           />
         </div>
       </div>
@@ -2587,6 +2841,18 @@ function App() {
                     <kbd>Ctrl</kbd>+<kbd>V</kbd>
                   </td>
                   <td>{t("app.help.rowPaste")}</td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>Ctrl</kbd>+<kbd>F</kbd>
+                  </td>
+                  <td>{t("app.help.rowSearch")}</td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>+</kbd> / <kbd>-</kbd>
+                  </td>
+                  <td>{t("app.help.rowSpeed")}</td>
                 </tr>
                 <tr>
                   <td>

@@ -1931,3 +1931,119 @@ button.primary:hover {
   background: none;
   color: var(--textFaint);
 }
+
+/* ==== Velocidad de reproducción ==== */
+.speedSelect {
+  width: 74px;
+  font-family: var(--font-mono);
+}
+
+/* ==== Buscar y reemplazar (columna derecha) ==== */
+.rightColHeaderActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.searchToggle.active {
+  color: var(--accent);
+}
+
+.searchToggle:hover {
+  color: var(--accent);
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.searchInput {
+  flex: 1 1 90px;
+  min-width: 0;
+  background: var(--surface3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.searchInput.replace {
+  color: var(--textDim);
+}
+
+.searchToggleCase {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 4px 7px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--surface3);
+  color: var(--textDim);
+  cursor: pointer;
+}
+
+.searchToggleCase.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.searchCount {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--textDim);
+  min-width: 34px;
+  text-align: center;
+}
+
+.searchCount.none {
+  color: var(--danger);
+}
+
+.searchBtn {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 5px 9px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--surface3);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.searchBtn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.searchBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Marcas del buscar sobre el texto del subtítulo. Fondo claro + texto
+   oscuro: los presets de texto claros siguen legibles debajo. */
+.captionMark {
+  background: var(--warn);
+  color: #121114;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.captionMark.active {
+  background: var(--accent);
+  color: #fff;
+}

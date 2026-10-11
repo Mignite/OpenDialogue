@@ -116,5 +116,14 @@
   "assExport.unassigned": "Sin hablante asignado",
   "assExport.fontsLoading": "Cargando fuentes del sistema...",
   "assExport.fontPicker": "Ver fuentes instaladas",
-  "assExport.fontsEmpty": "Ninguna fuente coincide"
+  "assExport.fontsEmpty": "Ninguna fuente coincide",
+  "app.transport.speed": "Velocidad de reproducción",
+  "app.help.rowSpeed": "Velocidad: acelerar / frenar",
+  "app.help.rowSearch": "Buscar y reemplazar",
+  "app.search.open": "Buscar y reemplazar (Ctrl+F)",
+  "app.search.placeholder": "Buscar",
+  "app.search.replacePlaceholder": "Reemplazar con",
+  "app.search.matchCase": "Distinguir mayúsculas",
+  "app.search.replace": "Reemplazar",
+  "app.search.replaceAll": "Reemplazar todo"
 }

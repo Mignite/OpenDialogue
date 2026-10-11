@@ -29,3 +29,25 @@ describe("ajustesDesdeJson", () => {
     });
   });
 });
+
+describe("ajustesDesdeJson: velocidad", () => {
+  it("velocidad válida se conserva junto al locale", () => {
+    expect(ajustesDesdeJson('{"locale":"es","velocidad":1.5}')).toEqual({
+      locale: "es",
+      velocidad: 1.5,
+    });
+    expect(ajustesDesdeJson('{"velocidad":0.5}')).toEqual({ velocidad: 0.5 });
+  });
+
+  it("velocidad fuera del selector se descarta", () => {
+    expect(ajustesDesdeJson('{"velocidad":7.3}')).toEqual({});
+    expect(ajustesDesdeJson('{"velocidad":"1.5"}')).toEqual({});
+    expect(ajustesDesdeJson('{"velocidad":null}')).toEqual({});
+  });
+
+  it("round-trip conserva ambos campos", () => {
+    expect(ajustesDesdeJson(ajustesAJson({ locale: "en", velocidad: 2 }))).toEqual(
+      { locale: "en", velocidad: 2 },
+    );
+  });
+});
