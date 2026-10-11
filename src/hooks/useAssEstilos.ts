@@ -4,6 +4,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import type { Caption, Hablante, PresetAss } from "../types";
 import { buildAss, presetParaExportar } from "../utils/ass";
 import { cargarPresetsAss, guardarPresetsAss } from "../utils/assPresets";
+import { programarDebounce, descargarDebounce } from "./debounce";
 import { t } from "../i18n";
 
 export interface AssEstilosDeps {
@@ -43,7 +44,11 @@ export function useAssEstilos({
 
   // Timer del auto-guardado (trailing debounce): el write a disco vive acá,
   // no en el panel.
-  const presetWriteTimerRef = useRef<number>(0);
+  const presetWriteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // El callback pendiente vive aparte del timer: el cleanup del unmount
+  // necesita ejecutarlo si el timer NO venció (si no, cerrar la app dentro de
+  // la ventana de 400 ms perdía el último cambio de estilo).
+  const presetWritePendienteRef = useRef<(() => void) | null>(null);
   const persistirPresets = useCallback(
     async (presets: PresetAss[], opts?: { ya?: boolean }) => {
       setPresetsAss(presets);
@@ -51,8 +56,8 @@ export function useAssEstilos({
       // trailing debounce: un solo write por ráfaga de keystrokes y siempre
       // con el ÚLTIMO contenido (sin reordenamientos). `ya:true` escribe al
       // instante (import .ass: el mensaje de éxito debe implicar disco).
-      window.clearTimeout(presetWriteTimerRef.current);
       const escribir = async () => {
+        presetWritePendienteRef.current = null;
         try {
           await guardarPresetsAss(presets);
         } catch (err) {
@@ -61,14 +66,34 @@ export function useAssEstilos({
         }
       };
       if (opts?.ya) {
+        presetWriteTimerRef.current = descargarDebounce(
+          presetWriteTimerRef.current,
+          presetWritePendienteRef.current,
+        );
         await escribir();
         return;
       }
-      presetWriteTimerRef.current = window.setTimeout(() => {
-        void escribir();
-      }, 400);
+      presetWritePendienteRef.current = escribir;
+      presetWriteTimerRef.current = programarDebounce(
+        presetWriteTimerRef.current,
+        () => void escribir(),
+        400,
+      );
     },
     [notify],
+  );
+
+  // Flush al desmontar: sin esto, cerrar la app antes de que venza el debounce
+  // descartaba la escritura pendiente (el timer muere con la ventana).
+  useEffect(
+    () => () => {
+      const pendiente = presetWritePendienteRef.current;
+      presetWriteTimerRef.current = descargarDebounce(
+        presetWriteTimerRef.current,
+        pendiente,
+      );
+    },
+    [],
   );
 
   const exportarAssConPreset = useCallback(

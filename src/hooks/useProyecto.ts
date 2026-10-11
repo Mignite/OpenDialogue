@@ -330,8 +330,11 @@ export function useProyecto(
       const existe: boolean = await invoke("existe_archivo", {
         ruta: proyecto.ruta_video,
       });
-      playheadPendienteRef.current = proyecto.playhead ?? 0;
       if (existe) {
+        // Solo se guarda el playhead pendiente si el video va a cargar: si no
+        // existe, dejarlo puesto contaminaba el `loadedmetadata` del PRÓXIMO
+        // video (abrir cualquier otro salto al tiempo del proyecto anterior).
+        playheadPendienteRef.current = proyecto.playhead ?? 0;
         cargarVideo(proyecto.ruta_video);
       } else {
         setRutaFaltante(proyecto.ruta_video);

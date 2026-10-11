@@ -34,6 +34,10 @@ export function useCaptions({
   const skipEditorHistoryRef = useRef(false);
   const editorPushedCaptionsRef = useRef<Caption[] | null>(null);
   const editorPushedHablantesRef = useRef<Hablante[] | null>(null);
+  // Timer del focus automático del editor (agregar/pegar fragmento). Rastreado
+  // para poder cancelarlo: si el usuario navega dentro de los 30 ms, el focus
+  // no debe robarle el input.
+  const editorFocusTimerRef = useRef<number>(0);
   // Historial vive acá (sus snapshots son captions+hablantes) y se expone
   // para menú/teclado/paneles: así no hay ciclo de orden con quien lo usa.
   const { pushHistorial, deshacer, rehacer, limpiarHistorial } = useHistory(
@@ -46,6 +50,12 @@ export function useCaptions({
   useEffect(() => {
     sortedByStartRef.current = [...captions].sort((a, b) => a.inicio - b.inicio);
   }, [captions]);
+
+  // El focus automático no debe sobrevivir al desmontaje ni quedar pendiente si
+  // el usuario navega antes de los 30 ms.
+  useEffect(() => {
+    return () => window.clearTimeout(editorFocusTimerRef.current);
+  }, []);
 
   function asignarHablante(hablanteId: string) {
     const sel = selectedCaptionIdsRef.current;
@@ -127,9 +137,15 @@ export function useCaptions({
       return copy;
     });
     setSelectedCaptionIds([nuevo.id]);
-    // El focus disparará handleEditorFocus; ya se pusheó el snapshot pre-add
+    // El focus dispara handleEditorFocus, pero ya se pusheó el snapshot pre-add.
     skipEditorHistoryRef.current = true;
-    setTimeout(() => textEditorRef.current?.focus(), 30);
+    // 30 ms para que el textarea exista con el texto ya en su estado. Si en esa
+    // ventana el usuario navega o hace clic en otro sitio, el focus robado
+    //ría el input; por eso se cancela al desmontar y al volver a enfocar.
+    editorFocusTimerRef.current = window.setTimeout(() => {
+      editorFocusTimerRef.current = 0;
+      textEditorRef.current?.focus();
+    }, 30);
   }
 
   // Ctrl+V: mismo alta que agregarFragmento pero con texto del portapapeles.

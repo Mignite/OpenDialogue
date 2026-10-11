@@ -197,6 +197,9 @@ function App() {
     window.clearTimeout(mensajeTimerRef.current);
     mensajeTimerRef.current = window.setTimeout(() => setExportMensaje(""), 5000);
   }, []);
+  // El timer de notify muere solo con la ventana, pero dejarlo colgado es
+  // exactamente el patrón que se corrigió en los debounces: se limpia.
+  useEffect(() => () => window.clearTimeout(mensajeTimerRef.current), []);
   const cerrarAssModal = useCallback(() => setAssModalAbierto(false), []);
 
   // Últimos ajustes conocidos: cambiarIdioma y cambiarVelocidad (en
@@ -511,8 +514,7 @@ function App() {
 
   async function handleExportarSrtPorHablante() {
     if (captionsRef.current.length === 0) {
-      setExportMensaje(t("app.export.noCaptions"));
-      setTimeout(() => setExportMensaje(""), 4000);
+      notify(t("app.export.noCaptions"));
       return;
     }
 
@@ -562,23 +564,22 @@ function App() {
       }
 
       if (archivosCreados === 0) {
-        setExportMensaje(t("app.export.noSpeaker"));
+        notify(t("app.export.noSpeaker"));
       } else if (sinAsignar > 0) {
-        setExportMensaje(
+        notify(
           t("app.export.exportedWithUnassigned", { count: archivosCreados, unassigned: sinAsignar }) +
             (solapes.length > 0
               ? t("app.export.overlapSuffix", { count: solapes.length })
               : ""),
         );
       } else {
-        setExportMensaje(
+        notify(
           t("app.export.exportedOk", { count: archivosCreados }) +
             (solapes.length > 0
               ? t("app.export.overlapSuffix", { count: solapes.length })
               : ""),
         );
       }
-      setTimeout(() => setExportMensaje(""), 5000);
     } catch (err) {
       console.error("Error exportando SRT por hablante:", err);
       notify("No se pudo exportar el SRT por hablante.");
@@ -587,8 +588,7 @@ function App() {
 
   async function handleExportarJsonCombinado() {
     if (captionsRef.current.length === 0) {
-      setExportMensaje(t("app.export.noCaptions"));
-      setTimeout(() => setExportMensaje(""), 4000);
+      notify(t("app.export.noCaptions"));
       return;
     }
 
@@ -613,8 +613,7 @@ function App() {
         ruta: path,
         contenido: JSON.stringify(data, null, 2),
       });
-      setExportMensaje(t("app.export.jsonDone"));
-      setTimeout(() => setExportMensaje(""), 4000);
+      notify(t("app.export.jsonDone"));
     } catch (err) {
       console.error("Error exportando JSON:", err);
       notify("No se pudo exportar el JSON combinado.");
@@ -623,8 +622,7 @@ function App() {
 
   async function handleExportarAss() {
     if (captionsRef.current.length === 0) {
-      setExportMensaje(t("assExport.noCaptions"));
-      setTimeout(() => setExportMensaje(""), 4000);
+      notify(t("assExport.noCaptions"));
       return;
     }
     // El PlayRes sigue al video real para que el tamaño de fuente se vea igual

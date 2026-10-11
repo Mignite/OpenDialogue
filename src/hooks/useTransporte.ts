@@ -197,6 +197,10 @@ export function useTransporte({
       // Restaurar reproducción
       if (wasPlayingBeforeSeekRef.current) {
         setTimeout(() => {
+          // El video pudo cambiar dentro de estos 50 ms (proyecto nuevo): sin
+          // esta guarda, `video` sigue siendo el element del video anterior y
+          // lo reanuda por detrás del nuevo.
+          if (videoRef.current !== video) return;
           video.play().catch(() => {});
         }, 50);
       }
