@@ -24,7 +24,7 @@ import {
   ASS_EM_PREVIEW,
   VELOCIDADES_REPRODUCCION,
 } from "./utils/constants";
-import { formatTime, parseTimeInput } from "./utils/time";
+import { formatTime } from "./utils/time";
 import {
   coincide,
   normalizarTermino,
@@ -46,6 +46,7 @@ import { cargarAjustes, guardarAjustes, type Ajustes } from "./utils/ajustes";
 
 import { useAssEstilos } from "./hooks/useAssEstilos";
 import { useCaptions } from "./hooks/useCaptions";
+import { useTransporte } from "./hooks/useTransporte";
 import { useHablantes } from "./hooks/useHablantes";
 import { useProyecto } from "./hooks/useProyecto";
 import { useWaveform } from "./hooks/useWaveform";
@@ -71,22 +72,17 @@ function App() {
   const [videoPath, setVideoPath] = useState<string>("");
   const [videoNoEncontrado, setVideoNoEncontrado] = useState<boolean>(false);
   const [rutaFaltante, setRutaFaltante] = useState<string>("");
-  const [playheadTime, setPlayheadTime] = useState<number>(0);
   const [windowSeconds, setWindowSeconds] = useState<number>(10);
   const [windowStart, setWindowStart] = useState<number>(0);
   const [dockHeight, setDockHeight] = useState<number>(240);
   const [arrastrando, setArrastrando] = useState<boolean>(false);
-  const [reproduciendo, setReproduciendo] = useState<boolean>(false);
   const [hablantes, setHablantes] = useState<Hablante[]>([]);
   const [panelHablantesAbierto, setPanelHablantesAbierto] =
     useState<boolean>(false);
   const [panelEstilosAbierto, setPanelEstilosAbierto] =
     useState<boolean>(false);
-  const [timeInputValue, setTimeInputValue] = useState<string>("");
-  const [editandoTiempo, setEditandoTiempo] = useState<boolean>(false);
   const [autoFollowing, setAutoFollowing] = useState<boolean>(true);
   const autoFollowingRef = useRef(true);
-  const [videoDuration, setVideoDuration] = useState<number>(0);
   // Tick de re-render para el recuadro del preview .ass: `overlayRecuadro` mide
   // el <video> (clientWidth/clientHeight) durante el render, así que sin esto
   // redimensionar la ventana en pausa dejaba el preview con el tamaño y la
@@ -103,7 +99,6 @@ function App() {
 
   // Refs para drag del playhead
   const isDraggingPlayheadRef = useRef(false);
-  const wasPlayingBeforeSeekRef = useRef<boolean>(false);
 
   // Refs para drag de bordes de subtítulos - MODIFICADO
   const isDraggingCaptionEdgeRef = useRef<{
@@ -196,43 +191,14 @@ function App() {
   }, []);
   const cerrarAssModal = useCallback(() => setAssModalAbierto(false), []);
 
-  // ==== Velocidad de reproducción ====
-  // Dual ref+state (patrón #1): el keydown global (deps []) lee la ref, el
-  // <select> renderiza el state. playbackRate se re-aplica en loadedmetadata
-  // porque el <video> lo resetea a 1 al cargar otro archivo.
-  const [velocidad, setVelocidad] = useState(1);
-  const velocidadRef = useRef(1);
-  // Últimos ajustes conocidos: cambiarIdioma y cambiarVelocidad mergean sobre
-  // esto (guardarAjustes escribe el objeto completo, sin merge pisan campos).
+  // Últimos ajustes conocidos: cambiarIdioma y cambiarVelocidad (en
+  // useTransporte) mergean sobre esto (guardarAjustes escribe el objeto
+  // completo, sin merge pisan campos).
   const ajustesRef = useRef<Ajustes>({});
   const persistirAjustes = useCallback((parcial: Ajustes) => {
     ajustesRef.current = { ...ajustesRef.current, ...parcial };
     void guardarAjustes(ajustesRef.current);
   }, []);
-  const cambiarVelocidad = useCallback(
-    (v: number) => {
-      velocidadRef.current = v;
-      setVelocidad(v);
-      const video = videoRef.current;
-      if (video) video.playbackRate = v;
-      persistirAjustes({ velocidad: v });
-    },
-    [persistirAjustes],
-  );
-  const pasoVelocidad = useCallback(
-    (dir: 1 | -1) => {
-      const idx = VELOCIDADES_REPRODUCCION.findIndex(
-        (v) => Math.abs(v - velocidadRef.current) < 0.001,
-      );
-      const actual = idx === -1 ? VELOCIDADES_REPRODUCCION.indexOf(1) : idx;
-      const nuevo = Math.min(
-        VELOCIDADES_REPRODUCCION.length - 1,
-        Math.max(0, actual + dir),
-      );
-      cambiarVelocidad(VELOCIDADES_REPRODUCCION[nuevo]);
-    },
-    [cambiarVelocidad],
-  );
 
   // Slice 2 del monolito: waveform (análisis + caché).
   const onda = useWaveform(notify);
@@ -382,6 +348,41 @@ function App() {
       else setBusquedaAbierta(false);
     }
   }
+  // Slice 6 del monolito: transporte (playhead/reproducción/velocidad/saltos).
+  const trans = useTransporte({
+    videoRef,
+    videoSrc,
+    setAutoFollowing,
+    isScrollingManuallyRef,
+    sortedByStartRef: caps.sortedByStartRef,
+    selectedCaptionIdsRef: caps.selectedCaptionIdsRef,
+    setSelectedCaptionIds: caps.setSelectedCaptionIds,
+    persistirAjustes,
+  });
+  const {
+    playheadTime,
+    setPlayheadTime,
+    reproduciendo,
+    videoDuration,
+    setVideoDuration,
+    velocidad,
+    wasPlayingBeforeSeekRef,
+    cambiarVelocidad,
+    pasoVelocidad,
+    reaplicarVelocidad,
+    togglePlay,
+    saltar,
+    saltarCaption,
+    ciclarCaptionSimultaneo,
+    matchingCaptionsRef,
+    timeInputValue,
+    setTimeInputValue,
+    editandoTiempo,
+    handleTimeInputFocus,
+    handleTimeInputBlur,
+    handleTimeInputKeyDown,
+  } = trans;
+
   // Slice 1 del monolito: estilos .ass (presets + export + PlayRes).
   const ass = useAssEstilos({
     captionsRef: caps.captionsRef,
@@ -729,7 +730,7 @@ function App() {
       const onLoadedMeta = () => {
         setVideoDuration(video.duration);
         // El <video> resetea playbackRate a 1 con cada archivo nuevo.
-        video.playbackRate = velocidadRef.current;
+        reaplicarVelocidad();
         // Restaurar el playhead guardado en el proyecto (si hay uno pendiente)
         // y posicionar la ventana del timeline para que lo muestre.
         const pendiente = playheadPendienteRef.current;
@@ -766,27 +767,6 @@ function App() {
     });
     ro.observe(video);
     return () => ro.disconnect();
-  }, [videoSrc]);
-
-  // El video suena directo (single-track): sin elemento <audio> aparte no
-  // hay nada que sincronizar. Solo se refleja play/pause en el botón.
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const onPlay = () => {
-      setReproduciendo(true);
-    };
-    const onPause = () => {
-      setReproduciendo(false);
-    };
-
-    video.addEventListener("play", onPlay);
-    video.addEventListener("pause", onPause);
-    return () => {
-      video.removeEventListener("play", onPlay);
-      video.removeEventListener("pause", onPause);
-    };
   }, [videoSrc]);
 
   useEffect(() => {
@@ -982,96 +962,6 @@ function App() {
     setWindowStart(windowStartRef.current);
   });
 
-  function togglePlay() {
-    const video = videoRef.current;
-    if (!video) return;
-    if (video.paused) {
-      video.play().catch(() => {});
-      setAutoFollowing(true);
-      isScrollingManuallyRef.current = false;
-    } else {
-      video.pause();
-    }
-  }
-
-  function saltar(delta: number) {
-    const video = videoRef.current;
-    if (!video) return;
-    const newTime = Math.max(
-      0,
-      Math.min(video.duration || Infinity, video.currentTime + delta),
-    );
-    video.currentTime = newTime;
-    isScrollingManuallyRef.current = false;
-  }
-
-  function saltarCaption(direccion: 1 | -1) {
-    const video = videoRef.current;
-    if (!video) return;
-    const caps = sortedByStartRef.current;
-    if (caps.length === 0) return;
-    const t = video.currentTime;
-
-    let newTime: number;
-    if (direccion === 1) {
-      let lo = 0;
-      let hi = caps.length;
-      while (lo < hi) {
-        const mid = (lo + hi) >> 1;
-        if (caps[mid].inicio > t + 0.05) hi = mid;
-        else lo = mid + 1;
-      }
-      newTime = lo < caps.length ? caps[lo].inicio + 0.01 : t;
-    } else {
-      let lo = 0;
-      let hi = caps.length;
-      while (lo < hi) {
-        const mid = (lo + hi) >> 1;
-        if (caps[mid].inicio < t - 0.05) lo = mid + 1;
-        else hi = mid;
-      }
-      // Si el playhead está dentro o después del inicio del candidato, ese no
-      // es el "anterior": retroceder uno más (Alt+← dentro de un caption va al
-      // caption anterior, no reinicia el actual).
-      if (lo > 0 && t >= caps[lo - 1].inicio) lo -= 1;
-      newTime = lo > 0 ? caps[lo - 1].inicio + 0.01 : caps[0].inicio + 0.01;
-    }
-    video.currentTime = newTime;
-    isScrollingManuallyRef.current = false;
-  }
-  function handleTimeInputFocus() {
-    setEditandoTiempo(true);
-    setTimeInputValue(formatTime(playheadTime));
-  }
-
-  function handleTimeInputBlur() {
-    setEditandoTiempo(false);
-  }
-
-  function handleTimeInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key !== "Enter") return;
-    const secs = parseTimeInput(timeInputValue);
-    const video = videoRef.current;
-    if (secs !== null && video) {
-      // Guardar estado de reproducción
-      wasPlayingBeforeSeekRef.current = !video.paused;
-      // Pausar si estaba reproduciendo
-      if (!video.paused) {
-        video.pause();
-      }
-      video.currentTime = Math.max(
-        0,
-        Math.min(video.duration || Infinity, secs),
-      );
-      // Restaurar reproducción
-      if (wasPlayingBeforeSeekRef.current) {
-        setTimeout(() => {
-          video.play().catch(() => {});
-        }, 50);
-      }
-    }
-    (e.target as HTMLInputElement).blur();
-  }
   // Manejar click en el timeline - ir al tiempo exacto donde se clickea
   function handleClickTimeline(e: React.MouseEvent) {
     const canvas = canvasRef.current;
@@ -1999,21 +1889,6 @@ function App() {
       }
     }
   });
-
-  const matchingCaptionsRef = useRef<Caption[]>([]);
-  function ciclarCaptionSimultaneo(direccion: 1 | -1) {
-    const actual = matchingCaptionsRef.current;
-    if (actual.length <= 1) return;
-
-    const sel = selectedCaptionIdsRef.current;
-    const currentId = sel.length > 0 ? sel[sel.length - 1] : "";
-    const idxActual = actual.findIndex(
-      (c) => c.id === currentId,
-    );
-    const siguienteIdx =
-      (idxActual + direccion + actual.length) % actual.length;
-    setSelectedCaptionIds([actual[siguienteIdx].id]);
-  }
 
   // Carriles por hablante: uno por cada hablante + el carril "—" (sin asignar)
   const trackRows = [
