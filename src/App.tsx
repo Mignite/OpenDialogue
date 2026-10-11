@@ -21,7 +21,6 @@ import {
   EDGE_TRIGGER,
   NEW_MARGIN,
   LERP_FACTOR,
-  ISLA_FALLBACK,
   ASS_EM_PREVIEW,
 } from "./utils/constants";
 import { formatTime, parseTimeInput } from "./utils/time";
@@ -33,12 +32,12 @@ import {
   findSnapTime,
 } from "./utils/captions";
 import { filtrarPorMarquee, captionRowIndex, filasDestinoRelativas } from "./utils/selection";
-import { buscarFinIslaAudio, picoEnRango } from "./utils/audioIslands";
+import { picoEnRango } from "./utils/audioIslands";
 import { lineasOverlayActivas } from "./utils/ass";
 import { cargarAjustes, guardarAjustes } from "./utils/ajustes";
 
-import { useHistory } from "./hooks/useHistory";
 import { useAssEstilos } from "./hooks/useAssEstilos";
+import { useCaptions } from "./hooks/useCaptions";
 import { useHablantes } from "./hooks/useHablantes";
 import { useProyecto } from "./hooks/useProyecto";
 import { useWaveform } from "./hooks/useWaveform";
@@ -61,10 +60,6 @@ const TRACK_LABEL_W = 42;
 function App() {
   const { locale, setLocale, t } = useLocale();
   const [videoSrc, setVideoSrc] = useState<string>("");
-  const [selectedCaptionIds, setSelectedCaptionIds] = useState<string[]>([]);
-  const selectedCaptionId = selectedCaptionIds.length
-    ? selectedCaptionIds[selectedCaptionIds.length - 1]
-    : null;
   const [videoPath, setVideoPath] = useState<string>("");
   const [videoNoEncontrado, setVideoNoEncontrado] = useState<boolean>(false);
   const [rutaFaltante, setRutaFaltante] = useState<string>("");
@@ -72,7 +67,6 @@ function App() {
   const [windowSeconds, setWindowSeconds] = useState<number>(10);
   const [windowStart, setWindowStart] = useState<number>(0);
   const [dockHeight, setDockHeight] = useState<number>(240);
-  const [captions, setCaptions] = useState<Caption[]>([]);
   const [arrastrando, setArrastrando] = useState<boolean>(false);
   const [reproduciendo, setReproduciendo] = useState<boolean>(false);
   const [hablantes, setHablantes] = useState<Hablante[]>([]);
@@ -91,12 +85,6 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const textEditorRef = useRef<HTMLTextAreaElement>(null);
-  const wasPlayingBeforeEditRef = useRef(false);
-  // Snapshot del historial en focus del editor: evita pasos de undo vacíos
-  const skipEditorHistoryRef = useRef(false);
-  const editorPushedCaptionsRef = useRef<Caption[] | null>(null);
-  const editorPushedHablantesRef = useRef<Hablante[] | null>(null);
 
   // Refs para drag del playhead
   const isDraggingPlayheadRef = useRef(false);
@@ -133,19 +121,15 @@ function App() {
   const windowStartRef = useRef(0);
   const windowTargetRef = useRef(0);
   const windowSecondsRef = useRef(windowSeconds);
-  const captionsRef = useRef<Caption[]>([]);
-  const sortedByStartRef = useRef<Caption[]>([]);
   const trackAreaRef = useRef<HTMLDivElement | null>(null);
   const trackHandleRef = useRef<HTMLDivElement | null>(null);
   const trackHandleDraggingRef = useRef(false);
   const playheadLineRef = useRef<HTMLDivElement | null>(null);
 
   const hablantesRef = useRef<Hablante[]>([]);
-  const currentCaptionIdxRef = useRef<number>(-1);
 
   const videoPathRef = useRef("");
   const playheadPendienteRef = useRef<number | null>(null);
-  const selectedCaptionIdsRef = useRef<string[]>([]);
   const bodyDragRef = useRef<{
     ids: string[];
     deltaT: number;
@@ -176,12 +160,6 @@ function App() {
   const [exportMensaje, setExportMensaje] = useState<string>("");
   const [showHelp, setShowHelp] = useState(false);
   const [assModalAbierto, setAssModalAbierto] = useState(false);
-  const { pushHistorial, deshacer, rehacer } = useHistory(
-    captionsRef,
-    hablantesRef,
-    setCaptions,
-    setHablantes,
-  );
   // Mensaje efímero del statusBar con auto-limpieza (un solo timer: los
   // llamados seguidos no se pisan). useCallback-estable para los hooks.
   const mensajeTimerRef = useRef<number>(0);
@@ -191,15 +169,56 @@ function App() {
     mensajeTimerRef.current = window.setTimeout(() => setExportMensaje(""), 5000);
   }, []);
   const cerrarAssModal = useCallback(() => setAssModalAbierto(false), []);
+  // Slice 2 del monolito: waveform (análisis + caché).
+  const onda = useWaveform();
+
+  // Slice 5 del monolito: captions y selección. El historial vive dentro
+  // (deshacer/rehacer/pushHistorial salen de acá). Los aliases conservan los
+  // nombres para un diff mínimo; el state vive en el hook.
+  const caps = useCaptions({
+    videoRef,
+    ondaVolumenRef: onda.volumenRef,
+    hablantesRef,
+    setHablantes,
+  });
+  const {
+    captions,
+    captionsRef,
+    selectedCaptionIds,
+    setSelectedCaptionIds,
+    selectedCaptionIdsRef,
+    sortedByStartRef,
+    currentCaptionIdxRef,
+    textEditorRef,
+    pushHistorial,
+    deshacer,
+    rehacer,
+    asignarHablante,
+    actualizarTextoCaption,
+    agregarFragmento,
+    pegarFragmento,
+    eliminarCaption,
+    eliminarSeleccion,
+    toggleSeleccion,
+    seleccionRango,
+    handleSelectCaption,
+    moverCaptions,
+    dividirCaptionEnPlayhead,
+    actualizarTiempoCaption,
+    handleEditorFocus,
+    handleEditorBlur,
+    handleEditorKeyDown,
+  } = caps;
+  const selectedCaptionId = selectedCaptionIds.length
+    ? selectedCaptionIds[selectedCaptionIds.length - 1]
+    : null;
   // Slice 1 del monolito: estilos .ass (presets + export + PlayRes).
   const ass = useAssEstilos({
-    captionsRef,
+    captionsRef: caps.captionsRef,
     hablantesRef,
     notify,
     alExportar: cerrarAssModal,
   });
-  // Slice 2 del monolito: waveform (análisis + caché).
-  const onda = useWaveform();
 
   // Slice 4 del monolito: hablantes (CRUD + speakerMap). El state se queda
   // en App (como captions hasta el slice 5): cero reordenamientos y el ref
@@ -208,9 +227,9 @@ function App() {
     hablantes,
     setHablantes,
     hablantesRef,
-    captionsRef,
-    setCaptions,
-    pushHistorial,
+    captionsRef: caps.captionsRef,
+    setCaptions: caps.setCaptions,
+    pushHistorial: caps.pushHistorial,
   });
   const playheadFrameSkipRef = useRef(0);
   const dragScrollVelocityRef = useRef(0);
@@ -249,7 +268,7 @@ function App() {
   // video/SRT, imports). Dueño de rutaProyecto + flags dirty.
   const proyecto = useProyecto(
     {
-      captionsRef,
+      captionsRef: caps.captionsRef,
       hablantesRef,
       videoPathRef,
       videoRef,
@@ -259,9 +278,9 @@ function App() {
       windowSecondsRef,
     },
     {
-      setCaptions,
+      setCaptions: caps.setCaptions,
       setHablantes,
-      setSelectedCaptionIds,
+      setSelectedCaptionIds: caps.setSelectedCaptionIds,
       setVideoSrc,
       setVideoPath,
       setVideoNoEncontrado,
@@ -269,7 +288,7 @@ function App() {
       setVideoDuration,
     },
     {
-      pushHistorial,
+      pushHistorial: caps.pushHistorial,
       notify,
       persistirPresetsAss: ass.persistirPresets,
       cargarVideo: cargarVideoDesdeRuta,
@@ -299,10 +318,6 @@ function App() {
       }
     }
   }, [videoDuration, windowSeconds]);
-
-  useEffect(() => {
-    sortedByStartRef.current = [...captions].sort((a, b) => a.inicio - b.inicio);
-  }, [captions]);
 
   useEffect(() => {
     // OJO: `proyecto` (objeto) NO va en deps: cambia de identidad en cada
@@ -807,263 +822,6 @@ function App() {
     video.currentTime = newTime;
     isScrollingManuallyRef.current = false;
   }
-
-  function asignarHablante(hablanteId: string) {
-    const sel = selectedCaptionIdsRef.current;
-    if (sel.length > 0) {
-      pushHistorial();
-      setCaptions((prev) => {
-        const copy = prev.map((c) =>
-          sel.includes(c.id) ? { ...c, hablante_id: hablanteId } : c,
-        );
-        captionsRef.current = copy;
-        return copy;
-      });
-      return;
-    }
-    const idx = currentCaptionIdxRef.current;
-    if (idx === -1) return;
-    pushHistorial();
-
-    setCaptions((prev) => {
-      const copy = [...prev];
-      copy[idx] = { ...copy[idx], hablante_id: hablanteId };
-      captionsRef.current = copy;
-      return copy;
-    });
-  }
-
-  function actualizarTextoCaption(id: string, nuevoTexto: string) {
-    setCaptions((prev) => {
-      const copy = prev.map((c) =>
-        c.id === id ? { ...c, texto: nuevoTexto } : c,
-      );
-      captionsRef.current = copy;
-      return copy;
-    });
-  }
-  // Duración de un fragmento nuevo: usa la isla de audio (fin del diálogo
-  // bajo el playhead) si hay análisis de volumen; fallback a ISLA_FALLBACK.
-  function duracionFragmento(inicio: number): number {
-    const finIsla = buscarFinIslaAudio(onda.volumenRef.current, inicio);
-    return finIsla !== null ? finIsla - inicio : ISLA_FALLBACK;
-  }
-
-  function agregarFragmento() {
-    pushHistorial();
-    const video = videoRef.current;
-    const inicio = video ? video.currentTime : 0;
-    const duracion = duracionFragmento(inicio);
-    const nuevo: Caption = {
-      id: `cap-frag-${Date.now()}`,
-      inicio,
-      fin: inicio + duracion,
-      texto: "",
-      hablante_id: null,
-    };
-    setCaptions((prev) => {
-      const copy = [...prev, nuevo].sort((a, b) => a.inicio - b.inicio);
-      captionsRef.current = copy;
-      return copy;
-    });
-    setSelectedCaptionIds([nuevo.id]);
-    // El focus disparará handleEditorFocus; ya se pusheó el snapshot pre-add
-    skipEditorHistoryRef.current = true;
-    setTimeout(() => textEditorRef.current?.focus(), 30);
-  }
-
-  const eliminarCaption = useCallback((id: string) => {
-    pushHistorial();
-    setCaptions((prev) => {
-      const copy = prev.filter((c) => c.id !== id);
-      captionsRef.current = copy;
-      return copy;
-    });
-  }, [pushHistorial, setCaptions]);
-
-  const eliminarSeleccion = useCallback(() => {
-    const sel = selectedCaptionIdsRef.current;
-    if (sel.length === 0) return;
-    pushHistorial();
-    setCaptions((prev) => {
-      const copy = prev.filter((c) => !sel.includes(c.id));
-      captionsRef.current = copy;
-      return copy;
-    });
-    setSelectedCaptionIds([]);
-  }, [pushHistorial, setCaptions]);
-
-  // ==== Selección múltiple ====
-  const seleccionSola = useCallback((id: string) => {
-    setSelectedCaptionIds([id]);
-  }, []);
-
-  const toggleSeleccion = useCallback((id: string) => {
-    setSelectedCaptionIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-  }, []);
-
-  // Shift+click: rango desde el último seleccionado hasta el clickeado.
-  // porTiempo=true usa el orden temporal (track); false usa el orden del array
-  // (lista derecha).
-  const seleccionRango = useCallback((id: string, porTiempo: boolean) => {
-    setSelectedCaptionIds((prev) => {
-      const anchor = prev[prev.length - 1];
-      const caps = porTiempo ? sortedByStartRef.current : captionsRef.current;
-      const iA = anchor ? caps.findIndex((c) => c.id === anchor) : -1;
-      const iB = caps.findIndex((c) => c.id === id);
-      if (iA === -1 || iB === -1) return [id];
-      const [lo, hi] = iA < iB ? [iA, iB] : [iB, iA];
-      return caps.slice(lo, hi + 1).map((c) => c.id);
-    });
-  }, []);
-
-  const handleSelectCaption = useCallback(
-    (id: string, shift: boolean, ctrl: boolean) => {
-      if (shift) {
-        seleccionRango(id, false);
-        return;
-      }
-      if (ctrl) {
-        toggleSeleccion(id);
-        return;
-      }
-      seleccionSola(id);
-      const cap = captionsRef.current.find((c) => c.id === id);
-      const video = videoRef.current;
-      if (cap && video) {
-        video.currentTime = cap.inicio;
-      }
-    },
-    [seleccionRango, toggleSeleccion, seleccionSola],
-  );
-
-  // Mueve una selección de captions un deltaT (manteniendo cada duración).
-  // cambios reasigna hablantes por id (corrimiento relativo del body drag);
-  // ausente o vacío = solo tiempo. pushHistorial UNA vez: Ctrl+Z deshace el bloque.
-  const moverCaptions = useCallback(
-    (
-      ids: string[],
-      deltaT: number,
-      cambios?: Map<string, string | null>,
-    ) => {
-      if (ids.length === 0) return;
-      if (deltaT === 0 && (!cambios || cambios.size === 0)) return;
-      pushHistorial();
-      setCaptions((prev) => {
-        const copy = prev.map((c) => {
-          if (!ids.includes(c.id)) return c;
-          const dur = c.fin - c.inicio;
-          const nuevoInicio = Math.max(0, c.inicio + deltaT);
-          const updated: Caption = {
-            ...c,
-            inicio: nuevoInicio,
-            fin: nuevoInicio + dur,
-          };
-          if (cambios && cambios.has(c.id)) {
-            updated.hablante_id = cambios.get(c.id) ?? null;
-          }
-          return updated;
-        });
-        captionsRef.current = copy;
-        return copy;
-      });
-    },
-    [pushHistorial, setCaptions],
-  );
-
-  function dividirCaptionEnPlayhead() {
-    const video = videoRef.current;
-    if (!video) return;
-    const t = video.currentTime;
-    const idx = currentCaptionIdxRef.current;
-    const cap = captionsRef.current[idx];
-    if (!cap || t <= cap.inicio || t >= cap.fin) return;
-    pushHistorial();
-    const izquierda: Caption = {
-      ...cap,
-      id: `cap-cut-${Date.now()}-l`,
-      fin: t,
-    };
-    const derecha: Caption = {
-      ...cap,
-      id: `cap-cut-${Date.now()}-r`,
-      inicio: t,
-    };
-    setCaptions((prev) => {
-      const copy = prev
-        .filter((c) => c.id !== cap.id)
-        .concat([izquierda, derecha])
-        .sort((a, b) => a.inicio - b.inicio);
-      captionsRef.current = copy;
-      return copy;
-    });
-    setSelectedCaptionIds([derecha.id]);
-  }
-
-  function actualizarTiempoCaption(
-    id: string,
-    campo: "inicio" | "fin",
-    nuevoValor: number,
-  ) {
-    pushHistorial();
-    setCaptions((prev) => {
-      const copy = prev.map((c) => {
-        if (c.id === id) {
-          const updated = { ...c, [campo]: Math.max(0, nuevoValor) };
-          // Asegurar que inicio < fin
-          if (campo === "inicio" && updated.inicio >= updated.fin) {
-            updated.inicio = updated.fin - 0.1;
-          }
-          if (campo === "fin" && updated.fin <= updated.inicio) {
-            updated.fin = updated.inicio + 0.1;
-          }
-          return updated;
-        }
-        return c;
-      });
-      captionsRef.current = copy;
-      return copy;
-    });
-  }
-
-  function handleEditorFocus() {
-    if (skipEditorHistoryRef.current) {
-      // Focus automático tras "Nuevo fragmento": el snapshot ya se pusheó
-      // antes de agregar; no crear un paso de undo duplicado.
-      skipEditorHistoryRef.current = false;
-    } else if (
-      editorPushedCaptionsRef.current !== captionsRef.current ||
-      editorPushedHablantesRef.current !== hablantesRef.current
-    ) {
-      // Snapshot pre-edición (una sola vez por sesión de focus; un segundo
-      // focus sin cambios no crea pasos de undo vacíos).
-      pushHistorial();
-      editorPushedCaptionsRef.current = captionsRef.current;
-      editorPushedHablantesRef.current = hablantesRef.current;
-    }
-    const video = videoRef.current;
-    if (!video) return;
-    wasPlayingBeforeEditRef.current = !video.paused;
-    if (!video.paused) video.pause();
-  }
-
-  function handleEditorBlur() {
-    const video = videoRef.current;
-    if (!video) return;
-    if (wasPlayingBeforeEditRef.current) {
-      video.play().catch(() => {});
-    }
-  }
-
-  function handleEditorKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      (e.target as HTMLTextAreaElement).blur();
-    }
-  }
-
   function handleTimeInputFocus() {
     setEditandoTiempo(true);
     setTimeInputValue(formatTime(playheadTime));
@@ -1621,23 +1379,7 @@ function App() {
       if (e.ctrlKey && e.key.toLowerCase() === "v") {
         e.preventDefault();
         if (clipboardTextRef.current) {
-          pushHistorial();
-          const video = videoRef.current;
-          const inicio = video ? video.currentTime : 0;
-          const duracion = duracionFragmento(inicio);
-          const nuevo: Caption = {
-            id: `cap-paste-${Date.now()}`,
-            inicio,
-            fin: inicio + duracion,
-            texto: clipboardTextRef.current,
-            hablante_id: null,
-          };
-          setCaptions((prev) => {
-            const copy = [...prev, nuevo].sort((a, b) => a.inicio - b.inicio);
-            captionsRef.current = copy;
-            return copy;
-          });
-          setSelectedCaptionIds([nuevo.id]);
+          pegarFragmento(clipboardTextRef.current);
         }
         return;
       }
