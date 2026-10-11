@@ -56,6 +56,7 @@ import {
   escribirPortapapeles,
   leerPortapapeles,
 } from "./utils/clipboard";
+import { resolverRutaVideo } from "./utils/rutaVideo";
 import { useCaptions } from "./hooks/useCaptions";
 import { useTransporte } from "./hooks/useTransporte";
 import { useHablantes } from "./hooks/useHablantes";
@@ -500,27 +501,28 @@ function App() {
       // Carga en memoria y marca sucio: el recovery NO pisa el archivo del
       // proyecto, así que el usuario decide si guardar (Ctrl+S) o descartar.
       proyecto.limpiarBanderas();
+      const rutaVideo = resolverRutaVideo(datos.ruta_video, ruta);
       proyecto.rutaProyectoRef.current = ruta;
       proyecto.setRutaProyecto(ruta);
       setHablantes(datos.hablantes);
       caps.setCaptions(datos.captions);
       caps.setSelectedCaptionIds([]);
       playheadPendienteRef.current = datos.playhead ?? 0;
-      videoPathRef.current = datos.ruta_video;
-      setVideoPath(datos.ruta_video);
+      videoPathRef.current = rutaVideo;
+      setVideoPath(rutaVideo);
       // Se comprueba la existencia del video como al cargar un proyecto: si no
       // está, el panel de "video no encontrado" ofrece seguir sin él. Sin
       // backend el invoke falla y cae al mismo panel, sin romper nada.
-      void invoke<boolean>("existe_archivo", { ruta: datos.ruta_video })
+      void invoke<boolean>("existe_archivo", { ruta: rutaVideo })
         .then((ok) => {
-          if (ok) cargarVideoDesdeRuta(datos.ruta_video);
+          if (ok) cargarVideoDesdeRuta(rutaVideo);
           else {
-            setRutaFaltante(datos.ruta_video);
+            setRutaFaltante(rutaVideo);
             setVideoNoEncontrado(true);
           }
         })
         .catch(() => {
-          setRutaFaltante(datos.ruta_video);
+          setRutaFaltante(rutaVideo);
           setVideoNoEncontrado(true);
         });
     },
@@ -634,7 +636,7 @@ function App() {
       }
     } catch (err) {
       console.error("Error exportando SRT por hablante:", err);
-      notify("No se pudo exportar el SRT por hablante.");
+      notify(t("err.exportSrtPerSpeaker"));
     }
   }
 
@@ -668,7 +670,7 @@ function App() {
       notify(t("app.export.jsonDone"));
     } catch (err) {
       console.error("Error exportando JSON:", err);
-      notify("No se pudo exportar el JSON combinado.");
+      notify(t("err.exportJson"));
     }
   }
 
@@ -724,9 +726,7 @@ function App() {
     if (!v) return;
     const alFallarVideo = () => {
       console.error("Error reproduciendo video:", v.error);
-      notify(
-        "El video no se puede reproducir (códec o contenedor no soportado).",
-      );
+      notify(t("err.videoNotPlayable"));
     };
     v.addEventListener("error", alFallarVideo);
     return () => v.removeEventListener("error", alFallarVideo);

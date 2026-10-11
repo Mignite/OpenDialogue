@@ -17,6 +17,7 @@ import {
   cargarPresetsAss,
   nuevoPreset,
 } from "../utils/assPresets";
+import { rutaRelativaAlProyecto, resolverRutaVideo } from "../utils/rutaVideo";
 import { t } from "../i18n";
 
 export interface ProyectoRefs {
@@ -250,7 +251,11 @@ export function useProyecto(
   const guardarProyectoEnRuta = useCallback(
     async (path: string) => {
       const proyecto: Proyecto = {
-        ruta_video: videoPathRef.current,
+        // Si el video está en la misma carpeta (o debajo) del proyecto se
+        // guarda la ruta RELATIVA: así el .cdp y el video juntos se abren en
+        // otra máquina o en otro SO. Fuera de esa carpeta va absoluta, que es
+        // lo único honesto. Al abrir, `resolverRutaVideo` la reancora.
+        ruta_video: rutaRelativaAlProyecto(videoPathRef.current, path),
         hablantes: hablantesRef.current,
         captions: captionsRef.current,
         playhead: videoRef.current?.currentTime ?? 0,
@@ -327,17 +332,21 @@ export function useProyecto(
       reiniciarOnda();
       setVideoDuration(0);
 
+      // La ruta guardada puede ser relativa (proyectos nuevos) o absoluta (los
+      // viejos): `resolverRutaVideo` reancora las relativas contra la carpeta
+      // del .cdp y deja las absolutas como están.
+      const rutaVideo = resolverRutaVideo(proyecto.ruta_video, path as string);
       const existe: boolean = await invoke("existe_archivo", {
-        ruta: proyecto.ruta_video,
+        ruta: rutaVideo,
       });
       if (existe) {
         // Solo se guarda el playhead pendiente si el video va a cargar: si no
         // existe, dejarlo puesto contaminaba el `loadedmetadata` del PRÓXIMO
         // video (abrir cualquier otro salto al tiempo del proyecto anterior).
         playheadPendienteRef.current = proyecto.playhead ?? 0;
-        cargarVideo(proyecto.ruta_video);
+        cargarVideo(rutaVideo);
       } else {
-        setRutaFaltante(proyecto.ruta_video);
+        setRutaFaltante(rutaVideo);
         setVideoNoEncontrado(true);
       }
     } catch (err) {

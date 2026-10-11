@@ -11,17 +11,9 @@ interface Props {
   onGuardar: (presets: PresetAss[]) => void;
 }
 
-const ALINEACIONES: { valor: number; etiqueta: string }[] = [
-  { valor: 1, etiqueta: "1 Abajo izq." },
-  { valor: 2, etiqueta: "2 Abajo centro" },
-  { valor: 3, etiqueta: "3 Abajo der." },
-  { valor: 4, etiqueta: "4 Medio izq." },
-  { valor: 5, etiqueta: "5 Medio centro" },
-  { valor: 6, etiqueta: "6 Medio der." },
-  { valor: 7, etiqueta: "7 Arriba izq." },
-  { valor: 8, etiqueta: "8 Arriba centro" },
-  { valor: 9, etiqueta: "9 Arriba der." },
-];
+// Solo el valor; la etiqueta sale de i18n (estaban hardcodeadas en español y
+// se veían también con la app en inglés).
+const ALINEACIONES: number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
 const CAMPOS_NUMERO: (keyof PresetAss)[] = [
   "fontsize",
@@ -296,9 +288,9 @@ function StylesPanel({ presets, panelAbierto, onTogglePanel, onGuardar }: Props)
                   value={sel.alignment}
                   onChange={(e) => editar("alignment", Number(e.target.value))}
                 >
-                  {ALINEACIONES.map((a) => (
-                    <option key={a.valor} value={a.valor}>
-                      {a.etiqueta}
+                  {ALINEACIONES.map((valor) => (
+                    <option key={valor} value={valor}>
+                      {t(`assExport.align_${valor}`)}
                     </option>
                   ))}
                 </select>
