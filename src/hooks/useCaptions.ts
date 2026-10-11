@@ -51,9 +51,13 @@ export function useCaptions({
     const sel = selectedCaptionIdsRef.current;
     if (sel.length > 0) {
       pushHistorial();
+      // Set en vez de sel.includes(): la selección puede ser de cientos de
+      // captions (un marquee sobre el timeline entero) y el .map recorre
+      // TODOS los captions. Con Array.includes() eso es O(n·k).
+      const selSet = new Set(sel);
       setCaptions((prev) => {
         const copy = prev.map((c) =>
-          sel.includes(c.id) ? { ...c, hablante_id: hablanteId } : c,
+          selSet.has(c.id) ? { ...c, hablante_id: hablanteId } : c,
         );
         captionsRef.current = copy;
         return copy;
@@ -163,7 +167,10 @@ export function useCaptions({
     if (sel.length === 0) return;
     pushHistorial();
     setCaptions((prev) => {
-      const copy = prev.filter((c) => !sel.includes(c.id));
+      // Set por la misma razón que en asignarHablante: borrar una selección
+      // grande recorría todos los captions con O(k) comparación cada uno.
+      const selSet = new Set(sel);
+      const copy = prev.filter((c) => !selSet.has(c.id));
       captionsRef.current = copy;
       return copy;
     });
@@ -228,9 +235,14 @@ export function useCaptions({
       if (ids.length === 0) return;
       if (deltaT === 0 && (!cambios || cambios.size === 0)) return;
       pushHistorial();
+      // Un Set por llamada: moverCaptions corre en el mouseup de cada body
+      // drag y el .map recorre todos los captions. Con Array.includes() un
+      // bloque grande (varios cientos de captions) era O(n·k) en el momento
+      // en que el usuario ya soltó y espera ver el resultado.
+      const idSet = new Set(ids);
       setCaptions((prev) => {
         const copy = prev.map((c) => {
-          if (!ids.includes(c.id)) return c;
+          if (!idSet.has(c.id)) return c;
           const dur = c.fin - c.inicio;
           const nuevoInicio = Math.max(0, c.inicio + deltaT);
           const updated: Caption = {
