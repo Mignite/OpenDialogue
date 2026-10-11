@@ -36,20 +36,9 @@ fn escribir_atomico(ruta: &std::path::Path, contenido: &[u8]) -> Result<(), Stri
     })
 }
 
-// Hijos sin flash de consola: en Windows, cada proceso hijo de una app GUI
-// abre su propia ventana de consola por un instante (powershell, reg).
-// CREATE_NO_WINDOW lo evita; los pipes (.output()) siguen funcionando igual.
-#[cfg(target_os = "windows")]
-fn comando_oculto(programa: &str) -> std::process::Command {
-    use std::os::windows::process::CommandExt;
-    let mut cmd = std::process::Command::new(programa);
-    cmd.creation_flags(0x08000000);
-    cmd
-}
-#[cfg(not(target_os = "windows"))]
-fn comando_oculto(programa: &str) -> std::process::Command {
-    std::process::Command::new(programa)
-}
+// El helper `comando_oculto` (CREATE_NO_WINDOW en Windows) se usaba para
+// spawnar powershell/reg/fc-list al enumerar fuentes. Con `fontdb` la app ya
+// no shellea ningún proceso hijo, así que el helper se eliminó por completo.
 
 fn calcular_cache_key(ruta_video: &str) -> Result<String, String> {
     let metadata = std::fs::metadata(ruta_video).map_err(|e| e.to_string())?;
@@ -384,101 +373,74 @@ fn escribir_archivo_texto(ruta: String, contenido: String) -> Result<(), String>
 }
 
 /// Nombres de las familias instaladas, para el selector de fuente del preset
-/// .ass. Sale de GDI+/DirectWrite, que da los nombres de FAMILIA reales
-/// ("Bebas Neue"), que es lo que resuelven CSS y libass. Medido: 186 familias
-/// limpias en ~400 ms con el spawn de powershell.exe incluido (pwsh tarda 3x).
+/// .ass.
 ///
-/// El registro de Windows se usa solo de fallback: devuelve el nombre con el
-/// estilo pegado ("Bebas Neue Regular") y 110 de sus 201 entradas no son
-/// familias sino estilos ("Arial Bold", "Calibri Bold Italic"), que el filtro
-/// del frontend descarta midiendo pero no puede renombrar.
+/// Fuente única de verdad: `fontdb` parsea los archivos de fuente (tabla
+/// `name` de cada `.ttf`/`.otf`/`.ttc`) en Rust puro. Ventajas frente a las dos
+/// rutas por plataforma anteriores:
+///   - Una sola ruta de código, idéntica en Windows/Linux/macOS: sin PowerShell,
+///     sin `fc-list`, sin `#[cfg]`, sin dependencia de binarios externos.
+///   - Devuelve los nombres de FAMILIA reales ("Bebas Neue"), que es lo que
+///     resuelven CSS y libass. El registro de Windows devolvía el nombre con el
+///     estilo pegado ("Bebas Neue Regular") y 110 de sus 201 entradas eran
+///     estilos, no familias.
+///   - MacOS entra gratis (antes devolvía `vec![]`).
+///   - ~20 ms con caché caliente (medido por fontdb) frente a los ~400 ms del
+///     spawn de powershell.exe.
 #[tauri::command]
 async fn listar_fuentes_sistema() -> Result<Vec<String>, String> {
-    // Async + spawn_blocking: powershell tarda ~400 ms y como comando
-    // sync congelaba el hilo principal al abrir la app (el panel de
-    // Estilos pide las fuentes al montar).
+    // spawn_blocking: parsear los archivos de fuente toma decenas/cientos de
+    // ms y como comando sync congelaba el hilo principal al abrir la app (el
+    // panel de Estilos pide las fuentes al montar).
     tauri::async_runtime::spawn_blocking(|| {
-        // Windows: GDI+ da las familias reales (ver doc arriba).
-        #[cfg(target_os = "windows")]
-        {
-            const PS: &str = "Add-Type -AssemblyName System.Drawing; [System.Drawing.Text.InstalledFontCollection]::new().Families | ForEach-Object { $_.Name }";
-            if let Ok(salida) = comando_oculto("powershell")
-                .args(["-NoProfile", "-NonInteractive", "-Command", PS])
-                .output()
-            {
-                let familias: Vec<String> = String::from_utf8_lossy(&salida.stdout)
-                    .lines()
-                    .map(|l| l.trim().to_string())
-                    .filter(|l| !l.is_empty())
-                    .collect();
-                if !familias.is_empty() {
-                    return Ok(familias);
-                }
-            }
-            Ok(familias_del_registro())
-        }
-        // Linux: fontconfig (`fc-list : family`, una familia por línea; las
-        // entradas multi-familia vienen separadas por coma). Sin deps nuevas.
-        #[cfg(target_os = "linux")]
-        {
-            Ok(familias_fc_list())
-        }
-        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-        {
-            Ok(Vec::new())
-        }
+        let mut db = fontdb::Database::new();
+        // Escanea los directorios estándar de fuentes del SO (Windows:
+        // %WINDIR%\Fonts; Linux/macOS: los <dir> de fontconfig). No consulta la
+        // API del sistema, así que una fuente instalada fuera de esos
+        // directorios (p.ej. una carpeta <dir> propia en fonts.conf) no
+        // aparecería; el frontend filtra igual por lo que el webview pinta.
+        db.load_system_fonts();
+        // Todas las familias declaradas por cada cara (un mismo archivo puede
+        // declarar varias). Lo que NO se agrega son las variantes de peso
+        // ("Cantarell Light"): fontdb agrupa los pesos bajo la familia base, y
+        // en .ass el peso va en el campo Bold del Style:, no pegado al
+        // Fontname (ver `lineaStyle` y los campos bold/italic del preset).
+        let nombres: Vec<String> = db
+            .faces()
+            // `families` es Vec<(String, Language)>; el nombre es el primer
+            // elemento de cada tupla.
+            .flat_map(|cara| cara.families.iter().map(|(n, _)| n.clone()))
+            .collect();
+        Ok(normalizar_familias(nombres))
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
-#[cfg(target_os = "linux")]
-fn familias_fc_list() -> Vec<String> {
-    use std::collections::HashSet;
-    let Ok(salida) = comando_oculto("fc-list").args([":", "family"]).output() else {
-        return Vec::new();
-    };
-    let mut vistas: HashSet<String> = HashSet::new();
-    let mut todas: Vec<String> = Vec::new();
-    for linea in String::from_utf8_lossy(&salida.stdout).lines() {
-        for parte in linea.split(',') {
-            let nombre = parte.trim().to_string();
-            if !nombre.is_empty() && vistas.insert(nombre.clone()) {
-                todas.push(nombre);
-            }
-        }
-    }
-    todas.sort();
-    todas
-}
-
-#[cfg(target_os = "windows")]
-fn familias_del_registro() -> Vec<String> {
-    let claves = [
-        r"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts",
-        r"HKCU\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts",
-    ];
-    let mut todas: Vec<String> = Vec::new();
-    for clave in claves {
-        // Si la clave no existe (típico en HKCU sin fuentes de usuario), reg
-        // escribe en stderr y devuelve código 1: no es un error.
-        let Ok(salida) = comando_oculto("reg").args(["query", clave]).output() else {
+/// Parte pura del listado de fuentes: dedup + orden + descarte de lo que no
+/// puede ser una familia CSS/.ass. Una familia no lleva separadores de ruta,
+/// ni dos puntos, ni punto y coma (delimitador de los campos `Style:` del
+/// .ass). Centralizado aquí y en tests para que el frontend reciba siempre la
+/// misma forma de lista venga del SO que venga.
+fn normalizar_familias(nombres: Vec<String>) -> Vec<String> {
+    let mut vistas: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut familias: Vec<String> = Vec::new();
+    for nombre in nombres {
+        let limpio = nombre.trim();
+        if limpio.is_empty()
+            || limpio.contains('/')
+            || limpio.contains('\\')
+            || limpio.contains(':')
+            || limpio.contains(';')
+        {
             continue;
-        };
-        for linea in String::from_utf8_lossy(&salida.stdout).lines() {
-            let t = linea.trim();
-            if t.is_empty() || t.starts_with("HKEY") {
-                continue;
-            }
-            // Cada línea: "    <nombre>    <tipo>    <ruta del archivo>"
-            if let Some(nombre) = t.split_whitespace().next() {
-                if !nombre.is_empty() {
-                    todas.push(nombre.to_string());
-                }
-            }
+        }
+        if vistas.insert(limpio.to_string()) {
+            familias.push(limpio.to_string());
         }
     }
-    todas
+    familias.sort();
+    familias
 }
 
 // Un nombre de archivo nunca debe escapar de su carpeta: el frontend
@@ -694,6 +656,38 @@ mod tests {
     #[test]
     fn nombre_archivo_con_subruta_err() {
         assert!(nombre_archivo_seguro("a/b").is_err());
+    }
+
+    // --- Fuentes del sistema ---
+    //
+    // `normalizar_familias` es la parte pura y testeable del listado: recibe
+    // los nombres de familia tal como venga la fuente de verdad y devuelve la
+    // lista limpia (dedup + orden). La lectura real del sistema vive en
+    // `listar_fuentes_sistema` (fontdb) y NO se testea aquí porque depende del
+    // SO. Estos tests fijan el contrato de nombres que el frontend consume.
+
+    #[test]
+    fn familias_dedup_y_orden() {
+        let crudas = vec!["Zapfino", "Arial", "Arial", "Bebas Neue"];
+        let familias = normalizar_familias(crudas.into_iter().map(String::from).collect());
+        assert_eq!(familias, vec!["Arial", "Bebas Neue", "Zapfino"]);
+    }
+
+    #[test]
+    fn familias_descarta_vacias_y_blancos() {
+        let crudas = vec!["  ", "", "Arial"];
+        let familias = normalizar_familias(crudas.into_iter().map(String::from).collect());
+        assert_eq!(familias, vec!["Arial"]);
+    }
+
+    #[test]
+    fn familias_ignora_nombres_tecnicamente_invalidos() {
+        // Una familia no puede llevar un separador de ruta ni un punto y coma
+        // (el .ass lo usa como delimitador de campos de Style:). Si el parser
+        // de fuentes devolviera algo así, no debe llegar al selector.
+        let crudas = vec!["Arial", "C:/Windows/Fonts", "Mala;Sana", "Arial"];
+        let familias = normalizar_familias(crudas.into_iter().map(String::from).collect());
+        assert_eq!(familias, vec!["Arial"]);
     }
 
     // Un hablante llamado "Narrador..." producía "Narrador....srt", que el

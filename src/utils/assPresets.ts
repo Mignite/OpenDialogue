@@ -25,6 +25,19 @@ function esPresetAss(valor: unknown): valor is PresetAss {
   );
 }
 
+// Presets guardados antes de que existieran bold/italic llegan sin esas claves.
+// `esPresetAss` no las exige (son opcionales), y esta normalización las
+// rellena a `false` para que el resto del código lea siempre un booleano y no
+// un `undefined` que se cuele en el .ass. Un valor no-booleano se descarta
+// (guarda corrupta) en vez de propagarse.
+function normalizarPreset(p: PresetAss): PresetAss {
+  return {
+    ...p,
+    bold: p.bold === true,
+    italic: p.italic === true,
+  };
+}
+
 function semilla(): PresetAss[] {
   return [{ ...DEFAULT_PRESET_ASS }];
 }
@@ -34,7 +47,7 @@ export function presetsDesdeJson(texto: string | null | undefined): PresetAss[] 
   try {
     const data = JSON.parse(texto) as { presets?: unknown };
     const lista = Array.isArray(data?.presets)
-      ? data.presets.filter(esPresetAss)
+      ? data.presets.filter(esPresetAss).map(normalizarPreset)
       : [];
     return lista.length > 0 ? lista : semilla();
   } catch {

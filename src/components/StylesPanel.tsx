@@ -166,7 +166,11 @@ function StylesPanel({ presets, panelAbierto, onTogglePanel, onGuardar }: Props)
                     ref={inputFuenteRef}
                     className="assFontInput"
                     value={sel.fontname}
-                    style={{ fontFamily: familiaCss(sel.fontname) }}
+                    style={{
+                      fontFamily: familiaCss(sel.fontname),
+                      fontWeight: sel.bold ? 700 : 400,
+                      fontStyle: sel.italic ? "italic" : "normal",
+                    }}
                     placeholder={t("assExport.fontPlaceholder")}
                     onFocus={() => setListaFuentesAbierta(true)}
                     onBlur={() =>
@@ -242,6 +246,37 @@ function StylesPanel({ presets, panelAbierto, onTogglePanel, onGuardar }: Props)
                     )}
                   </div>
                 )}
+              </div>
+              {/* Peso y cursiva: en .ass son los campos Bold/Italic del
+                  Style:, no parte del nombre de la fuente. Por eso el selector
+                  de arriba lista solo familias canónicas ("Cantarell") y acá
+                  se elige el peso ("Cantarell" + negrita = Cantarell Bold). */}
+              <div className="assField">
+                <label>{t("assExport.field_weight")}</label>
+                <div className="assToggleRow">
+                  <button
+                    type="button"
+                    className={
+                      "assToggle" + (sel.bold === true ? " activo" : "")
+                    }
+                    aria-pressed={sel.bold === true}
+                    onClick={() => editar("bold", sel.bold !== true)}
+                  >
+                    <span className="assToggleGlyph">B</span>
+                    {t("assExport.bold")}
+                  </button>
+                  <button
+                    type="button"
+                    className={
+                      "assToggle" + (sel.italic === true ? " activo" : "")
+                    }
+                    aria-pressed={sel.italic === true}
+                    onClick={() => editar("italic", sel.italic !== true)}
+                  >
+                    <span className="assToggleGlyph italics">I</span>
+                    {t("assExport.italic")}
+                  </button>
+                </div>
               </div>
               {CAMPOS_NUMERO.map((campo) => (
                 <div className="assField" key={campo}>

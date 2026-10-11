@@ -157,9 +157,12 @@ export const ASS_EVENTS_FORMAT =
 function lineaStyle(nombre: string, preset: PresetAss): string {
   const c = hexToAssColor(preset.color);
   const o = hexToAssColor(preset.outlineColor);
+  // .ass usa -1 para "sí" en los campos booleanos (Bold, Italic) y 0 para "no".
+  const b = preset.bold ? -1 : 0;
+  const i = preset.italic ? -1 : 0;
   return (
     `Style: ${nombre},${preset.fontname},${preset.fontsize},${c},${c},${o},` +
-    `&H00000000,0,0,0,0,100,100,0,0,1,${preset.outline},${preset.shadow},` +
+    `&H00000000,${b},${i},0,0,100,100,0,0,1,${preset.outline},${preset.shadow},` +
     `${preset.alignment},${preset.marginL},${preset.marginR},${preset.marginV},1`
   );
 }
@@ -233,6 +236,10 @@ export interface EstiloAss {
   marginL: number;
   marginR: number;
   marginV: number;
+  // Recuperados del Style: importado para que el preset generado conserve la
+  // negrita/cursiva. .ass usa -1 = sí, 0 = no (cualquier otro valor = no).
+  bold: boolean;
+  italic: boolean;
 }
 
 export interface AssParseResult {
@@ -319,6 +326,8 @@ export function parseAss(texto: string): AssParseResult {
           marginL: num(f.MarginL, 10),
           marginR: num(f.MarginR, 10),
           marginV: num(f.MarginV, 40),
+          bold: num(f.Bold, 0) !== 0,
+          italic: num(f.Italic, 0) !== 0,
         });
       }
     } else if (seccion === "[events]") {
@@ -408,6 +417,10 @@ export function presetDesdeEstilos(
     marginL: base.marginL,
     marginR: base.marginR,
     marginV: base.marginV,
+    // Conserva la negrita/cursiva del Style: Default del archivo importado, si
+    // el usuario edita ese preset el bold/italic no se pierde al reexportar.
+    bold: base.bold,
+    italic: base.italic,
   };
 }
 

@@ -52,6 +52,46 @@ describe("presetsDesdeJson", () => {
     const r = presetsDesdeJson(JSON.stringify({ presets: [P1, { ...P1, id: "p2" }] }));
     expect(r.map((p) => p.id)).toEqual(["p1", "p2"]);
   });
+
+  // Los presets guardados antes de que existieran bold/italic llegan sin esas
+  // claves. No deben rechazarse (los campos son opcionales a propósito) ni
+  // quedar como `undefined`, que se colaría en el .ass.
+  it("rellena a false los presets viejos que no traen bold/italic", () => {
+    const viejo = {
+      id: "viejo",
+      nombre: "Viejo",
+      fontname: "Arial",
+      fontsize: 48,
+      color: "#FFFFFF",
+      outlineColor: "#000000",
+      outline: 2,
+      shadow: 1,
+      alignment: 2,
+      marginL: 10,
+      marginR: 10,
+      marginV: 40,
+    };
+    const r = presetsDesdeJson(JSON.stringify({ presets: [viejo] }));
+    expect(r).toHaveLength(1);
+    expect(r[0].bold).toBe(false);
+    expect(r[0].italic).toBe(false);
+  });
+
+  it("conserva bold/italic de un preset que sí los trae", () => {
+    const r = presetsDesdeJson(
+      JSON.stringify({ presets: [{ ...P1, bold: true, italic: true }] }),
+    );
+    expect(r[0].bold).toBe(true);
+    expect(r[0].italic).toBe(true);
+  });
+
+  it("descarta un bold que no sea booleano en vez de propagarlo", () => {
+    const r = presetsDesdeJson(
+      JSON.stringify({ presets: [{ ...P1, bold: "sí", italic: 1 }] }),
+    );
+    expect(r[0].bold).toBe(false);
+    expect(r[0].italic).toBe(false);
+  });
 });
 
 describe("presetsAJson", () => {

@@ -111,6 +111,10 @@ function SpeakersPanel({ hablantes, presets, panelAbierto, onTogglePanel, onAgre
                   estilo
                     ? {
                         fontFamily: familiaCss(estilo.fontname),
+                        // El peso/cursiva del preset se ve aquí: si no, la fila
+                        // muestra una fuente que el .ass no va a usar igual.
+                        fontWeight: estilo.bold ? 700 : 400,
+                        fontStyle: estilo.italic ? "italic" : "normal",
                         boxShadow: `inset 0 -2px 0 ${estilo.color}`,
                       }
                     : undefined

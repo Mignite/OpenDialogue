@@ -59,4 +59,6 @@ export const DEFAULT_PRESET_ASS: PresetAss = {
   marginL: 10,
   marginR: 10,
   marginV: 40,
+  bold: false,
+  italic: false,
 };

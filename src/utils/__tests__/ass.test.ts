@@ -20,6 +20,97 @@ import {
 import type { Caption, PresetAss, Hablante } from "../../types";
 import { DEFAULT_PRESET_ASS } from "../constants";
 
+// --- Bold / Italic ---
+// El formato .ass tiene los campos Bold e Italic en el Style:, pero hasta ahora
+// la app los escribía fijos en 0 (no había forma de hacer negrita/cursiva). En
+// .ass el PESO va en esos campos, nunca pegado al Fontname ("Cantarell Light"
+// no es una familia), por eso el selector lista solo familias canónicas y el
+// peso se controla aparte.
+describe("bold/italic en el .ass", () => {
+  const HABS: Hablante[] = [
+    { id: "sp1", nombre: "Juan", tecla: "1", color: "#E85D4E" },
+  ];
+  const cap = (id: string, i: number, f: number): Caption => ({
+    id,
+    inicio: i,
+    fin: f,
+    texto: "hola",
+    hablante_id: "sp1",
+  });
+  const styleDe = (p: PresetAss) =>
+    buildAss([cap("a", 0, 3)], HABS, () => p, 1920, 1080)
+      .split("\n")
+      .find((l) => l.startsWith("Style: H1,"))!;
+
+  it("un preset sin bold escribe 0 en el campo Bold", () => {
+    const linea = styleDe({ ...DEFAULT_PRESET_ASS });
+    const campos = linea.slice("Style: H1,".length).split(",");
+    // Índice 6 = Bold, 7 = Italic (tras "Style: H1," el primer campo es el
+    // Fontname, así que Bold cae en el 6º). Ver ASS_STYLE_FORMAT.
+    expect(campos[6]).toBe("0");
+    expect(campos[7]).toBe("0");
+  });
+
+  it("bold:true escribe -1 en el campo Bold", () => {
+    const linea = styleDe({ ...DEFAULT_PRESET_ASS, bold: true });
+    const campos = linea.slice("Style: H1,".length).split(",");
+    expect(campos[6]).toBe("-1");
+    expect(campos[7]).toBe("0");
+  });
+
+  it("italic:true escribe -1 en el campo Italic", () => {
+    const linea = styleDe({ ...DEFAULT_PRESET_ASS, italic: true });
+    const campos = linea.slice("Style: H1,".length).split(",");
+    expect(campos[6]).toBe("0");
+    expect(campos[7]).toBe("-1");
+  });
+
+  it("bold e italic a la vez los escribe ambos", () => {
+    const linea = styleDe({ ...DEFAULT_PRESET_ASS, bold: true, italic: true });
+    const campos = linea.slice("Style: H1,".length).split(",");
+    expect(campos[6]).toBe("-1");
+    expect(campos[7]).toBe("-1");
+  });
+
+  it("parseAss recupera bold de un Style: importado (-1)", () => {
+    const fuente = [
+      "[Script Info]",
+      "ScriptType: v4.00+",
+      "",
+      "[V4+ Styles]",
+      "Format: " + ASS_STYLE_FORMAT,
+      "Style: Default,Arial,48,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,-1,-1,0,0,100,100,0,0,1,2,0,2,10,10,40,1",
+      "",
+      "[Events]",
+      "Format: " + ASS_EVENTS_FORMAT,
+      "Dialogue: 0,0:00:00.00,0:00:03.00,Default,,0,0,0,,hola",
+      "",
+    ].join("\n");
+    const { styles: estilos } = parseAss(fuente);
+    expect(estilos[0].bold).toBe(true);
+    expect(estilos[0].italic).toBe(true);
+  });
+
+  it("parseAss deja bold/italic en false si el Style: trae 0", () => {
+    const fuente = [
+      "[Script Info]",
+      "ScriptType: v4.00+",
+      "",
+      "[V4+ Styles]",
+      "Format: " + ASS_STYLE_FORMAT,
+      "Style: Default,Arial,48,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,40,1",
+      "",
+      "[Events]",
+      "Format: " + ASS_EVENTS_FORMAT,
+      "Dialogue: 0,0:00:00.00,0:00:03.00,Default,,0,0,0,,hola",
+      "",
+    ].join("\n");
+    const { styles: estilos } = parseAss(fuente);
+    expect(estilos[0].bold).toBe(false);
+    expect(estilos[0].italic).toBe(false);
+  });
+});
+
 const HABLANTES: Hablante[] = [
   { id: "sp1", nombre: "Juan", tecla: "1", color: "#E85D4E" },
   { id: "sp2", nombre: "María", tecla: "2", color: "#4EA8E8" },

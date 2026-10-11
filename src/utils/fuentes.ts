@@ -2,15 +2,21 @@ import { invoke } from "@tauri-apps/api/core";
 
 // Detección de fuentes instaladas para el preset .ass.
 //
-// El webview no tiene API de fuentes, así que el plan es de dos pasos:
-//   1. el backend lee el registro de Windows (familias del sistema + del
-//      usuario) y devuelve los nombres CRUDOS;
-//   2. el renderer descarta los que no existen de verdad, midiendo.
+// El backend (`listar_fuentes_sistema`) usa `fontdb`, que parsea los archivos
+// de fuente y devuelve los nombres de FAMILIA canónicos ("Cantarell",
+// "Liberation Sans") en Windows, Linux y macOS por igual. Los pesos
+// ("Cantarell Light") NO se listan como fuentes aparte: en .ass el peso va en
+// el campo Bold del Style:, no pegado al Fontname.
 //
-// El paso 2 es el que importa: el registro mezcla familias reales ("Arial
-// Black", "Calibri Light") con variantes de estilo que NUNCA resuelven como
-// familia ("Calibri Bold", "Consolas Bold Italic"). Escribir esas en el .ass
-// produce un fallback silencioso, que es justo lo que hay que evitar.
+// Sobre esa lista el renderer aplica dos pasos más:
+//   1. `limpiarNombresFuentes` quita el sufijo de tipo y deduplica (red de
+//      seguridad para nombres que lleguen por otras vías, p. ej. un import);
+//   2. `detectarFamilias` descarta las que el webview no puede pintar.
+//
+// El paso 2 es el que importa para el aviso "no está instalada": el registro
+// de Windows (ya no usado) mezclaba familias reales con variantes de estilo
+// que NUNCA resuelven como familia ("Calibri Bold", "Consolas Bold Italic"),
+// y escribir esas en el .ass produce un fallback silencioso.
 
 /** Quita el sufijo de tipo que el registro agrega y deduplica.
  *  "Calibri Bold (TrueType)" -> "Calibri Bold" */

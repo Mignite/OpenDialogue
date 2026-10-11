@@ -45,4 +45,11 @@ export interface PresetAss {
   marginL: number;
   marginR: number;
   marginV: number;
+  // Peso y cursiva del estilo .ass (campos Bold/Italic del Style:). El
+  // selector de fuente lista solo familias canónicas: el peso NO va pegado al
+  // nombre ("Cantarell Light" no es una familia, es "Cantarell" en negrita),
+  // va en su propio campo, que es donde libass lo lee.
+  // Presets viejos no traen estas claves → ausentes → false (ver esPresetAss).
+  bold?: boolean;
+  italic?: boolean;
 }
