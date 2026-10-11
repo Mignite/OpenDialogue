@@ -24,13 +24,14 @@ import {
   ASS_EM_PREVIEW,
 } from "./utils/constants";
 import { formatTime, parseTimeInput } from "./utils/time";
-import { buildSrt, formatSrtTimestamp } from "./utils/srt";
+import { buildSrt, formatSrtTimestamp, nombreArchivoHablanteUnico } from "./utils/srt";
 import { AssExportModal } from "./components/AssExportModal";
 import {
   BuildOverlapReport,
   FormatOverlapReport,
   findSnapTime,
   findSnapBlockDelta,
+  clampDeltaBloque,
 } from "./utils/captions";
 import { filtrarPorMarquee, captionRowIndex, filasDestinoRelativas } from "./utils/selection";
 import { picoEnRango } from "./utils/audioIslands";
@@ -80,6 +81,13 @@ function App() {
   const [autoFollowing, setAutoFollowing] = useState<boolean>(true);
   const autoFollowingRef = useRef(true);
   const [videoDuration, setVideoDuration] = useState<number>(0);
+  // Tick de re-render para el recuadro del preview .ass: `overlayRecuadro` mide
+  // el <video> (clientWidth/clientHeight) durante el render, así que sin esto
+  // redimensionar la ventana en pausa dejaba el preview con el tamaño y la
+  // posición viejos hasta el próximo cambio de estado (en reproducción se
+  // corregía solo con el tick del playhead). El observer solo dispara este
+  // contador; los valores se releen en el render.
+  const [videoBoxTick, setVideoBoxTick] = useState<number>(0);
   const isScrollingManuallyRef = useRef(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -135,6 +143,17 @@ function App() {
     ids: string[];
     deltaT: number;
     startTimes: Map<string, number>;
+    // Extremos del bloque ya desplazados (t=0 del más temprano, t=fin del más
+    // tardío) + inicio del lead, calculados UNA vez en el mousedown. Durante
+    // el drag las captions no mutan (solo se mueven por transform hasta el
+    // mouseup), así que son constantes: recalcularlos por mousemove hacía dos
+    // `find` por id sobre el array completo en cada evento de mouse.
+    tMin: number;
+    tMax: number;
+    leadInicio: number;
+    // Set de ids del bloque, reutilizado por findSnapBlockDelta en vez de
+    // construir uno nuevo en cada mousemove.
+    exclude: Set<string>;
     moved: boolean;
     els: Map<string, HTMLElement>;
     filaOrigen: Map<string, number>;
@@ -171,7 +190,7 @@ function App() {
   }, []);
   const cerrarAssModal = useCallback(() => setAssModalAbierto(false), []);
   // Slice 2 del monolito: waveform (análisis + caché).
-  const onda = useWaveform();
+  const onda = useWaveform(notify);
 
   // Slice 5 del monolito: captions y selección. El historial vive dentro
   // (deshacer/rehacer/pushHistorial salen de acá). Los aliases conservan los
@@ -243,7 +262,6 @@ function App() {
   const { reiniciar: reiniciarOnda, analizarVolumenDe, estaEnAnalisis } = onda;
   const cargarVideoDesdeRuta = useCallback(
     (path: string) => {
-      console.log(`[DEBUG APP] cargarVideoDesdeRuta -> path=${path}`);
       setVideoPath(path);
       setVideoSrc(convertFileSrc(path));
       setVideoNoEncontrado(false);
@@ -290,6 +308,7 @@ function App() {
     },
     {
       pushHistorial: caps.pushHistorial,
+      limpiarHistorial: caps.limpiarHistorial,
       notify,
       persistirPresetsAss: ass.persistirPresets,
       cargarVideo: cargarVideoDesdeRuta,
@@ -346,6 +365,10 @@ function App() {
         (c) => !c.hablante_id,
       ).length;
       let archivosCreados = 0;
+      // Nombres ya escritos en esta corrida: dos hablantes homónimos (o
+      // "A/B" y "A:B", que sanitan al mismo texto) generaban el MISMO archivo
+      // y el segundo pisaba al primero.
+      const usados: string[] = [];
 
       for (const h of hablantesRef.current) {
         const propios = captionsRef.current
@@ -354,7 +377,11 @@ function App() {
         if (propios.length === 0) continue;
 
         const contenido = buildSrt(propios);
-        const nombreArchivo = `${(h.nombre || h.tecla || h.id).replace(/[\\/:*?"<>|]/g, "_")}.srt`;
+        const nombreArchivo = nombreArchivoHablanteUnico(
+          h.nombre || h.tecla || h.id,
+          usados,
+        );
+        usados.push(nombreArchivo);
         await invoke("escribir_archivo_en_carpeta", {
           carpeta,
           nombreArchivo,
@@ -571,6 +598,21 @@ function App() {
     }
   }, [videoSrc]);
 
+  // Re-render del preview al cambiar el tamaño del <video>. Sin esto el
+  // recuadro del overlay queda con la medida vieja al redimensionar en pausa
+  // (no hay tick de playhead que lo corrija). Observa la caja, no el viewport:
+  // el <video> también cambia de tamaño con el layout (paneles, zoom de
+  // window, maximize de la ventana).
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      setVideoBoxTick((n) => n + 1);
+    });
+    ro.observe(video);
+    return () => ro.disconnect();
+  }, [videoSrc]);
+
   // El video suena directo (single-track): sin elemento <audio> aparte no
   // hay nada que sincronizar. Solo se refleja play/pause en el botón.
   useEffect(() => {
@@ -610,37 +652,34 @@ function App() {
     const wSec = windowSecondsRef.current;
     const ws = windowStartRef.current;
     const rect = area.getBoundingClientRect();
-    const lead = captionsRef.current.find((c) => c.id === bd.ids[0]);
-    if (!lead) return;
+    const leadInicio = bd.leadInicio;
+    // Guarda de seguridad (equivalente al `if (!lead) return` de antes): si el
+    // lead ya no está en captions, tMin queda Infinity y el delta sería -Inf,
+    // lo que mandaría todos los clips a t=0 al soltar.
+    if (!Number.isFinite(leadInicio)) return;
     let leadNuevo = ws + ((clientX - rect.left - TRACK_LABEL_W) / areaWidth) * wSec;
     if (!ctrlKey) {
       // Snap de bloque (estilo Premiere/filmcraft): se prueban AMBOS extremos
-      // del bloque ya desplazado (inicio mín + fin máx del set) y gana el imán
-      // más cercano (bordes vecinos + playhead). Antes solo el inicio del lead
+      // del bloque ya desplazado (tMin/tMax del set) y gana el imán más
+      // cercano (bordes vecinos + playhead). Antes solo el inicio del lead
       // snapeaba: arrastrar a la derecha nunca pegaba.
-      const tMin0 = Math.min(
-        ...bd.ids.map(
-          (id) => captionsRef.current.find((c) => c.id === id)?.inicio ?? Infinity,
-        ),
-      );
-      const tMax0 = Math.max(
-        ...bd.ids.map(
-          (id) => captionsRef.current.find((c) => c.id === id)?.fin ?? -Infinity,
-        ),
-      );
-      const base = leadNuevo - lead.inicio;
+      const base = leadNuevo - leadInicio;
       const playhead = videoRef.current?.currentTime ?? null;
       const deltaSnap = findSnapBlockDelta(
-        tMin0 + base,
-        tMax0 + base,
-        bd.ids,
+        bd.tMin + base,
+        bd.tMax + base,
+        bd.exclude,
         captionsRef.current,
         playhead,
       );
       leadNuevo += deltaSnap;
     }
-    let deltaT = leadNuevo - lead.inicio;
-    if (deltaT < -lead.inicio) deltaT = -lead.inicio;
+    // Clamp contra t=0 con el inicio MÁS TEMPRANO del bloque, no con el del
+    // lead: si otro clip del set empieza antes, el clamp por lead dejaba
+    // pasar un deltaT que lo empujaba bajo 0 y moverCaptions lo recortaba a 0
+    // por su cuenta — la selección se deformaba y el preview no coincidía con
+    // lo que se guardaba.
+    const deltaT = clampDeltaBloque(leadNuevo - leadInicio, bd.tMin);
     bd.deltaT = deltaT;
     if (Math.abs(deltaT) > 0.002) bd.moved = true;
     // Fila destino del lead (para el corrimiento relativo al soltar)
@@ -1700,7 +1739,10 @@ function App() {
   // elemento deja letterbox, así que clientWidth/videoWidth infla la escala.
   // Como libass escala por PlayResY (altura), la escala correcta es el
   // mínimo de ambos ejes. Sin dimensiones (video sin cargar), legacy.
+  // `videoBoxTick` no se lee: solo su cambio de identidad fuerza el re-render
+  // que vuelve a medir el <video> (ver el ResizeObserver de arriba).
   const overlayRecuadro = (() => {
+    void videoBoxTick;
     const v = videoRef.current;
     if (!v || !v.videoWidth || !v.videoHeight) return null;
     const escala = Math.min(
@@ -1840,9 +1882,15 @@ function App() {
       const tracks = area
         ? Array.from(area.querySelectorAll<HTMLElement>(".track"))
         : [];
+      let tMin = Infinity;
+      let tMax = -Infinity;
       for (const id of ids) {
         const c = captionsRef.current.find((x) => x.id === id);
-        if (c) startTimes.set(id, c.inicio);
+        if (c) {
+          startTimes.set(id, c.inicio);
+          if (c.inicio < tMin) tMin = c.inicio;
+          if (c.fin > tMax) tMax = c.fin;
+        }
         const el = area?.querySelector<HTMLElement>(
           `[data-caption-id="${id}"]`,
         );
@@ -1856,10 +1904,18 @@ function App() {
           );
         }
       }
+      // El lead es el clip agarrado (ids[0]); su inicio ancla el cálculo del
+      // delta. Si no está (carril degenerado), se ancla en tMin.
+      const leadInicio =
+        captionsRef.current.find((c) => c.id === ids[0])?.inicio ?? tMin;
       bodyDragRef.current = {
         ids,
         deltaT: 0,
         startTimes,
+        tMin,
+        tMax,
+        leadInicio,
+        exclude: new Set(ids),
         moved: false,
         els,
         filaOrigen,

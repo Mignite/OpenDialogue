@@ -70,19 +70,37 @@ export function findSnapTime(
   return best;
 }
 
+// Clamp del body drag contra el borde izquierdo (t=0). `tMin` es el inicio
+// MÁS TEMPRANO de la selección, NO el del clip lead (el que se agarró): si
+// otro clip del bloque empieza antes, el clamp por lead dejaba pasar un
+// deltaT que empujaba ese clip por debajo de 0, y `moverCaptions` lo recortaba a
+// 0 por su cuenta — la selección se deformaba (el desfase interno entre
+// clips no se conservaba) y el preview no coincidía con lo guardado.
+export function clampDeltaBloque(deltaT: number, tMin: number): number {
+  // El clamp de t=0. Devuelve -0 cuando tMin es 0 (inofensivo: `-0 === 0`,
+  // así que los guards `deltaT === 0` de moverCaptions siguen disparando).
+  return Math.max(deltaT, -tMin);
+}
+
 // Snap de bloque (body drag, estilo Premiere): prueba AMBOS extremos del
 // bloque ya desplazado (tMin/tMax) contra bordes vecinos + playhead y
 // devuelve el delta del imán más cercano (0 si ninguno). Con un clip,
 // tMin == lead.inicio y equivale al snap simple de antes.
+// `excludeIds` acepta un Set ya armado: el body drag lo reutiliza en cada
+// mousemove en vez de construir uno nuevo del array de ids.
 export function findSnapBlockDelta(
   tMin: number,
   tMax: number,
-  excludeIds: string | string[],
+  excludeIds: string | string[] | Set<string>,
   caps: Caption[],
   playhead: number | null,
 ): number {
   const exclude =
-    typeof excludeIds === "string" ? new Set([excludeIds]) : new Set(excludeIds);
+    excludeIds instanceof Set
+      ? excludeIds
+      : typeof excludeIds === "string"
+        ? new Set([excludeIds])
+        : new Set(excludeIds);
   let bestDelta = 0;
   let bestDist = SNAP_THRESHOLD;
   const considerar = (t: number) => {

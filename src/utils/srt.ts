@@ -67,3 +67,18 @@ export function buildSrt(caps: Caption[]): string {
     )
     .join("\n");
 }
+
+// Nombre del .srt de un hablante en el export por hablante. Sustituye los
+// caracteres prohibidos por "_" y, si el resultado ya se usó, anexa _2, _3...
+// Sin esto dos hablantes homónimos (o "A/B" y "A:B", que sanitan al mismo
+// texto) escribían el MISMO archivo y el segundo pisaba al primero.
+export function nombreArchivoHablanteUnico(
+  nombre: string,
+  usados: string[],
+): string {
+  const base = nombre.replace(/[\\/:*?"<>|]/g, "_");
+  if (!usados.includes(`${base}.srt`)) return `${base}.srt`;
+  let n = 2;
+  while (usados.includes(`${base}_${n}.srt`)) n++;
+  return `${base}_${n}.srt`;
+}

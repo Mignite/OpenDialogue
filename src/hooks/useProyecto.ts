@@ -43,6 +43,7 @@ export interface ProyectoSetters {
 
 export interface ProyectoServicios {
   pushHistorial: () => void;
+  limpiarHistorial: () => void;
   notify: (msg: string) => void;
   persistirPresetsAss: (
     presets: PresetAss[],
@@ -86,6 +87,7 @@ export function useProyecto(
   } = setters;
   const {
     pushHistorial,
+    limpiarHistorial,
     notify,
     persistirPresetsAss,
     cargarVideo,
@@ -131,9 +133,10 @@ export function useProyecto(
         setCaptions(parsed);
       } catch (err) {
         console.error("Error cargando SRT:", err);
+        notify(t("err.loadSrt", { error: String(err) }));
       }
     },
-    [pushHistorial, limpiarBanderas, setCaptions],
+    [pushHistorial, limpiarBanderas, setCaptions, notify],
   );
 
   const handleAbrirVideo = useCallback(async () => {
@@ -143,14 +146,13 @@ export function useProyecto(
         filters: [{ name: t("dialog.filterVideo"), extensions: ["mp4", "mov", "mkv"] }],
       });
       if (path) {
-        console.log(`[DEBUG handleAbrirVideo] Video seleccionado: ${path}`);
         cargarVideo(path as string);
       }
     } catch (err) {
       console.error("[ERROR handleAbrirVideo] Error abriendo diálogo:", err);
-      console.log("[DEBUG] No se pudo abrir el diálogo de video");
+      notify(t("err.openVideo", { error: String(err) }));
     }
-  }, [cargarVideo]);
+  }, [cargarVideo, notify]);
 
   const handleAbrirSrt = useCallback(async () => {
     try {
@@ -161,8 +163,9 @@ export function useProyecto(
       if (path) await cargarSrtDesdeRuta(path as string);
     } catch (err) {
       console.error("Error abriendo diálogo SRT:", err);
+      notify(t("err.openSrtDialog", { error: String(err) }));
     }
-  }, [cargarSrtDesdeRuta]);
+  }, [cargarSrtDesdeRuta, notify]);
 
   // Importa el par SRT+TXT de auto-subs: tiempos del SRT, hablantes de los
   // turnos "Speaker N" del TXT (match secuencial por texto en autosubs.ts).
@@ -218,16 +221,12 @@ export function useProyecto(
       setSelectedCaptionIds([]);
     } catch (err) {
       console.error("Error importando auto-subs:", err);
+      notify(t("err.importAutosubs", { error: String(err) }));
     }
-  }, [pushHistorial, limpiarBanderas, setHablantes, setCaptions, setSelectedCaptionIds]);
+  }, [pushHistorial, limpiarBanderas, setHablantes, setCaptions, setSelectedCaptionIds, notify]);
 
   const guardarProyectoEnRuta = useCallback(
     async (path: string) => {
-      console.log("Guardando en:", path);
-      console.log("videoPathRef:", videoPathRef.current);
-      console.log("captionsRef:", captionsRef.current.length, "captions");
-      console.log("hablantesRef:", hablantesRef.current.length, "hablantes");
-
       const proyecto: Proyecto = {
         ruta_video: videoPathRef.current,
         hablantes: hablantesRef.current,
@@ -244,12 +243,14 @@ export function useProyecto(
         setHayCambios(false);
         setRutaProyecto(path);
         rutaProyectoRef.current = path;
-        console.log("Guardado exitoso");
       } catch (err) {
         console.error("ERROR al guardar:", err);
+        // Sin esto un guardado fallido (disco lleno, ruta sin permisos) no
+        // dejaba ninguna señal: el statusBar seguía diciendo "Guardado".
+        notify(t("err.saveProject", { error: String(err) }));
       }
     },
-    [captionsRef, hablantesRef, videoPathRef, videoRef],
+    [captionsRef, hablantesRef, videoPathRef, videoRef, notify],
   );
 
   const handleGuardarComo = useCallback(async () => {
@@ -261,8 +262,9 @@ export function useProyecto(
       await guardarProyectoEnRuta(path as string);
     } catch (err) {
       console.error("Error abriendo diálogo de guardado:", err);
+      notify(t("err.saveDialog", { error: String(err) }));
     }
-  }, [guardarProyectoEnRuta]);
+  }, [guardarProyectoEnRuta, notify]);
 
   const handleGuardar = useCallback(async () => {
     if (rutaProyectoRef.current) {
@@ -291,6 +293,10 @@ export function useProyecto(
         ruta: path,
       });
       limpiarBanderas();
+      // El historial es del proyecto anterior: sus snapshots restauraban
+      // captions/hablantes de otro documento sobre estos (con el video y la
+      // ruta ya cambiados) y un guardado posterior mezclaba ambos.
+      limpiarHistorial();
       setRutaProyecto(path as string);
       setCaptions(proyecto.captions || []);
       setHablantes(proyecto.hablantes || []);
@@ -311,9 +317,11 @@ export function useProyecto(
       }
     } catch (err) {
       console.error("Error cargando proyecto:", err);
+      notify(t("err.loadProject", { error: String(err) }));
     }
   }, [
     limpiarBanderas,
+    limpiarHistorial,
     setRutaProyecto,
     setCaptions,
     setHablantes,
@@ -324,6 +332,7 @@ export function useProyecto(
     cargarVideo,
     setRutaFaltante,
     setVideoNoEncontrado,
+    notify,
   ]);
 
   const handleNuevoProyecto = useCallback(async () => {
@@ -335,6 +344,7 @@ export function useProyecto(
       if (!ok) return;
     }
     limpiarBanderas();
+    limpiarHistorial();
     setVideoSrc("");
     setVideoPath("");
     setRutaProyecto("");
@@ -351,6 +361,7 @@ export function useProyecto(
     updateScrollbarThumb(0, windowSecondsRef.current, 0);
   }, [
     limpiarBanderas,
+    limpiarHistorial,
     setVideoSrc,
     setVideoPath,
     setVideoNoEncontrado,

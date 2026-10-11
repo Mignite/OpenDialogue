@@ -1,13 +1,16 @@
 import { useCallback, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { t } from "../i18n";
 
 // Waveform: análisis de volumen (symphonia vía IPC) + caché en memoria.
 // El dibujado es en tiempo real desde `volumen` (ver drawCanvasFrame): sin
 // prerender topado, vale para cualquier duración.
 // El mirror bare `volumenRef = volumen` se queda en App (regla transversal:
 // un solo mirror); este hook expone el ref para los lectores en rAF.
-export function useWaveform() {
+// `notify` (estable) reporta los fallos: sin él, un códec no soportado
+// (Opus/AC3 en mp4) dejaba el waveform vacío sin explicación alguna.
+export function useWaveform(notify?: (msg: string) => void) {
   const [volumen, setVolumen] = useState<number[]>([]);
   const [analizando, setAnalizando] = useState<boolean>(false);
   const volumenRef = useRef<number[]>([]);
@@ -55,8 +58,9 @@ export function useWaveform() {
     }
   }
 
-  // useCallback-estable (solo refs/setters/funciones de módulo): los
-  // consumidores (cargarVideo, slice useProyecto) no re-suscriben nada.
+  // useCallback-estable (notify es useCallback([]) en App; refs/setters y
+  // funciones de módulo): los consumidores (cargarVideo, slice useProyecto) no
+  // re-suscriben nada.
   const analizarVolumenDe = useCallback(async (ruta: string) => {
     // Single-track: siempre la pista 0 (el video llega pre-editado con solo
     // diálogo). Sin selector de pista ni extracción: el video suena directo.
@@ -111,10 +115,15 @@ export function useWaveform() {
     rutaRequestRef.current.set(ruta, miRequestId);
     let reanclado = false;
 
-    const unlistenChunk = await listen<[number | null, number[]]>(
+    const unlistenChunk = await listen<[string, number | null, number[]]>(
       "volumen_chunk",
       (event) => {
-        const [chunkTrack, datos] = event.payload;
+        const [eventRuta, chunkTrack, datos] = event.payload;
+        // Filtro por ruta: el análisis del video anterior sigue emitiendo
+        // chunks mientras este corre y, al ser single-track, el track_index
+        // siempre es 0 (no filtraba nada). Sin esto sus muestras se sumaban
+        // al waveform del video nuevo.
+        if (eventRuta !== ruta) return;
         if (chunkTrack !== track_index) return; // descarta chunks de análisis anteriores
         if (analisisVolumenRequestRef.current !== miRequestId) {
           unlistenChunk();
@@ -151,6 +160,7 @@ export function useWaveform() {
         reanclado = true;
       } else if (analisisVolumenRequestRef.current === miRequestId) {
         console.error("Error analizando volumen:", err);
+        notify?.(t("err.analyzeVolume", { error: String(err) }));
       }
     } finally {
       if (analisisVolumenRequestRef.current === miRequestId)
@@ -160,7 +170,7 @@ export function useWaveform() {
       // re-anclada tampoco: el vigente es el original recién re-anclado.
       if (!reanclado && enCursoRef.current === ruta) enCursoRef.current = null;
     }
-  }, []);
+  }, [notify]);
 
   return { volumen, analizando, volumenRef, analizarVolumenDe, reiniciar, estaEnAnalisis };
 }

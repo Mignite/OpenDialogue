@@ -36,7 +36,7 @@ export function useCaptions({
   const editorPushedHablantesRef = useRef<Hablante[] | null>(null);
   // Historial vive acá (sus snapshots son captions+hablantes) y se expone
   // para menú/teclado/paneles: así no hay ciclo de orden con quien lo usa.
-  const { pushHistorial, deshacer, rehacer } = useHistory(
+  const { pushHistorial, deshacer, rehacer, limpiarHistorial } = useHistory(
     captionsRef,
     hablantesRef,
     setCaptions,
@@ -338,6 +338,7 @@ export function useCaptions({
     pushHistorial,
     deshacer,
     rehacer,
+    limpiarHistorial,
     asignarHablante,
     actualizarTextoCaption,
     duracionFragmento,

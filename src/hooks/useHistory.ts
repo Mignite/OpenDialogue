@@ -47,5 +47,14 @@ export function useHistory(
     hablantesRef.current = siguiente.hablantes;
   }, [snapshotActual, setCaptions, setHablantes, captionsRef, hablantesRef]);
 
-  return { pushHistorial, deshacer, rehacer };
+  // Vacía el historial. Lo llaman abrir/cargar/nuevo proyecto: los snapshots
+  // son de otro documento, así que sin esto un Ctrl+Z tras abrir el proyecto B
+  // restauraba los captions y hablantes del A encima de los del B (con el
+  // video y la ruta del B), y un guardado posterior mezclaba ambos proyectos.
+  const limpiarHistorial = useCallback(() => {
+    pastRef.current = [];
+    futureRef.current = [];
+  }, []);
+
+  return { pushHistorial, deshacer, rehacer, limpiarHistorial };
 }

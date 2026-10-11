@@ -349,7 +349,11 @@ async fn analizar_volumen(
             if ultimo_emit.elapsed().as_millis() > 250 {
                 if ultimo_flush_idx < resultados.len() {
                     let nuevo_chunk = resultados[ultimo_flush_idx..].to_vec();
-                    let _ = app.emit("volumen_chunk", (track_index, nuevo_chunk));
+                    // La ruta viaja con el chunk: si el usuario abre otro video
+                    // mientras este analiza, el frontend descarta los chunks
+                    // que no son de la ruta que espera (antes, al ser single-track
+                    // el track_index siempre era 0 y no filtraba nada).
+                    let _ = app.emit("volumen_chunk", (&ruta, track_index, nuevo_chunk));
                     ultimo_flush_idx = resultados.len();
                 }
                 ultimo_emit = Instant::now();
@@ -358,7 +362,7 @@ async fn analizar_volumen(
 
         if ultimo_flush_idx < resultados.len() {
             let nuevo_chunk = resultados[ultimo_flush_idx..].to_vec();
-            let _ = app.emit("volumen_chunk", (track_index, nuevo_chunk));
+            let _ = app.emit("volumen_chunk", (&ruta, track_index, nuevo_chunk));
         }
         // Blindaje: un container válido sin audio decodificable daría un
         // .cache de 0 bytes que el loader rechazaría en cada apertura
@@ -479,13 +483,14 @@ fn familias_del_registro() -> Vec<String> {
 
 // Un nombre de archivo nunca debe escapar de su carpeta: el frontend
 // sanitiza, pero este comando es el choke point y no puede confiar en eso.
-// Rechaza `..`, separadores y rutas absolutas (ambos sabores, para que un
-// `C:\x` no cuele en Linux y viceversa).
+// Rechaza `..` como nombre COMPLETO, separadores y rutas absolutas (ambos
+// sabores, para que un `C:\x` no cuele en Linux y viceversa). Los puntos
+// sueltos dentro del nombre son legales (`Narrador....srt`): la travesía solo
+// es posible con un separador, y esos ya están rechazados.
 fn nombre_archivo_seguro(nombre: &str) -> Result<String, String> {
     if nombre.is_empty()
         || nombre == "."
         || nombre == ".."
-        || nombre.contains("..")
         || nombre.contains('/')
         || nombre.contains('\\')
         || nombre.contains('\0')
@@ -689,5 +694,19 @@ mod tests {
     #[test]
     fn nombre_archivo_con_subruta_err() {
         assert!(nombre_archivo_seguro("a/b").is_err());
+    }
+
+    // Un hablante llamado "Narrador..." producía "Narrador....srt", que el
+    // contains("..") de antes rechazaba y abortaba TODO el export por hablante
+    // (los archivos ya escritos quedaban, el último no). La travesía real solo
+    // puede ocurrir con separadores de ruta, que se rechazan aparte: los puntos
+    // sueltos dentro de un nombre de archivo son legales.
+    #[test]
+    fn nombre_archivo_con_puntos_dentro_ok() {
+        assert_eq!(
+            nombre_archivo_seguro("Narrador....srt").as_deref(),
+            Ok("Narrador....srt")
+        );
+        assert_eq!(nombre_archivo_seguro("a..b.srt").as_deref(), Ok("a..b.srt"));
     }
 }
