@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Caption, Hablante } from "../types";
 import { buscarFinIslaAudio } from "../utils/audioIslands";
+import { clampCaptionTiempos } from "../utils/captionTiempos";
 import { ISLA_FALLBACK } from "../utils/constants";
 import { useHistory } from "./useHistory";
 
@@ -311,22 +312,24 @@ export function useCaptions({
     id: string,
     campo: "inicio" | "fin",
     nuevoValor: number,
+    duracionVideo = 0,
   ) {
+    // Un solo push aunque se muevan inicio y fin juntos (el editor numérico
+    // manda los dos): así un Ctrl+Z revierte el cambio completo.
     pushHistorial();
     setCaptions((prev) => {
       const copy = prev.map((c) => {
-        if (c.id === id) {
-          const updated = { ...c, [campo]: Math.max(0, nuevoValor) };
-          // Asegurar que inicio < fin
-          if (campo === "inicio" && updated.inicio >= updated.fin) {
-            updated.inicio = updated.fin - 0.1;
-          }
-          if (campo === "fin" && updated.fin <= updated.inicio) {
-            updated.fin = updated.inicio + 0.1;
-          }
-          return updated;
-        }
-        return c;
+        if (c.id !== id) return c;
+        // El clamp vive en una función pura testeada y compartida con el
+        // editor numérico: no puede haber dos reglas distintas de "qué es un
+        // tiempo válido" en la misma app.
+        const { inicio, fin } = clampCaptionTiempos(
+          campo === "inicio" ? nuevoValor : c.inicio,
+          campo === "fin" ? nuevoValor : c.fin,
+          duracionVideo,
+          c,
+        );
+        return { ...c, inicio, fin };
       });
       captionsRef.current = copy;
       return copy;

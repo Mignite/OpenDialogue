@@ -24,7 +24,7 @@ import {
   ASS_EM_PREVIEW,
   VELOCIDADES_REPRODUCCION,
 } from "./utils/constants";
-import { formatTime } from "./utils/time";
+import { formatTime, parseTimeInput } from "./utils/time";
 import {
   coincide,
   normalizarTermino,
@@ -51,6 +51,11 @@ import { cargarAjustes, guardarAjustes, type Ajustes } from "./utils/ajustes";
 
 import { useAssEstilos } from "./hooks/useAssEstilos";
 import { useRecovery } from "./hooks/useRecovery";
+import {
+  captionAPortapapeles,
+  escribirPortapapeles,
+  leerPortapapeles,
+} from "./utils/clipboard";
 import { useCaptions } from "./hooks/useCaptions";
 import { useTransporte } from "./hooks/useTransporte";
 import { useHablantes } from "./hooks/useHablantes";
@@ -1455,6 +1460,35 @@ function App() {
     };
   }, []);
 
+  // Mueve la selección de captions en el tiempo desde el teclado
+  // (Ctrl+Shift+←/→). Reusa `moverCaptions`, que ya hace el clamp a 0 y el
+  // push de historial (un Ctrl+Z deshace el nudge completo). Sin selección,
+  // mueve el caption bajo el playhead: siempre hace algo útil.
+  const nudgeSeleccion = useCallback(
+    (deltaT: number) => {
+      const sel = selectedCaptionIdsRef.current;
+      if (sel.length > 0) {
+        moverCaptions(sel, deltaT);
+        return;
+      }
+      const idx = currentCaptionIdxRef.current;
+      const cap = captionsRef.current[idx];
+      if (cap) moverCaptions([cap.id], deltaT);
+    },
+    [moverCaptions],
+  );
+
+  // Aplica un tiempo editado a mano. Envuelve a actualizarTiempoCaption para
+  // pasarle la duración del video (tope del `fin`) desde un solo lugar.
+  const aplicarTiempoCaption = useCallback(
+    (id: string, campo: "inicio" | "fin", valor: number | null) => {
+      // null = texto no parseable (input vacío o basura): no se toca el caption.
+      if (valor === null || !Number.isFinite(valor)) return;
+      actualizarTiempoCaption(id, campo, valor, videoDuration);
+    },
+    [actualizarTiempoCaption, videoDuration],
+  );
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.ctrlKey && e.key.toLowerCase() === "s") {
@@ -1494,6 +1528,26 @@ function App() {
       if (e.altKey && e.code === "ArrowLeft") {
         e.preventDefault();
         saltarCaption(-1);
+        return;
+      }
+      // Ajuste fino: Shift mueve 0,1 s en vez de 5 s. El timing de subtítulos es
+      // trabajo de décimas, y con saltos de 5 s hacía falta el input numérico
+      // para corregir medio segundo.
+      if (e.code === "ArrowRight" && e.shiftKey) {
+        e.preventDefault();
+        saltar(0.1);
+        return;
+      }
+      if (e.code === "ArrowLeft" && e.shiftKey) {
+        e.preventDefault();
+        saltar(-0.1);
+        return;
+      }
+      // Ctrl+Shift+←/→ mueve el caption seleccionado en vez del playhead:
+      // corrige el timing del subtítulo sin salir de él.
+      if (e.ctrlKey && e.shiftKey && (e.code === "ArrowLeft" || e.code === "ArrowRight")) {
+        e.preventDefault();
+        nudgeSeleccion(e.code === "ArrowRight" ? 0.1 : -0.1);
         return;
       }
       if (e.code === "ArrowRight") {
@@ -1560,15 +1614,29 @@ function App() {
         const idx = currentCaptionIdxRef.current;
         const cap = captionsRef.current[idx];
         if (cap) {
-          clipboardTextRef.current = cap.texto;
+          // Portapapeles real del SO (copiar a un editor externo). El ref
+          // interno se mantiene como respaldo para cuando el webview no da
+          // permiso de clipboard.
+          clipboardTextRef.current = captionAPortapapeles(
+            cap.texto,
+            cap.inicio,
+            cap.fin,
+          );
+          void escribirPortapapeles(clipboardTextRef.current);
         }
         return;
       }
       if (e.ctrlKey && e.key.toLowerCase() === "v") {
         e.preventDefault();
-        if (clipboardTextRef.current) {
-          pegarFragmento(clipboardTextRef.current);
-        }
+        // Primero el SO (permite pegar texto de CUALQUIER programa); si no
+        // hay nada o no hay permiso, al portapapeles interno de la app.
+        void leerPortapapeles().then((delSo) => {
+          const texto = delSo || clipboardTextRef.current;
+          if (texto) {
+            clipboardTextRef.current = texto;
+            pegarFragmento(texto);
+          }
+        });
         return;
       }
       if (e.key === "?") {
@@ -2257,6 +2325,51 @@ function App() {
                   ))}
                 </select>
               </div>
+              {/* Tiempos del caption seleccionado. Antes solo se cambiaban
+                  arrastrando los bordes del clip en el timeline, que es un
+                  ajuste fino e impreciso: el timing es el 80% del oficio y
+                  necesitaba un input numérico. Enter aplica y hace push de
+                  historial una sola vez (ambos tiempos juntos). */}
+              {currentCaption && (
+                <div className="captionTimeRow">
+                  <span className="captionTimeLabel">
+                    {t("app.timeInput.captionTimes")}
+                  </span>
+                  <input
+                    className="timeInput small"
+                    placeholder="HH:MM:SS.ss"
+                    defaultValue={formatTime(currentCaption.inicio)}
+                    onBlur={(e) =>
+                      aplicarTiempoCaption(
+                        currentCaption.id,
+                        "inicio",
+                        parseTimeInput(e.target.value),
+                      )
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                    }}
+                    title={t("app.timeInput.captionStart")}
+                  />
+                  <span className="captionTimeSep">→</span>
+                  <input
+                    className="timeInput small"
+                    placeholder="HH:MM:SS.ss"
+                    defaultValue={formatTime(currentCaption.fin)}
+                    onBlur={(e) =>
+                      aplicarTiempoCaption(
+                        currentCaption.id,
+                        "fin",
+                        parseTimeInput(e.target.value),
+                      )
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                    }}
+                    title={t("app.timeInput.captionEnd")}
+                  />
+                </div>
+              )}
             </>
           ) : (
             <div className="videoEmpty">
@@ -2733,6 +2846,20 @@ function App() {
                     <kbd>→</kbd> / <kbd>←</kbd>
                   </td>
                   <td>{t("app.help.rowSeek5s")}</td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>Shift</kbd>+<kbd>→</kbd> /{" "}
+                    <kbd>Shift</kbd>+<kbd>←</kbd>
+                  </td>
+                  <td>{t("app.help.rowSeekFine")}</td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>→</kbd> /{" "}
+                    <kbd>←</kbd>
+                  </td>
+                  <td>{t("app.help.rowNudgeCaption")}</td>
                 </tr>
                 <tr>
                   <td>

@@ -343,6 +343,41 @@ body {
   font-size: 13px;
 }
 
+/* Inicio/fin del caption seleccionado. Va en su propia fila bajo los
+   controles porque son dos inputs con etiqueta: meterlos en la barra de
+   transporte los mezcla con el playhead, que es otro tiempo distinto. */
+.captionTimeRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.captionTimeLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--textFaint);
+}
+
+.captionTimeSep {
+  color: var(--textFaint);
+  font-size: 12px;
+}
+
+.timeInput.small {
+  width: 92px;
+  padding: 4px 4px;
+  font-size: 12px;
+  border-radius: var(--r-sm);
+}
+
+.timeInput.small:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .playbackControls select {
   background: var(--surface2);
   border: 1px solid var(--border);
