@@ -4,16 +4,19 @@ export function parseSrtTime(t: string): number {
   const m = t.trim().match(/(\d+):(\d+):(\d+)[,.](\d+)/);
   if (!m) return 0;
   const [, h, min, s, ms] = m;
-  return +h * 3600 + +min * 60 + +s + +ms / 1000;
+  // La cola fraccional ("5", "50", "500") es decimal: "5" = 0.5 s, no 5 ms
+  return +h * 3600 + +min * 60 + +s + Number("0." + ms);
 }
 
 export function parseSrt(texto: string): Caption[] {
-  const bloques = texto.replace(/\r/g, "").trim().split(/\n\n+/);
+  // El separador tolera líneas "en blanco" con espacios: igual cortan el bloque
+  const bloques = texto.replace(/\r/g, "").trim().split(/\n\s*\n/);
   const resultado: Caption[] = [];
   let contador = 1;
 
   for (const bloque of bloques) {
-    const lineas = bloque.split("\n").filter((l) => l.length > 0);
+    // Ignora líneas compuestas solo de espacios dentro del bloque
+    const lineas = bloque.split("\n").filter((l) => l.trim().length > 0);
     if (lineas.length < 2) continue;
 
     const idxTiempo = lineas.findIndex((l) => l.includes("-->"));

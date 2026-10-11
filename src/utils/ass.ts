@@ -67,7 +67,7 @@ export function unescapeAssText(s: string): string {
       // Los overrides ({...}) no son parte del modelo: se descartan. El regex
       // exige que la { no esté precedida por barra, para no comerse las
       // llaves que escapamos al escribir.
-      .replace(/(^|[^\\])\{[^}]*\}/g, "$1")
+      .replace(/(?<!\\)\{[^}]*\}/g, "")
       .replace(/\\([{}\\])/g, "$1")
       .replace(/\\N|\\n/g, "\n")
   );

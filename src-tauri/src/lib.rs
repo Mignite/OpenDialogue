@@ -199,9 +199,31 @@ fn existe_archivo(ruta: String) -> bool {
     std::path::Path::new(&ruta).exists()
 }
 
+// SRT en Latin-1 o UTF-16 hacían fallar `read_to_string` (solo UTF-8).
+// Orden: BOM (UTF-16LE/BE, UTF-8) → UTF-8 estricto → fallback Windows-1252
+// (superconjunto de Latin-1: 0x80-0x9F mapean a caracteres útiles en vez de
+// controles). Sin BOM no se intenta UTF-16: sus bytes NUL pasarían como UTF-8.
+fn decodificar_texto(bytes: &[u8]) -> String {
+    if bytes.starts_with(&[0xFF, 0xFE]) {
+        let (texto, _, _) = encoding_rs::UTF_16LE.decode(&bytes[2..]);
+        return texto.into_owned();
+    }
+    if bytes.starts_with(&[0xFE, 0xFF]) {
+        let (texto, _, _) = encoding_rs::UTF_16BE.decode(&bytes[2..]);
+        return texto.into_owned();
+    }
+    let sin_bom = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);
+    if let Ok(texto) = std::str::from_utf8(sin_bom) {
+        return texto.to_owned();
+    }
+    let (texto, _, _) = encoding_rs::WINDOWS_1252.decode(bytes);
+    texto.into_owned()
+}
+
 #[tauri::command]
 fn leer_archivo_texto(ruta: String) -> Result<String, String> {
-    std::fs::read_to_string(&ruta).map_err(|e| e.to_string())
+    let bytes = std::fs::read(&ruta).map_err(|e| e.to_string())?;
+    Ok(decodificar_texto(&bytes))
 }
 
 #[tauri::command]
@@ -282,7 +304,11 @@ async fn analizar_volumen(
         loop {
             let packet = match format.next_packet() {
                 Ok(p) => p,
-                Err(SymphoniaError::IoError(_)) => break,
+                Err(SymphoniaError::IoError(e))
+                    if e.kind() == std::io::ErrorKind::UnexpectedEof =>
+                {
+                    break
+                }
                 Err(e) => return Err(e.to_string()),
             };
 
@@ -451,13 +477,34 @@ fn familias_del_registro() -> Vec<String> {
     todas
 }
 
+// Un nombre de archivo nunca debe escapar de su carpeta: el frontend
+// sanitiza, pero este comando es el choke point y no puede confiar en eso.
+// Rechaza `..`, separadores y rutas absolutas (ambos sabores, para que un
+// `C:\x` no cuele en Linux y viceversa).
+fn nombre_archivo_seguro(nombre: &str) -> Result<String, String> {
+    if nombre.is_empty()
+        || nombre == "."
+        || nombre == ".."
+        || nombre.contains("..")
+        || nombre.contains('/')
+        || nombre.contains('\\')
+        || nombre.contains('\0')
+        || std::path::Path::new(nombre).is_absolute()
+        || nombre.contains(':')
+    {
+        return Err(format!("Nombre de archivo no válido: {:?}", nombre));
+    }
+    Ok(nombre.to_string())
+}
+
 #[tauri::command]
 fn escribir_archivo_en_carpeta(
     carpeta: String,
     nombre_archivo: String,
     contenido: String,
 ) -> Result<(), String> {
-    let ruta = std::path::Path::new(&carpeta).join(&nombre_archivo);
+    let seguro = nombre_archivo_seguro(&nombre_archivo)?;
+    let ruta = std::path::Path::new(&carpeta).join(&seguro);
     escribir_atomico(&ruta, contenido.as_bytes())
 }
 
@@ -580,5 +627,67 @@ mod tests {
         let p: Proyecto = serde_json::from_value(proyecto_value(None)).expect("parse");
         assert_eq!(p.hablantes[0].preset_id, None);
         assert_eq!(p.playhead, 0.0);
+    }
+
+    #[test]
+    fn texto_utf16le_con_bom() {
+        let original = "1\n00:00:00,000 --> 00:00:01,000\ncanci\u{f3}n\n";
+        let mut bytes = vec![0xFF, 0xFE];
+        for u in original.encode_utf16() {
+            bytes.extend_from_slice(&u.to_le_bytes());
+        }
+        assert_eq!(decodificar_texto(&bytes), original);
+    }
+
+    #[test]
+    fn texto_utf16be_con_bom() {
+        let original = "1\n00:00:00,000 --> 00:00:01,000\ncanci\u{f3}n\n";
+        let mut bytes = vec![0xFE, 0xFF];
+        for u in original.encode_utf16() {
+            bytes.extend_from_slice(&u.to_be_bytes());
+        }
+        assert_eq!(decodificar_texto(&bytes), original);
+    }
+
+    #[test]
+    fn texto_utf8_con_y_sin_bom() {
+        let original = "1\n00:00:00,000 --> 00:00:01,000\ncanción\n";
+        assert_eq!(decodificar_texto(original.as_bytes()), original);
+        let mut con_bom = vec![0xEF, 0xBB, 0xBF];
+        con_bom.extend_from_slice(original.as_bytes());
+        assert_eq!(decodificar_texto(&con_bom), original);
+    }
+
+    #[test]
+    fn texto_latin1_con_tildes_cae_a_windows1252() {
+        // "canción" en Latin-1 / Windows-1252: ó = 0xF3 (UTF-8 inválido solo).
+        let bytes = b"1\n00:00:00,000 --> 00:00:01,000\ncanci\xf3n\n";
+        assert_eq!(
+            decodificar_texto(bytes),
+            "1\n00:00:00,000 --> 00:00:01,000\ncanción\n"
+        );
+    }
+
+    #[test]
+    fn nombre_archivo_normal_ok() {
+        assert_eq!(
+            nombre_archivo_seguro("subtitulos.srt").as_deref(),
+            Ok("subtitulos.srt")
+        );
+    }
+
+    #[test]
+    fn nombre_archivo_parent_err() {
+        assert!(nombre_archivo_seguro("../x").is_err());
+    }
+
+    #[test]
+    fn nombre_archivo_absoluto_err() {
+        assert!(nombre_archivo_seguro("/abs").is_err());
+    }
+
+    #[test]
+    fn nombre_archivo_con_subruta_err() {
+        assert!(nombre_archivo_seguro("a/b").is_err());
     }
 }

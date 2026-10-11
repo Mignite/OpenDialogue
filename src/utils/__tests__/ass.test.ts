@@ -154,6 +154,10 @@ describe("escapeAssText / unescapeAssText", () => {
     expect(unescapeAssText("{\\pos(10,20)}texto")).toBe("texto");
   });
 
+  it("quita overrides consecutivos sin dejar basura", () => {
+    expect(unescapeAssText("{\\an8}{\\i1}Hola")).toBe("Hola");
+  });
+
   it("mantiene texto normal intacto", () => {
     expect(unescapeAssText("texto normal")).toBe("texto normal");
   });

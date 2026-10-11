@@ -126,20 +126,21 @@ export function useProyecto(
           ruta: path,
         });
         const parsed = parseSrt(contenido);
+        pushHistorial();
         limpiarBanderas();
         setCaptions(parsed);
       } catch (err) {
         console.error("Error cargando SRT:", err);
       }
     },
-    [limpiarBanderas, setCaptions],
+    [pushHistorial, limpiarBanderas, setCaptions],
   );
 
   const handleAbrirVideo = useCallback(async () => {
     try {
       const path = await open({
         multiple: false,
-        filters: [{ name: t("dialog.filterVideo"), extensions: ["mp4", "mov", "avi", "mkv"] }],
+        filters: [{ name: t("dialog.filterVideo"), extensions: ["mp4", "mov", "mkv"] }],
       });
       if (path) {
         console.log(`[DEBUG handleAbrirVideo] Video seleccionado: ${path}`);

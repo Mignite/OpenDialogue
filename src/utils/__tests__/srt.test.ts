@@ -18,6 +18,12 @@ describe("parseSrtTime", () => {
   it("handles leading zeros", () => {
     expect(parseSrtTime("01:02:03,004")).toBeCloseTo(3723.004, 3);
   });
+
+  it("interpreta milisegundos de 1-2 dígitos como fracción decimal", () => {
+    // "5" significa 5 décimas = 0.5 s, no 5 ms
+    expect(parseSrtTime("00:00:01,5")).toBeCloseTo(1.5, 3);
+    expect(parseSrtTime("00:00:01,50")).toBeCloseTo(1.5, 3);
+  });
 });
 
 describe("formatSrtTimestamp", () => {
@@ -84,6 +90,15 @@ First`;
     const result = parseSrt(unsorted);
     expect(result[0].texto).toBe("First");
     expect(result[1].texto).toBe("Second");
+  });
+
+  it("separa bloques divididos por una línea con solo espacios", () => {
+    // La línea entre bloques tiene un espacio: igual debe cortarlos en dos
+    const conEspacio = `1\n00:00:01,000 --> 00:00:02,000\nPrimero\n \n2\n00:00:03,000 --> 00:00:04,000\nSegundo`;
+    const result = parseSrt(conEspacio);
+    expect(result).toHaveLength(2);
+    expect(result[0].texto).toBe("Primero");
+    expect(result[1].texto).toBe("Segundo");
   });
 });
 

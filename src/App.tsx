@@ -379,6 +379,7 @@ function App() {
       setTimeout(() => setExportMensaje(""), 5000);
     } catch (err) {
       console.error("Error exportando SRT por hablante:", err);
+      notify("No se pudo exportar el SRT por hablante.");
     }
   }
 
@@ -414,6 +415,7 @@ function App() {
       setTimeout(() => setExportMensaje(""), 4000);
     } catch (err) {
       console.error("Error exportando JSON:", err);
+      notify("No se pudo exportar el JSON combinado.");
     }
   }
 
@@ -457,6 +459,23 @@ function App() {
       })
       .catch(() => {});
   }, []);
+
+  // Error nativo del <video> (listener por addEventListener: el evento
+  // `error` de un media element NO burbujea y el onError sintético de React
+  // no lo captura). Cubre códec/contenedor no soportado por el webview
+  // (Opus/AC3 en audio, HEVC sin extensiones, etc.).
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const alFallarVideo = () => {
+      console.error("Error reproduciendo video:", v.error);
+      notify(
+        "El video no se puede reproducir (códec o contenedor no soportado).",
+      );
+    };
+    v.addEventListener("error", alFallarVideo);
+    return () => v.removeEventListener("error", alFallarVideo);
+  }, [videoSrc, notify]);
 
   useEffect(() => {
     const unlistenAbrir = listen("abrir_proyecto", () =>

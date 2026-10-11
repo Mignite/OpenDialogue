@@ -16,6 +16,14 @@ export function useWaveform() {
   // Ruta con análisis en curso (si hay). Reabrirla no duplica el trabajo:
   // se deja el análisis y sus chunks en paz (ver estaEnAnalisis).
   const enCursoRef = useRef<string | null>(null);
+  // Ruta → requestId de la ÚLTIMA tarea Rust lanzada para ella. El contador
+  // global se invalida en cada `reiniciar`, pero la tarea Rust original puede
+  // seguir corriendo (el backend deduplica por (ruta, track) y rechaza el
+  // duplicado con "Ya se está analizando"). Al reabrir, ese rechazo es la
+  // prueba de que la original sigue viva y se re-ancla a ella (ver catch del
+  // invoke) en vez de quedarse con el waveform vacío. Solo lo tocan los
+  // intentos que llegan a invocar: los atajos de caché no lanzan tarea.
+  const rutaRequestRef = useRef<Map<string, number>>(new Map());
 
   // Descarta el análisis en vuelo y limpia el waveform (al abrir video,
   // proyecto o empezar uno nuevo). No toca duración ni ventana: eso es App.
@@ -97,6 +105,12 @@ export function useWaveform() {
     setAnalizando(true);
     setVolumen([]);
 
+    // Registrar el intento ANTES de invocar: si el backend lo rechaza por
+    // duplicado, `previoRequestId` identifica la tarea vigente a re-anclar.
+    const previoRequestId = rutaRequestRef.current.get(ruta);
+    rutaRequestRef.current.set(ruta, miRequestId);
+    let reanclado = false;
+
     const unlistenChunk = await listen<[number | null, number[]]>(
       "volumen_chunk",
       (event) => {
@@ -121,13 +135,30 @@ export function useWaveform() {
       setVolumen(resultado);
     } catch (err) {
       unlistenChunk();
-      console.error("Error analizando volumen:", err);
+      if (
+        String(err).includes("Ya se está analizando") &&
+        previoRequestId !== undefined &&
+        analisisVolumenRequestRef.current === miRequestId
+      ) {
+        // La tarea original de esta ruta sigue corriendo (el rechazo lo
+        // prueba): re-anclar el request vigente a ella en vez de duplicar.
+        // Su continuación pendiente aceptará el resultado con este id y el
+        // guard `estaEnAnalisis` vuelve a reconocerla (caso normal). El
+        // waveform intermedio se pierde, pero el resultado final es completo.
+        rutaRequestRef.current.set(ruta, previoRequestId);
+        analisisVolumenRequestRef.current = previoRequestId;
+        enCursoRef.current = ruta;
+        reanclado = true;
+      } else if (analisisVolumenRequestRef.current === miRequestId) {
+        console.error("Error analizando volumen:", err);
+      }
     } finally {
       if (analisisVolumenRequestRef.current === miRequestId)
         setAnalizando(false);
       // Las salidas obsoletas (stale) no limpian: el análisis vigente es de
-      // otra ruta (reiniciar ya limpió) o de esta misma en curso.
-      if (enCursoRef.current === ruta) enCursoRef.current = null;
+      // otra ruta (reiniciar ya limpió) o de esta misma en curso. Una salida
+      // re-anclada tampoco: el vigente es el original recién re-anclado.
+      if (!reanclado && enCursoRef.current === ruta) enCursoRef.current = null;
     }
   }, []);
 

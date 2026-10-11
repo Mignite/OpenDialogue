@@ -1,7 +1,7 @@
 import type { PresetAss } from "../types";
 
 export const VENTANAS_POR_SEGUNDO = 15;
-export const EXT_VIDEO = [".mp4", ".mov", ".avi", ".mkv"];
+export const EXT_VIDEO = [".mp4", ".mov", ".mkv"];
 // Compensación celda ASS vs em CSS: en libass/VSFilter Fontsize es altura de
 // celda (ascent+descent) y en CSS font-size es el em — con el mismo número el
 // texto en CSS se ve ~10-25% más grande según la fuente.
@@ -12,6 +12,8 @@ export const EDGE_TRIGGER = 0.92;
 export const NEW_MARGIN = 0.08;
 export const LERP_FACTOR = 0.12;
 export const SNAP_THRESHOLD = 0.15;
+// Un color por tecla de hablante (1-9): tonos vivos legibles sobre
+// fondo oscuro, sin repetir (antes eran 6 y desde el 7º se reciclaban).
 export const PALETA = [
   "#E85D4E",
   "#4EA8E8",
@@ -19,6 +21,9 @@ export const PALETA = [
   "#E8C34E",
   "#B980E8",
   "#4EE8C3",
+  "#EC4E9E",
+  "#F67E2C",
+  "#6E8CFB",
 ];
 export const HISTORY_LIMIT = 50;
 
