@@ -1,5 +1,29 @@
 /* ===== FUENTES LOCALES ===== */
 @font-face {
+  font-family: "Inter";
+  src: url("./assets/fonts/Inter-400.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("./assets/fonts/Inter-500.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("./assets/fonts/Inter-600.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("./assets/fonts/Inter-700.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
   font-family: "Space Grotesk";
   src: url("./assets/fonts/SpaceGrotesk-500.woff2") format("woff2");
   font-weight: 500;
@@ -48,16 +72,16 @@
      Sin esto WebKitGTK los pinta claros y los popups cantan en blanco. */
   color-scheme: dark;
 
-  /* neutros (precisión fría) */
-  --bg: #0e0f11;
-  --surface: #131416;
-  --surface2: #16181b;
-  --surface3: #1a1c1f;
-  --border: #1e2024;
-  --borderStrong: #2c2f36;
-  --text: #e8eaed;
-  --textDim: #9a9ea6;
-  --textFaint: #55585e;
+  /* neutros cálidos (paleta OpenDialogue, design/v3/estilo-elegido.html) */
+  --bg: #121114;
+  --surface: #1b1a20;
+  --surface2: #24232b;
+  --surface3: #2c2b34;
+  --border: #2e2d37;
+  --borderStrong: #3b3946;
+  --text: #ecebf0;
+  --textDim: #a9a7b4;
+  --textFaint: #706e7b;
 
   /* acentos: 1 acción + 2 semánticos + 1 aviso */
   --accent: #e85d4e;
@@ -67,11 +91,11 @@
   --warn: #e8c34e;
   --danger: #f87171;
 
-  /* radios (precisión fría: aristas contenidas) */
-  --r-sm: 5px;
-  --r-md: 6px;
+  /* radios (decisiones de diseño: 5 contenedores, 4 elementos pequeños, 6 ventanas) */
+  --r-sm: 4px;
+  --r-md: 5px;
   --r-lg: 6px;
-  --r-xl: 8px;
+  --r-xl: 6px;
 
   /* tipos */
   --font-display: "Space Grotesk", "Inter", "Segoe UI", sans-serif;
@@ -123,7 +147,7 @@ body {
 
 .mainGrid {
   display: grid;
-  grid-template-columns: 1.3fr 1fr;
+  grid-template-columns: minmax(0, 1fr) 420px;
   gap: 16px;
   flex: 1;
   min-height: 0;
@@ -177,15 +201,24 @@ body {
 
 /* ===== COLUMNA DERECHA (panel hairline, sin tarjeta) ===== */
 .rightCol {
-  background: transparent;
+  background: var(--surface);
   border-left: 1px solid var(--border);
   border-radius: 0;
-  padding: 0 0 0 14px;
-  overflow-y: auto;
+  padding: 0;
+  overflow: hidden;
   height: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dockPanel {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 12px 12px 0;
 }
 
 .rightCol::-webkit-scrollbar {
@@ -208,17 +241,6 @@ body {
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-}
-
-.rightColTitle {
-  font-family: var(--font-display);
-  font-size: 10px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--textFaint);
-  font-weight: 600;
-  color: var(--text);
-  letter-spacing: 0.03em;
 }
 
 .captionCount {
@@ -819,56 +841,47 @@ body {
   color: var(--danger);
 }
 
-/* ===== HABLANTES ===== */
-.speakersAccordion {
-  background: var(--surface2);
-  border-radius: var(--r-md);
-  overflow: hidden;
+/* ===== DOCK DERECHO: pestañas + panel de hablantes ===== */
+.dockTabs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
-.speakersAccordionHeader {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.dockTab {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--textDim);
   background: transparent;
   border: none;
+  border-bottom: 2px solid transparent;
   border-radius: 0;
-  padding: 9px 12px;
-  font-family: var(--font-display);
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text);
+  padding: 7px 12px 6px;
   cursor: pointer;
-  transition: background-color 0.15s;
+  transition: color 0.15s;
 }
 
-.speakersAccordionHeader:hover {
-  background: var(--surface3);
+.dockTab:hover {
+  color: var(--text);
 }
 
-.speakersAccordionHeader .chev {
-  color: var(--textFaint);
-  display: inline-flex;
-  transition: transform 0.2s;
-}
-
-.speakersAccordionHeader .chev svg {
-  width: 9px;
-  height: 9px;
-}
-
-.speakersAccordionHeader.open .chev {
-  transform: rotate(90deg);
+.dockTab.on {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  background: var(--surface);
 }
 
 .speakersPanel {
-  padding: 10px 12px 12px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-top: 1px solid var(--border);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .speakerRow {
@@ -970,11 +983,13 @@ body {
 /* Reutiliza el contenedor acordeón de hablantes y los controles .ass* del
    modal: misma familia visual, sin duplicar el sistema. */
 .stylesPanel {
-  padding: 10px 12px 12px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border-top: 1px solid var(--border);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .stylesPanel .assPresetList {
@@ -1943,6 +1958,44 @@ button.primary:hover {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  margin-left: auto;
+}
+
+/* ===== CHIPS DE HABLANTE (dock de subtítulos) ===== */
+.dockChips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.dockChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 3px 9px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  color: var(--text);
+}
+
+.dockChipDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Esquinas squircle donde el motor lo soporta (Chromium 139+ / WebView2);
+   en el resto queda la esquina redondeada normal. */
+@supports (corner-shape: squircle) {
+  *,
+  *::before,
+  *::after {
+    corner-shape: squircle;
+  }
 }
 
 .searchToggle.active {

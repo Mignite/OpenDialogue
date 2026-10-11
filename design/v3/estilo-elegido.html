@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Estilos OpenDialogue</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:28px;background:#fff;color:#111;font:14px/1.4 system-ui,Arial,sans-serif}
+h1{font-size:20px;margin:0 0 4px}
+.intro{margin:0 0 28px;color:#444}
+.card{margin:0 0 44px;max-width:1040px}
+.card h2{margin:0 0 2px;font-size:16px}
+.card>p{margin:0 0 10px;color:#555;font-size:13px}
+
+/* ---------- componentes (usan solo variables) ---------- */
+.app{background:var(--bg);color:var(--text);font-family:var(--font);border:var(--bw) solid var(--line);border-radius:var(--rad);overflow:hidden}
+.top,.status{display:flex;align-items:center;gap:12px;padding:8px 12px;background:var(--surface);font-size:13px}
+.top{border-bottom:var(--bw) solid var(--line)}
+.status{border-top:var(--bw) solid var(--line);font-size:11px;color:var(--dim)}
+.brand{font-family:var(--head,var(--font));font-weight:700;letter-spacing:.02em}
+.menu{color:var(--dim)}
+.grow{flex:1}
+.body{display:grid;grid-template-columns:1fr 330px;gap:12px;padding:12px}
+.col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.preview{position:relative;height:190px;background:var(--video);border:var(--bw) solid var(--line);border-radius:var(--rad);box-shadow:var(--clip-shadow)}
+.sub{position:absolute;left:0;right:0;bottom:14px;text-align:center}
+.sub span{display:inline-block;background:var(--subbg);color:var(--sub);padding:2px 8px;font-weight:700;font-size:15px;border-radius:var(--rad-s)}
+.transport{display:flex;align-items:center;gap:8px}
+.time{font-family:var(--mono);font-size:18px;font-weight:700;margin-left:6px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:inherit;font-size:13px;padding:6px 12px;background:var(--surface);color:var(--text);border:var(--bw) solid var(--line);border-radius:var(--rad);box-shadow:var(--shadow);cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--on-accent)}
+.btn.danger{color:var(--danger)}
+.btn[disabled]{opacity:.45}
+.ico{width:34px;height:34px;padding:0;font-size:15px;line-height:1}
+.play{border-radius:var(--play-rad)}
+.c0{--k:var(--c0)}.c1{--k:var(--c1)}.c2{--k:var(--c2)}.c3{--k:var(--c3)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:12px;padding:3px 9px;background:var(--surface);border:var(--bw) solid var(--line);border-radius:var(--rad)}
+.chip i{display:inline-block;width:9px;height:9px;background:var(--k);border-radius:var(--dot-rad,50%);margin-right:6px}
+.row{background:var(--surface);border:var(--bw) solid var(--line);border-left:var(--barw) solid var(--k);border-radius:var(--rad);padding:7px 10px;font-size:13px;box-shadow:var(--clip-shadow)}
+.tabs{display:flex;gap:2px;background:var(--tabstrip,var(--bg))}
+.tab{padding:5px 10px;font-size:12px;color:var(--dim);border-bottom:2px solid transparent}
+.tab.on{color:var(--text);border-bottom-color:var(--accent);background:var(--surface)}
+.row.sel{background:var(--sel)}
+.meta{font-family:var(--mono);font-size:11px;color:var(--dim);margin-bottom:2px}
+.tag{font-size:10px;font-weight:700;padding:1px 5px;margin-left:6px;background:var(--warn);color:var(--on-warn);border-radius:var(--rad-s)}
+.tl{background:var(--surface);border-top:var(--bw) solid var(--line);padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.ruler{display:flex;justify-content:space-between;padding-left:80px;font-family:var(--mono);font-size:10px;color:var(--dim)}
+.lane{display:flex;align-items:center;gap:10px;height:30px}
+.lbl{width:70px;font-size:12px;font-weight:700;flex:none}
+.track{position:relative;flex:1;height:100%;background:var(--track);border-radius:var(--rad-s)}
+.track::after{content:"";position:absolute;left:42%;top:-4px;bottom:-4px;width:2px;background:var(--accent);z-index:2}
+.clip{position:absolute;z-index:1;top:3px;bottom:3px;padding:0 6px;display:flex;align-items:center;font-size:11px;white-space:nowrap;overflow:hidden;background:var(--k);color:var(--ink,var(--on-c));border:var(--bw) solid var(--line);border-radius:var(--rad-s);box-shadow:var(--clip-shadow)}
+.clip.sel{outline:2px solid var(--accent);outline-offset:1px}
+
+/* ---------- 1. Brutalismo ---------- */
+.st-brutal{--bg:#FFF4D1;--surface:#FFFFFF;--text:#000;--dim:#333;--line:#000;--bw:3px;--barw:8px;--rad:0px;--rad-s:0px;--shadow:4px 4px 0 #000;--clip-shadow:3px 3px 0 #000;--accent:#FF5A5F;--on-accent:#000;--danger:#D00000;--warn:#FFD23F;--on-warn:#000;--sel:#FFE66D;--track:#FFF9E8;--video:#7CD7F0;--subbg:#000;--sub:#FFF4D1;--font:"Arial Black",Arial,sans-serif;--mono:"Courier New",monospace;--c0:#FF5A5F;--c1:#3D7BFF;--c2:#2BCB78;--c3:#FFC93C;--on-c:#000;--play-rad:0;--dot-rad:0}
+
+/* ---------- 2. Modernismo suizo ---------- */
+.st-swiss{--bg:#F3F3F0;--surface:#FFFFFF;--text:#111;--dim:#6E6E6E;--line:#D6D6D1;--bw:1px;--barw:4px;--rad:0px;--rad-s:0px;--shadow:none;--clip-shadow:none;--accent:#E3262E;--on-accent:#FFFFFF;--danger:#E3262E;--warn:#111;--on-warn:#FFFFFF;--sel:#EDEDE8;--track:#FAFAF7;--video:#C9CDD2;--subbg:rgba(0,0,0,.72);--sub:#FFFFFF;--font:Helvetica,Arial,sans-serif;--mono:"Courier New",monospace;--c0:#E3262E;--c1:#1F4FD8;--c2:#1A9E5C;--c3:#E8A40C;--on-c:#FFFFFF;--play-rad:0;--dot-rad:0}
+.st-swiss .c3{--ink:#111}
+
+/* ---------- 3. Dark pro (el actual) ---------- */
+.st-dark{--bg:#121114;--surface:#1B1A20;--text:#ECEBF0;--dim:#A9A7B4;--line:#2E2D37;--bw:1px;--barw:3px;--rad:8px;--rad-s:6px;--shadow:none;--clip-shadow:none;--accent:#E85D4E;--on-accent:#121114;--danger:#F87171;--warn:#E8C34E;--on-warn:#121114;--sel:#2C2B34;--track:#16151A;--video:#2A2935;--subbg:rgba(0,0,0,.45);--sub:#FFFFFF;--font:Inter,"Segoe UI",system-ui,Arial,sans-serif;--mono:"JetBrains Mono",Consolas,monospace;--c0:#E85D4E;--c1:#4EA8E8;--c2:#7ED957;--c3:#E8C34E;--on-c:#121114;--play-rad:8px;--dot-rad:50%}
+
+/* ---------- 4. Bauhaus ---------- */
+.st-bauhaus{--bg:#F2EBDD;--surface:#FFFDF8;--text:#1A1A1A;--dim:#555;--line:#1A1A1A;--bw:2px;--barw:10px;--rad:0px;--rad-s:0px;--shadow:none;--clip-shadow:none;--accent:#D62828;--on-accent:#FFFFFF;--danger:#D62828;--warn:#F6C90E;--on-warn:#1A1A1A;--sel:#FBE7A1;--track:#FBF7EE;--video:#1D4E89;--subbg:#F6C90E;--sub:#1A1A1A;--font:Futura,"Century Gothic","Trebuchet MS",Arial,sans-serif;--mono:"Courier New",monospace;--c0:#D62828;--c1:#1D4E89;--c2:#F6C90E;--c3:#1A1A1A;--on-c:#FFFFFF;--play-rad:50%;--dot-rad:50%}
+.st-bauhaus .c2{--ink:#1A1A1A}
+
+/* ---------- 5. Japandi ---------- */
+.st-japandi{--bg:#EFEAE0;--surface:#FAF7F1;--text:#3A3530;--dim:#8C8377;--line:#DCD4C6;--bw:1px;--barw:4px;--rad:14px;--rad-s:8px;--shadow:0 1px 2px rgba(60,50,40,.08);--clip-shadow:0 1px 2px rgba(60,50,40,.06);--accent:#7D8F70;--on-accent:#FFFFFF;--danger:#B5573A;--warn:#C9A66B;--on-warn:#FFFFFF;--sel:#EDE6D8;--track:#F6F2EA;--video:#CFC6B4;--subbg:rgba(58,53,48,.6);--sub:#FFFFFF;--font:"Helvetica Neue",Arial,sans-serif;--head:Georgia,"Times New Roman",serif;--mono:"Courier New",monospace;--c0:#B5785A;--c1:#7D8F70;--c2:#6E8195;--c3:#C9A66B;--on-c:#FFFFFF;--play-rad:50%;--dot-rad:50%}
+.st-japandi .c3{--ink:#3A3530}
+
+/* ---------- 6. Photoshop (Pro, como PhotoCraft) ---------- */
+.st-pro{--bg:#323232;--surface:#2A2A2A;--text:#DEDEDE;--dim:#B2B2B2;--line:#4A4A4A;--bw:1px;--barw:3px;--rad:4px;--rad-s:3px;--shadow:none;--clip-shadow:none;--accent:#378EF0;--on-accent:#FFFFFF;--danger:#EC5B62;--warn:#E8B046;--on-warn:#1E1E1E;--sel:#525252;--track:#1E1E1E;--video:#3A3A3A;--subbg:rgba(0,0,0,.6);--sub:#FFFFFF;--tabstrip:#262626;--font:"Segoe UI",Inter,Arial,sans-serif;--mono:Consolas,"JetBrains Mono",monospace;--c0:#E8685C;--c1:#378EF0;--c2:#5DBB63;--c3:#E8B046;--on-c:#121212;--play-rad:3px;--dot-rad:50%}
+
+
+/* ---------- versiones oscuras ---------- */
+.st-brutal-dark{--bg:#111111;--surface:#1C1C1C;--text:#F5F5F0;--dim:#AAAAAA;--line:#F5F5F0;--bw:3px;--barw:8px;--rad:0px;--rad-s:0px;--shadow:4px 4px 0 #F5F5F0;--clip-shadow:3px 3px 0 #F5F5F0;--accent:#FF5A5F;--on-accent:#000;--danger:#FF5A5F;--warn:#FFD23F;--on-warn:#000;--sel:#3D3A1F;--track:#161616;--video:#1F3A44;--subbg:#000;--sub:#FFF;--tabstrip:#111;--font:"Arial Black",Arial,sans-serif;--mono:"Courier New",monospace;--c0:#FF5A5F;--c1:#3D7BFF;--c2:#2BCB78;--c3:#FFC93C;--on-c:#000;--play-rad:0;--dot-rad:0}
+.st-swiss-dark{--bg:#141414;--surface:#1C1C1C;--text:#F2F2F2;--dim:#8C8C8C;--line:#333333;--bw:1px;--barw:4px;--rad:0px;--rad-s:0px;--shadow:none;--clip-shadow:none;--accent:#E3262E;--on-accent:#FFFFFF;--danger:#FF5C5C;--warn:#E8A40C;--on-warn:#111;--sel:#262626;--track:#101010;--video:#2A2A2A;--subbg:rgba(0,0,0,.7);--sub:#FFFFFF;--tabstrip:#111;--font:Helvetica,Arial,sans-serif;--mono:"Courier New",monospace;--c0:#E3262E;--c1:#4F7DF0;--c2:#2FB574;--c3:#E8A40C;--on-c:#FFFFFF;--play-rad:0;--dot-rad:0}
+.st-swiss-dark .c3{--ink:#111}
+.st-bauhaus-dark{--bg:#1A1714;--surface:#26221E;--text:#F2E9D8;--dim:#A8A090;--line:#F2E9D8;--bw:2px;--barw:10px;--rad:0px;--rad-s:0px;--shadow:none;--clip-shadow:none;--accent:#E8483F;--on-accent:#FFFFFF;--danger:#E8483F;--warn:#F6C90E;--on-warn:#1A1A1A;--sel:#3A3328;--track:#15120F;--video:#1D4E89;--subbg:#F6C90E;--sub:#1A1A1A;--tabstrip:#15120F;--font:Futura,"Century Gothic","Trebuchet MS",Arial,sans-serif;--mono:"Courier New",monospace;--c0:#D62828;--c1:#3F7CC4;--c2:#F6C90E;--c3:#F2E9D8;--on-c:#FFFFFF;--play-rad:50%;--dot-rad:50%}
+.st-bauhaus-dark .c2,.st-bauhaus-dark .c3{--ink:#1A1A1A}
+.st-japandi-dark{--bg:#1F1C19;--surface:#2A2622;--text:#E8E0D3;--dim:#9C9385;--line:#3A3530;--bw:1px;--barw:4px;--rad:14px;--rad-s:8px;--shadow:0 1px 2px rgba(0,0,0,.4);--clip-shadow:0 1px 2px rgba(0,0,0,.3);--accent:#9AAE8A;--on-accent:#1F1C19;--danger:#D08A6E;--warn:#C9A66B;--on-warn:#1F1C19;--sel:#36302A;--track:#181512;--video:#3A342D;--subbg:rgba(0,0,0,.5);--sub:#F2EBDF;--tabstrip:#181512;--font:"Helvetica Neue",Arial,sans-serif;--head:Georgia,"Times New Roman",serif;--mono:"Courier New",monospace;--c0:#C98A6B;--c1:#9AAE8A;--c2:#8DA0B3;--c3:#D2B07A;--on-c:#1F1C19;--play-rad:50%;--dot-rad:50%}
+
+/* ---------- Photoshop con paleta OpenDialogue (esquinas squircle) ---------- */
+.st-pro-og{--bg:#1B1A20;--surface:#24232B;--text:#ECEBF0;--dim:#A9A7B4;--line:#2E2D37;--bw:1px;--barw:3px;--rad:5px;--rad-s:4px;--shadow:none;--clip-shadow:none;--accent:#E85D4E;--on-accent:#121114;--danger:#F87171;--warn:#E8C34E;--on-warn:#121114;--sel:#2C2B34;--track:#121114;--video:#2A2935;--subbg:rgba(0,0,0,.55);--sub:#ECEBF0;--tabstrip:#121114;--font:Inter,"Segoe UI",Arial,sans-serif;--mono:"JetBrains Mono",Consolas,monospace;--c0:#E85D4E;--c1:#4EA8E8;--c2:#7ED957;--c3:#E8C34E;--on-c:#121114;--play-rad:50%;--dot-rad:50%}
+.st-pro-og *{corner-shape:squircle}
+</style>
+</head>
+<body>
+<h1>OpenDialogue: estilo elegido (Photoshop con paleta OpenDialogue)</h1>
+<p class="intro">Mismo markup en cada bloque; solo cambian las variables de color, borde, radio, sombra y tipografía. Las fuentes son del sistema, así que el resultado puede variar un poco según tu equipo.</p>
+<div id="root"></div>
+
+<script>
+const estilos = [
+  {id:'brutal',  nombre:'Brutalismo',        desc:'Bordes de 3 px, sombras duras sin difuminar, sin radios y colores planos.'},
+  {id:'swiss',   nombre:'Modernismo suizo',  desc:'Grilla limpia, sans neutra, un solo acento rojo y mucho aire.'},
+  {id:'dark',    nombre:'Dark pro (actual)', desc:'Fondos oscuros, bordes sutiles y densidad alta, como Linear o DaVinci.'},
+  {id:'bauhaus', nombre:'Bauhaus',           desc:'Primarios, formas geométricas (play circular, puntos cuadrados en brutal) y bordes gruesos.'},
+  {id:'japandi', nombre:'Japandi',           desc:'Tonos tierra, radios suaves, sombras leves y espacio para respirar.'},
+  {id:'pro', nombre:'Photoshop (Pro)', desc:'Gris carbón, paneles planos, pestañas y acento azul, siguiendo el tema Pro de PhotoCraft.'},
+  {id:'brutal-dark', nombre:'Brutalismo oscuro', desc:'Mismo brutalismo sobre negro: bordes y sombras claros, acentos de neón.'},
+  {id:'swiss-dark', nombre:'Modernismo suizo oscuro', desc:'Grilla sobria sobre casi negro, con el rojo suizo como único acento.'},
+  {id:'bauhaus-dark', nombre:'Bauhaus oscuro', desc:'Primarios y formas geométricas sobre fondo café oscuro.'},
+  {id:'japandi-dark', nombre:'Japandi oscuro', desc:'Tierra oscura, radios suaves y acentos salvia y arena, para trabajar de noche.'},
+  {id:'pro-og', nombre:'Photoshop con colores OpenDialogue', desc:'Paneles planos, pestañas y dock como Photoshop, con la paleta de OpenDialogue y esquinas squircle de 5 px.'}
+];
+
+const filas = [
+  {c:'c0', meta:'Ana · 00:01:19 · 5.7 s', txt:'Bueno, el color es el 80% de la percepción de una película.'},
+  {c:'c1', meta:'Luis · 00:01:25 · 3.1 s', txt:'Sí, pero ¿quién decide ese ochenta por ciento?', tag:'CPS 21'},
+  {c:'c0', meta:'Ana · 00:01:29 · 6.7 s', txt:'La cámara lo graba todo, pero el ojo solo recuerda lo que se ilumina bien.', tag:'SOLAPE', sel:true},
+  {c:'c3', meta:'Pepe · 00:01:36 · 2.0 s', txt:'Exacto.'}
+];
+
+const lanes = [
+  {n:'Ana',   c:'c0', clips:[[2,22,'Bueno, el color es el 80%'],[38,20,'La cámara lo graba todo','sel'],[70,20,'Entonces las sombras se tiran']]},
+  {n:'Luis',  c:'c1', clips:[[14,16,'Sí, pero ¿quién decide?'],[40,17,'¿Y si el director quiere más…']]},
+  {n:'Carmen',c:'c2', clips:[[52,22,'Y el color hace el resto']]},
+  {n:'Pepe',  c:'c3', clips:[[64,10,'Exacto.']]}
+];
+
+function app(){
+  return `
+  <div class="app">
+    <div class="top">
+      <span class="brand">OpenDialogue</span>
+      <span class="menu">Archivo</span><span class="menu">Edición</span><span class="menu">Ver</span>
+      <span class="grow"></span>
+      <button class="btn">Guardar</button>
+      <button class="btn primary">Exportar</button>
+    </div>
+    <div class="body">
+      <div class="col">
+        <div class="preview"><div class="sub"><span>La cámara lo graba todo, pero el ojo solo recuerda lo que se ilumina bien.</span></div></div>
+        <div class="transport">
+          <button class="btn ico">‹</button>
+          <button class="btn ico play">▶</button>
+          <button class="btn ico">›</button>
+          <span class="time">00:01:31.60</span>
+        </div>
+        <div class="row c0 sel"><div class="meta">Ana · 00:01:29 → 00:01:36 · 6.7 s</div>La cámara lo graba todo, pero el ojo solo recuerda lo que se ilumina bien.</div>
+        <div class="btns">
+          <button class="btn">Dividir</button>
+          <button class="btn">Unir</button>
+          <button class="btn danger">Eliminar</button>
+          <button class="btn" disabled>Deshacer</button>
+        </div>
+      </div>
+      <div class="col">
+        <div class="tabs"><span class="tab on">Subtítulos</span><span class="tab">Hablantes</span><span class="tab">Estilos</span></div><div class="chips">
+          <span class="chip c0"><i></i>Ana 3</span>
+          <span class="chip c1"><i></i>Luis 2</span>
+          <span class="chip c2"><i></i>Carmen 1</span>
+          <span class="chip c3"><i></i>Pepe 1</span>
+        </div>
+        ${filas.map(f=>`<div class="row ${f.c}${f.sel?' sel':''}"><div class="meta">${f.meta}${f.tag?`<span class="tag">${f.tag}</span>`:''}</div>${f.txt}</div>`).join('')}
+      </div>
+    </div>
+    <div class="tl">
+      <div class="ruler"><span>00:01:20</span><span>00:01:25</span><span>00:01:30</span><span>00:01:35</span><span>00:01:40</span><span>00:01:45</span></div>
+      ${lanes.map(l=>`
+      <div class="lane">
+        <span class="lbl">${l.n}</span>
+        <div class="track">${l.clips.map(([x,w,t,s])=>`<div class="clip ${l.c}${s?' sel':''}" style="left:${x}%;width:${w}%">${t}</div>`).join('')}</div>
+      </div>`).join('')}
+    </div>
+    <div class="status">
+      <span>2 solapes</span><span>1 aviso de lectura</span><span>8 líneas · 4 hablantes</span>
+      <span class="grow"></span><span>Waveform listo</span>
+    </div>
+  </div>`;
+}
+
+document.getElementById('root').innerHTML = estilos.filter(e => e.id === 'pro-og').map(e =>
+  `<section class="card st-${e.id}"><h2>${e.nombre}</h2><p>${e.desc}</p>${app()}</section>`
+).join('');
+</script>
+</body>
+</html>

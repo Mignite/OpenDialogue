@@ -6,8 +6,6 @@ import { fuentesDisponibles, fuenteResuelve, familiaCss } from "../utils/fuentes
 
 interface Props {
   presets: PresetAss[];
-  panelAbierto: boolean;
-  onTogglePanel: () => void;
   onGuardar: (presets: PresetAss[]) => void;
 }
 
@@ -36,7 +34,7 @@ const CAMPOS_NUMERO: (keyof PresetAss)[] = [
  *  puede editar en cualquier momento, sin subtítulos ni export de por medio.
  *  Todo cambio se auto-guarda (nivel usuario, fuera del undo del proyecto):
  *  no hay borrador ni confirmación de descarte posibles. */
-function StylesPanel({ presets, panelAbierto, onTogglePanel, onGuardar }: Props) {
+function StylesPanel({ presets, onGuardar }: Props) {
   const { t } = useLocale();
   const [seleccionId, setSeleccionId] = useState<string>(presets[0]?.id ?? "");
   const [fuentes, setFuentes] = useState<string[]>([]);
@@ -92,27 +90,8 @@ function StylesPanel({ presets, panelAbierto, onTogglePanel, onGuardar }: Props)
     .filter((f) => f.toLowerCase().includes(consulta))
     .slice(0, 40);
 
-  const chevronSvg = (
-    <svg
-      className={"icon xs chevron" + (panelAbierto ? " up" : "")}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-    >
-      <path d="M3 6l5 5 5-5" />
-    </svg>
-  );
-
   return (
-    <div className="speakersAccordion">
-      <button className="speakersAccordionHeader" onClick={onTogglePanel}>
-        <span>{t("styles.title", { count: presets.length })}</span>
-        {chevronSvg}
-      </button>
-      {panelAbierto && (
-        <div className="stylesPanel">
+    <div className="stylesPanel">
           <div className="assPresetList">
             {presets.map((p) => (
               <button
@@ -287,8 +266,6 @@ function StylesPanel({ presets, panelAbierto, onTogglePanel, onGuardar }: Props)
             </div>
           )}
         </div>
-      )}
-    </div>
   );
 }
 

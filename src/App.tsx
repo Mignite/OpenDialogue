@@ -66,6 +66,8 @@ const TRACK_HANDLE_H = 16;
 const WAVEFORM_H = 56;
 const TRACK_LABEL_W = 42;
 
+type PestanaDerecha = "subtitulos" | "hablantes" | "estilos";
+
 function App() {
   const { locale, setLocale, t } = useLocale();
   const [videoSrc, setVideoSrc] = useState<string>("");
@@ -74,13 +76,11 @@ function App() {
   const [rutaFaltante, setRutaFaltante] = useState<string>("");
   const [windowSeconds, setWindowSeconds] = useState<number>(10);
   const [windowStart, setWindowStart] = useState<number>(0);
-  const [dockHeight, setDockHeight] = useState<number>(240);
+  const [dockHeight, setDockHeight] = useState<number>(160);
   const [arrastrando, setArrastrando] = useState<boolean>(false);
   const [hablantes, setHablantes] = useState<Hablante[]>([]);
-  const [panelHablantesAbierto, setPanelHablantesAbierto] =
-    useState<boolean>(false);
-  const [panelEstilosAbierto, setPanelEstilosAbierto] =
-    useState<boolean>(false);
+  const [pestanaDerecha, setPestanaDerecha] =
+    useState<PestanaDerecha>("subtitulos");
   const [autoFollowing, setAutoFollowing] = useState<boolean>(true);
   const autoFollowingRef = useRef(true);
   // Tick de re-render para el recuadro del preview .ass: `overlayRecuadro` mide
@@ -273,10 +273,11 @@ function App() {
       setIndiceCoincidencia(0);
     }
   }, [coincidencias.length, indiceCoincidencia]);
-  // El input no existe si el panel estaba cerrado: el focus va en el effect.
+  // El input existe solo en la pestaña Subtítulos: el focus va en el effect.
   useEffect(() => {
-    if (busquedaAbierta) busquedaInputRef.current?.focus();
-  }, [busquedaAbierta]);
+    if (busquedaAbierta && pestanaDerecha === "subtitulos")
+      busquedaInputRef.current?.focus();
+  }, [busquedaAbierta, pestanaDerecha]);
 
   const navegarCoincidencia = useCallback(
     (dir: 1 | -1) => {
@@ -632,14 +633,16 @@ function App() {
     persistirAjustes({ locale });
   }
 
-  const togglePanelHablantes = useCallback(
-    () => setPanelHablantesAbierto((v) => !v),
-    [],
-  );
-
-  const togglePanelEstilos = useCallback(
-    () => setPanelEstilosAbierto((v) => !v),
-    [],
+  // Conteo de subtítulos por hablante: chips del dock (solo los que tienen líneas).
+  const conteoPorHablante = useMemo(
+    () =>
+      hablantes
+        .map((h) => ({
+          h,
+          n: captions.reduce((acc, c) => (c.hablante_id === h.id ? acc + 1 : acc), 0),
+        }))
+        .filter((x) => x.n > 0),
+    [captions, hablantes],
   );
 
   // Ajustes del usuario (idioma) desde ajustes.json, con
@@ -702,7 +705,7 @@ function App() {
       // export): los presets son nivel usuario y se editan en cualquier
       // momento, sin subtítulos de por medio.
       void ass.recargarPresets();
-      setPanelEstilosAbierto(true);
+      setPestanaDerecha("estilos");
     });
     const unlistenCargarAss = listen("cargar_ass", () => proyecto.handleCargarAss());
 
@@ -1400,6 +1403,7 @@ function App() {
 
       if (e.ctrlKey && e.key.toLowerCase() === "f") {
         e.preventDefault();
+        setPestanaDerecha("subtitulos");
         setBusquedaAbierta(true);
         return;
       }
@@ -2233,26 +2237,39 @@ function App() {
         </div>
 
         <div className="rightCol">
-          <SpeakersPanel
-            hablantes={hablantes}
-            presets={ass.presetsAss}
-            panelAbierto={panelHablantesAbierto}
-            onTogglePanel={togglePanelHablantes}
-            onAgregar={voces.agregarHablante}
-            onActualizar={voces.actualizarHablante}
-            onCambiarColor={voces.cambiarColorHablante}
-            onEliminar={voces.eliminarHablante}
-            onCommit={pushHistorial}
-          />
-          <StylesPanel
-            presets={ass.presetsAss}
-            panelAbierto={panelEstilosAbierto}
-            onTogglePanel={togglePanelEstilos}
-            onGuardar={ass.persistirPresets}
-          />
+          <div className="dockTabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={pestanaDerecha === "subtitulos"}
+              className={`dockTab${pestanaDerecha === "subtitulos" ? " on" : ""}`}
+              onClick={() => setPestanaDerecha("subtitulos")}
+            >
+              {t("app.rightCol.title")}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={pestanaDerecha === "hablantes"}
+              className={`dockTab${pestanaDerecha === "hablantes" ? " on" : ""}`}
+              onClick={() => setPestanaDerecha("hablantes")}
+            >
+              {t("speakers.title", { count: hablantes.length })}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={pestanaDerecha === "estilos"}
+              className={`dockTab${pestanaDerecha === "estilos" ? " on" : ""}`}
+              onClick={() => setPestanaDerecha("estilos")}
+            >
+              {t("styles.title", { count: ass.presetsAss.length })}
+            </button>
+          </div>
 
+          {pestanaDerecha === "subtitulos" && (
+          <div className="dockPanel">
           <div className="rightColHeader">
-            <span className="rightColTitle">{t("app.rightCol.title")}</span>
             {captions.length > 0 && (
               <span className="rightColHeaderActions">
                 <span className="captionCount">{t("app.rightCol.lines", { count: captions.length })}</span>
@@ -2276,6 +2293,19 @@ function App() {
               </span>
             )}
           </div>
+          {captions.length > 0 && conteoPorHablante.length > 0 && (
+            <div className="dockChips">
+              {conteoPorHablante.map(({ h, n }) => (
+                <span key={h.id} className="dockChip">
+                  <span
+                    className="dockChipDot"
+                    style={{ backgroundColor: h.color }}
+                  />
+                  {`${h.nombre || h.tecla} ${n}`}
+                </span>
+              ))}
+            </div>
+          )}
           {busquedaAbierta && captions.length > 0 && (
             <div className="searchBox">
               <input
@@ -2337,6 +2367,26 @@ function App() {
             coincidirMayus={coincidirMayus}
             idCoincidenciaActiva={coincidenciaActiva?.id}
           />
+          </div>
+          )}
+
+          {pestanaDerecha === "hablantes" && (
+            <SpeakersPanel
+              hablantes={hablantes}
+              presets={ass.presetsAss}
+              onAgregar={voces.agregarHablante}
+              onActualizar={voces.actualizarHablante}
+              onCambiarColor={voces.cambiarColorHablante}
+              onEliminar={voces.eliminarHablante}
+              onCommit={pushHistorial}
+            />
+          )}
+          {pestanaDerecha === "estilos" && (
+            <StylesPanel
+              presets={ass.presetsAss}
+              onGuardar={ass.persistirPresets}
+            />
+          )}
         </div>
       </div>
 

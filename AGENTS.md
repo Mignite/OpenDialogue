@@ -8,7 +8,7 @@ Tauri v2 + React 19 + Rust. Multi-speaker subtitle editor (color-coding); auto-s
 - `src/App.css` — All styles (camelCase classes) + design tokens (`:root`), local fonts, SVG icon helpers
 - `src/assets/fonts/` — Local woff2: SpaceGrotesk (500/600/700), JetBrainsMono (400/500/600/700)
 - `src/components/CaptionList.tsx` — Virtualized rows with time+color
-- `src/components/SpeakersPanel.tsx` — Accordion, name/key/color per speaker. Prop `onCommit` (undo snapshot on input focus)
+- `src/components/SpeakersPanel.tsx` — Pestaña Hablantes del dock derecho (sin acordeón): nombre/tecla/color/estilo por hablante. Prop `onCommit` (undo snapshot on input focus)
 - `src/utils/constants.ts` — `VENTANAS_POR_SEGUNDO`, `PALETA`, `SNAP_THRESHOLD`, `HISTORY_LIMIT`
 - `src/utils/srt.ts` — `parseSrt()`, `buildSrt()`, `formatSrtTimestamp()`
 - `src/utils/captions.ts` — `findSnapTime()`, `BuildOverlapReport()` (no `computeCaptionLanes` — carriles ahora por hablante, ver session log)
@@ -276,6 +276,15 @@ Tauri v2 + React 19 + Rust. Multi-speaker subtitle editor (color-coding); auto-s
 - **Pendiente a propósito**: `useTimelineVista` / `useTimelineGestos` (slices 7-8) NO se hicieron. El rAF loop (857-957) es el punto de integración entre vista y gestos — en un solo tick lee/escribe refs de ambos y llama `pintarMarquee`/`aplicarTransformBodyDrag`/`drawCanvasFrame`; no tiene dueño claro. El proyecto NO tiene jsdom/testing-library: los 211 tests pasan igual si se rompe el drag, nada lo detecta. Siguiente paso con criterio: **extraer la matemática del body-drag a funciones puras en utils/ y testearla** (igual que `findSnapBlockDelta`/`filasDestinoRelativas`), y recién después el hook que la orquesta.
 - **Trampa de verificación**: un dev server viejo ocupando el puerto 1420 devuelve HTTP 200 con el bundle VIEJO → falsos "funcionó"/"no funcionó". Confirmar siempre contra un server recién levantado. Y los selectores `.transport`/`.sinVideo` NO existen (son `.transportBtnGroup`/`.playbackControls`/`.videoMissing`/`.wordmark`): un `false` ahí no significa que falte el elemento.
 
+
+## Session log (2026-10-11) — diseño v3 en React (dock con pestañas)
+- **Fuente de verdad**: `design/v3/estilo-elegido.html` (estilo `st-pro-og`) + decisiones de `egui/DECISIONES.md` (rama `egui-rewrite`). Paleta cálida en `:root`: `--bg #121114`, `--surface #1b1a20`, `--surface2 #24232b`, `--surface3 #2c2b34`, bordes `#2e2d37`/`#3b3946`, texto `#ecebf0`/`#a9a7b4`/`#706e7b`. Radios: `--r-sm 4px`, `--r-md 5px`, `--r-lg`/`--r-xl 6px`. Squircle con `@supports (corner-shape: squircle)`.
+- **Dock derecho 420 px** (`.mainGrid` `minmax(0, 1fr) 420px`) con pestañas Subtítulos / Hablantes (N) / Estilos (N): estado `pestanaDerecha`, clases `.dockTabs`/`.dockTab`. Reemplaza los acordeones: `SpeakersPanel`/`StylesPanel` ya no reciben `panelAbierto`/`onTogglePanel`. El menú "Estilos..." cambia a la pestaña; Ctrl+F vuelve a Subtítulos.
+- **Chips por hablante** (`conteoPorHablante`, useMemo) encima de la lista de subtítulos.
+- **Inter** local: `src/assets/fonts/Inter-{400,500,600,700}.woff2` (convertidas desde el TTF de egui). Antes faltaba y caía a Segoe UI.
+- **Dock inferior**: alto por defecto 160 px (antes 240, dejaba hueco bajo el timeline).
+- **Sin barra superior propia**: la ventana tiene decoraciones nativas y el menú nativo de Tauri ya cubre Archivo/Edición/Ver. El Guardar/Exportar del diseño no se replicó.
+- **Verificado**: build, 211 tests, capturas de las tres pestañas, dock de 420 px, Inter cargada. **No verificado en navegador**: filas de subtítulos y chips (necesitan datos por IPC de Tauri).
 
 ## IPC Surface (commands)
 `guardar_proyecto`, `cargar_proyecto`, `existe_archivo`, `leer_archivo_texto`, `escribir_archivo_texto`, `escribir_archivo_en_carpeta`, `analizar_volumen` (emits `volumen_chunk`), `existe_cache_volumen`, `cargar_cache_volumen`, `listar_fuentes_sistema` (GDI+/DirectWrite vía PowerShell, ~400 ms; registro solo de fallback)

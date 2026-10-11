@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>OpenDialogue — Exportar .ass</title>
+<script src="./vendor/react.js"></script>
+<script src="./vendor/react-dom.js"></script>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;family=Montserrat:wght@700&amp;family=Bebas+Neue&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#121114}
+*{box-sizing:border-box}
+a{color:#A9A7B4}a:hover{color:#ECEBF0}
+</style>
+</helmet>
+
+<div style="position:relative;width:1440px;height:900px;background:#121114;color:#ECEBF0;font-family:'Inter',system-ui,sans-serif;font-size:13px;line-height:1.4;overflow:hidden">
+
+  <!-- Editor de fondo (atenuado) -->
+  <div style="position:absolute;inset:0;display:flex;flex-direction:column">
+    <div style="height:44px;background:#1B1A20;border-bottom:1px solid #2E2D37"></div>
+    <div style="height:520px;display:flex">
+      <div style="width:640px;padding:16px;border-right:1px solid #2E2D37"><div style="width:608px;height:342px;border-radius:10px;background:linear-gradient(135deg,#1b2430,#231d1b 55%,#0e1114)"></div></div>
+      <div style="width:420px;padding:16px;border-right:1px solid #2E2D37"><div style="height:32px;border-radius:6px;background:#24232B"></div></div>
+      <div style="width:380px;background:#1B1A20"></div>
+    </div>
+    <div style="height:308px;border-top:1px solid #2E2D37"></div>
+    <div style="height:28px;background:#1B1A20;border-top:1px solid #2E2D37"></div>
+  </div>
+  <div style="position:absolute;inset:0;background:rgba(10,9,12,.68)"></div>
+
+  <!-- Modal -->
+  <div style="position:absolute;left:280px;top:130px;width:880px;background:#1B1A20;border:1px solid #3B3946;border-radius:12px;box-shadow:0 30px 80px rgba(0,0,0,.6);overflow:hidden">
+
+    <!-- header -->
+    <div style="height:68px;display:flex;align-items:center;gap:12px;padding:0 24px;border-bottom:1px solid #2E2D37">
+      <div style="flex:1">
+        <div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:17px">Exportar subtítulos</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8E8C9B;margin-top:2px">entrevista-director · 34 líneas · 4 hablantes</div>
+      </div>
+      <button type="button" aria-label="Cerrar" style="width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:0;border-radius:6px;color:#A9A7B4;padding:0;cursor:pointer"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"></path></svg></button>
+    </div>
+
+    <!-- formato -->
+    <div style="display:flex;gap:10px;padding:16px 24px 0">
+      <button type="button" style="flex:1;text-align:left;background:transparent;border:1px solid #2E2D37;border-radius:8px;padding:9px 12px;font:inherit;color:#ECEBF0;cursor:pointer">
+        <div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px">SRT</div>
+        <div style="font-size:11.5px;color:#8E8C9B;margin-top:1px">Texto plano · un archivo por hablante o uno solo</div>
+      </button>
+      <button type="button" style="flex:1;text-align:left;background:rgba(232,93,78,.14);border:1px solid #E85D4E;border-radius:8px;padding:9px 12px;font:inherit;color:#ECEBF0;cursor:pointer">
+        <div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px">ASS</div>
+        <div style="font-size:11.5px;color:#A9A7B4;margin-top:1px">Estilizado · un color y fuente por hablante</div>
+      </button>
+      <button type="button" style="flex:1;text-align:left;background:transparent;border:1px solid #2E2D37;border-radius:8px;padding:9px 12px;font:inherit;color:#ECEBF0;cursor:pointer">
+        <div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px">JSON</div>
+        <div style="font-size:11.5px;color:#8E8C9B;margin-top:1px">Proyecto combinado con tiempos y hablantes</div>
+      </button>
+    </div>
+
+    <!-- cuerpo -->
+    <div style="display:flex;gap:24px;padding:20px 24px 24px">
+
+      <!-- izquierda: estilo por hablante -->
+      <div style="width:448px;flex:none;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:11px;font-weight:600;letter-spacing:.08em;color:#8E8C9B">ESTILO POR HABLANTE</span>
+          <a href="#presets" style="font-size:11.5px">Gestionar estilos</a>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;background:#24232B;border:1px solid #2E2D37;border-radius:8px;padding:10px;min-height:66px">
+          <span style="width:12px;height:12px;border-radius:50%;background:#2EC4B6;flex:none"></span>
+          <div style="width:72px;flex:none"><div style="font-size:13px;font-weight:600">Ana</div><div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8E8C9B">14 líneas</div></div>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8E8C9B" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"></path></svg>
+          <div style="flex:1;min-width:0;height:32px;display:flex;align-items:center;justify-content:space-between;background:#1B1A20;border:1px solid #2E2D37;border-radius:6px;padding:0 9px;font-size:12px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Entrevista · Montserrat 54</span><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#8E8C9B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"></path></svg></div>
+          <div style="width:96px;height:44px;flex:none;border-radius:6px;background:linear-gradient(135deg,#0d0e11,#1a1f27);display:flex;align-items:center;justify-content:center"><span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px;color:#2EC4B6;text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000">Bueno</span></div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;background:#24232B;border:1px solid #2E2D37;border-radius:8px;padding:10px;min-height:66px">
+          <span style="width:12px;height:12px;border-radius:50%;background:#F5A623;flex:none"></span>
+          <div style="width:72px;flex:none"><div style="font-size:13px;font-weight:600">Luis</div><div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8E8C9B">11 líneas</div></div>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8E8C9B" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"></path></svg>
+          <div style="flex:1;min-width:0;height:32px;display:flex;align-items:center;justify-content:space-between;background:#1B1A20;border:1px solid #2E2D37;border-radius:6px;padding:0 9px;font-size:12px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Entrevista · Montserrat 54</span><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#8E8C9B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"></path></svg></div>
+          <div style="width:96px;height:44px;flex:none;border-radius:6px;background:linear-gradient(135deg,#0d0e11,#1a1f27);display:flex;align-items:center;justify-content:center"><span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:14px;color:#F5A623;text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000">¿Y si…?</span></div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;background:#24232B;border:1px solid #2E2D37;border-radius:8px;padding:10px;min-height:66px">
+          <span style="width:12px;height:12px;border-radius:50%;background:#4EA8E8;flex:none"></span>
+          <div style="width:72px;flex:none"><div style="font-size:13px;font-weight:600">Carmen</div><div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8E8C9B">5 líneas</div></div>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8E8C9B" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"></path></svg>
+          <div style="flex:1;min-width:0;height:32px;display:flex;align-items:center;justify-content:space-between;background:#1B1A20;border:1px solid #2E2D37;border-radius:6px;padding:0 9px;font-size:12px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Secundario · Montserrat 48</span><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#8E8C9B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"></path></svg></div>
+          <div style="width:96px;height:44px;flex:none;border-radius:6px;background:linear-gradient(135deg,#0d0e11,#1a1f27);display:flex;align-items:center;justify-content:center"><span style="font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;color:#4EA8E8;text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000">El color</span></div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;background:#24232B;border:1px solid #E8C34E;border-radius:8px;padding:10px;min-height:66px">
+          <span style="width:12px;height:12px;border-radius:50%;background:#A3D13D;flex:none"></span>
+          <div style="width:72px;flex:none"><div style="font-size:13px;font-weight:600">Pepe</div><div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#8E8C9B">3 líneas</div></div>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#8E8C9B" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"></path></svg>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+            <div style="height:32px;display:flex;align-items:center;justify-content:space-between;background:#1B1A20;border:1px solid #2E2D37;border-radius:6px;padding:0 9px;font-size:12px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Rótulos · Bebas Neue 60</span><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#8E8C9B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"></path></svg></div>
+            <div style="display:flex;align-items:center;gap:5px;font-size:10.5px;color:#E8C34E"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5l6 10.5H2z"></path><path d="M8 6.8v3M8 11.6v.1"></path></svg>Fuente no instalada en este equipo</div>
+          </div>
+          <div style="width:96px;height:44px;flex:none;border-radius:6px;background:linear-gradient(135deg,#0d0e11,#1a1f27);display:flex;align-items:center;justify-content:center"><span style="font-family:'Bebas Neue','Montserrat',sans-serif;font-size:19px;color:#A3D13D;text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000">Exacto</span></div>
+        </div>
+      </div>
+
+      <!-- derecha: vista previa + opciones -->
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:16px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.08em;color:#8E8C9B">VISTA PREVIA · 00:01:31.60</div>
+        <div style="position:relative;width:360px;height:203px;border-radius:8px;overflow:hidden;background:linear-gradient(135deg,#1b2430 0%,#231d1b 55%,#0e1114 100%)">
+          <div style="position:absolute;inset:0;background:radial-gradient(circle at 28% 38%,rgba(232,160,110,.32),transparent 42%),radial-gradient(circle at 74% 34%,rgba(78,168,232,.2),transparent 40%)"></div>
+          <div style="position:absolute;left:62px;top:88px;width:94px;height:130px;border-radius:48px 48px 0 0;background:#171c24"></div>
+          <div style="position:absolute;left:88px;top:42px;width:44px;height:54px;border-radius:50%;background:#1f252e"></div>
+          <div style="position:absolute;left:200px;top:96px;width:88px;height:120px;border-radius:44px 44px 0 0;background:#211c1a"></div>
+          <div style="position:absolute;left:224px;top:50px;width:42px;height:50px;border-radius:50%;background:#2a2420"></div>
+          <div style="position:absolute;left:0;right:0;bottom:14px;display:flex;flex-direction:column;align-items:center;gap:4px;font-family:'Montserrat',sans-serif;font-weight:700;font-size:11.5px;line-height:1.15;text-align:center">
+            <div style="color:#2EC4B6;text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000">La cámara lo graba todo, pero el ojo<br>solo recuerda lo que se ilumina bien.</div>
+            <div style="color:#F5A623;text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000">¿Y si el director quiere más sombra?</div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+            <input type="checkbox" checked="checked" style="margin:2px 0 0;width:15px;height:15px;accent-color:#E85D4E">
+            <span><span style="display:block;font-size:12.5px;font-weight:500;color:#ECEBF0">Separar los solapes en líneas apiladas</span><span style="display:block;font-size:11.5px;color:#8E8C9B">Evita que dos hablantes se pisen en pantalla</span></span>
+          </label>
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+            <input type="checkbox" style="margin:2px 0 0;width:15px;height:15px;accent-color:#E85D4E">
+            <span><span style="display:block;font-size:12.5px;font-weight:500;color:#ECEBF0">Guardar el hablante como actor</span><span style="display:block;font-size:11.5px;color:#8E8C9B">Útil para reimportar el .ass sin perder asignaciones</span></span>
+          </label>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:12.5px;color:#A9A7B4;flex:1">Resolución del script</span>
+            <div style="width:150px;height:30px;display:flex;align-items:center;justify-content:space-between;background:#24232B;border:1px solid #2E2D37;border-radius:6px;padding:0 9px;font-family:'JetBrains Mono',monospace;font-size:12px">1920×1080<svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#8E8C9B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"></path></svg></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- footer -->
+    <div style="height:68px;display:flex;align-items:center;gap:12px;padding:0 24px;background:#16151a;border-top:1px solid #2E2D37">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#8E8C9B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4.5a1 1 0 011-1h3l1.5 1.5H13a1 1 0 011 1V12a1 1 0 01-1 1H3a1 1 0 01-1-1z"></path></svg>
+      <span style="flex:1;min-width:0;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#A9A7B4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">C:\Videos\entrevista-director.ass</span>
+      <button type="button" style="background:transparent;border:1px solid #2E2D37;border-radius:8px;padding:7px 12px;font:inherit;font-size:12.5px;color:#ECEBF0;cursor:pointer">Cambiar…</button>
+      <button type="button" style="background:transparent;border:1px solid #2E2D37;border-radius:8px;padding:7px 14px;font:inherit;font-size:12.5px;color:#ECEBF0;cursor:pointer">Cancelar</button>
+      <button type="button" style="display:inline-flex;align-items:center;gap:8px;background:#E85D4E;border:0;border-radius:8px;padding:8px 16px;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#121114;cursor:pointer"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#121114" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v7.5M4.8 7l3.2 3.2L11.2 7M3 13h10"></path></svg>Exportar .ass</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
