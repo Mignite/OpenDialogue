@@ -18,14 +18,16 @@ Visual multi-speaker subtitle editor and color-coding companion for [auto-subs](
 
 ## Features
 
-- **Per-speaker timeline** — one lane per speaker, HTML clips with real subtitle text, overlapping clips stacked with natural z-index.
-- **Waveform** — prerendered canvas scaled by `devicePixelRatio`, time grid and coral playhead with halo.
-- **Multi-selection** — click, Ctrl+click (toggle), Shift+click (time-range), marquee on the track area, virtualized list selection.
-- **Editing** — block body-drag with snap and edge auto-pan, edge trim, split at playhead, undo snapshots.
-- **ASS export** — styled `.ass` with per-speaker presets (font, size, colors, outline, margins, alignment), system font picker, round-trip import.
-- **auto-subs import** — pick the SRT, the twin TXT is found automatically (same folder/name). Speakers matched by text, accent/punctuation tolerant.
-- **Audio islands** — new fragments snap to the optimal dialogue length (1.5–5s) from RMS vs local background noise.
-- **Persistence** — `.json` projects with playhead, volume cache, atomic writes.
+- **Per-speaker timeline** - one lane per speaker, HTML clips with real subtitle text, overlapping clips stacked with natural z-index.
+- **Waveform** - drawn per pixel in real time from the RMS analysis (no size cap, accurate at any zoom), time grid and coral playhead with halo.
+- **Multi-selection** - click, Ctrl+click (toggle), Shift+click (time-range), marquee on the track area, virtualized list selection.
+- **Editing** - block body-drag with bidirectional snap and edge auto-pan, edge trim, split at playhead, undo snapshots.
+- **Playback speed** - 0.5x to 2x next to the time input, `+`/`-` shortcuts, persisted in `ajustes.json` and re-applied on every new file.
+- **Find and replace** - `Ctrl+F` or the header icon, `<mark>` highlighting in the list, `Aa` for case-sensitive, Enter/Shift+Enter to walk matches, replace one or all in a single undo step.
+- **ASS export** - styled `.ass` with per-speaker presets (font, size, colors, outline, margins, alignment), system font picker, round-trip import.
+- **auto-subs import** - pick the SRT, the twin TXT is found automatically (same folder/name). Speakers matched by text, accent/punctuation tolerant.
+- **Audio islands** - new fragments snap to the optimal dialogue length (1.5-5s) from RMS vs local background noise.
+- **Persistence** - `.json` projects with playhead, volume cache, atomic writes. Undo history is per document, and unsaved work is warned about on close.
 
 ## Stack
 
@@ -89,10 +91,10 @@ npx tauri build --bundles appimage
 1. Transcribe in [auto-subs](https://github.com/tmoroney/auto-subs) (any model), export SRT (+TXT to keep speakers).
 2. Open video in OpenDialogue (drag & drop or File menu), wait for volume analysis (waveform).
 3. File → Import auto-subs (SRT+TXT): pick the SRT, the twin TXT loads automatically.
-4. Edit on timeline: block-move, trim edges, assign speaker (`1–9`), split, delete, recolor.
+4. Edit on timeline: block-move, trim edges, assign speaker (`1-9`), split, delete, recolor.
 5. Save project (`.json`) and export `.srt`, styled `.ass`, or combined JSON.
 
-Full shortcuts: press `?` inside the app. UI in English and Spanish (toggle in status bar).
+Search and replace across the subtitles with `Ctrl+F` (or the header icon). Playback speed sits next to the time input (`+`/`-`). Full shortcuts: press `?` inside the app. UI in English and Spanish (toggle in status bar).
 
 ## File Structure
 
@@ -100,6 +102,13 @@ Full shortcuts: press `?` inside the app. UI in English and Spanish (toggle in s
 src/
   App.tsx / App.css          # layout, canvas loop, keybindings, IPC
   types.ts                   # Caption, Hablante, Proyecto
+  hooks/
+    useAssEstilos.ts          # .ass presets + export
+    useWaveform.ts           # volume analysis (IPC) + cache
+    useProyecto.ts           # save/load/new, file imports, dirty flags
+    useHablantes.ts          # speaker CRUD
+    useCaptions.ts           # mutations, selection, drag commits, history
+    useTransporte.ts         # playhead, play/pause, speed, caption jumps
   components/
     CaptionList.tsx          # virtualized list
     SpeakersPanel.tsx        # speakers accordion
@@ -131,11 +140,13 @@ design/
 ## Tests
 
 ```bash
-npm test          # vitest run — 151 tests (srt, time, captions, selection, audioIslands, autosubs, ass, assPresets)
+npm test          # vitest run — 211 tests (srt, time, captions, selection, audioIslands,
+                  # autosubs, ass, assPresets, busqueda, ajustes, fuentes, export filenames)
 npm run build     # tsc + vite build (type gate)
 ```
 
 Rust: `cargo check` is fast; `cargo clippy --all-targets` and `cargo fmt --check` gate CI.
+`cargo test` covers encoding (UTF-16/Latin-1), project round-trips and the backend filename guard.
 
 ## License
 
