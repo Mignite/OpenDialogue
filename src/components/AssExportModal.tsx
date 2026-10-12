@@ -59,31 +59,41 @@ export function AssExportModal({
               {t("assExport.applyToAll")}
             </button>
           </div>
-          {hablantes.map((h) => (
-            <div className="assAssignRow" key={h.id}>
-              <span
-                className="speakerDot"
-                style={{ background: h.color }}
-                aria-hidden="true"
-              />
-              <span className="assAssignName">
-                {h.nombre || h.tecla || h.id}
-              </span>
-              <span className="grow" />
-              <select
-                value={presetDe(h.id)}
-                onChange={(e) =>
-                  setAsignacion((a) => ({ ...a, [h.id]: e.target.value }))
-                }
-              >
-                {presets.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ))}
+          {hablantes.map((h) => {
+            // El dot refleja la asignación efímera de ESTA fila (lo que el
+            // usuario acaba de elegir en el <select>), no el preset guardado
+            // en el proyecto: si discreparan, la UI mentiría en la pantalla
+            // de decisión.
+            const colorDot =
+              presets.find((p) => p.id === presetDe(h.id))?.color ??
+              presets[0]?.color ??
+              "#FFFFFF";
+            return (
+              <div className="assAssignRow" key={h.id}>
+                <span
+                  className="speakerDot"
+                  style={{ background: colorDot }}
+                  aria-hidden="true"
+                />
+                <span className="assAssignName">
+                  {h.nombre || h.tecla || h.id}
+                </span>
+                <span className="grow" />
+                <select
+                  value={presetDe(h.id)}
+                  onChange={(e) =>
+                    setAsignacion((a) => ({ ...a, [h.id]: e.target.value }))
+                  }
+                >
+                  {presets.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
           <div className="assAssignRow">
             <span className="assAssignDotSin" aria-hidden="true" />
             <span className="assAssignName muted">

@@ -79,6 +79,11 @@ function PanelTabs({ panes, activo, onCambiar }: Props) {
           className={"panelTab" + (p.id === activo ? " activo" : "")}
           title={p.title}
           onClick={() => onCambiar(p.id)}
+          // preventDefault para que el click no robe el foco: sin esto el
+          // botón quedaría focalizado y el guard global de teclado cortaría
+          // todos los atajos (A, E, Espacio, 1-9, ?) hasta clickear el canvas.
+          // Mismo patrón que la matriz de alineación.
+          onMouseDown={(e) => e.preventDefault()}
         >
           {iconoPane(p.id)}
           <span>{p.label}</span>
