@@ -25,6 +25,7 @@ import {
   VELOCIDADES_REPRODUCCION,
 } from "./utils/constants";
 import { formatTime, parseTimeInput } from "./utils/time";
+import { colorHablante } from "./utils/colorHablante";
 import {
   coincide,
   normalizarTermino,
@@ -420,6 +421,17 @@ function App() {
     setCaptions: caps.setCaptions,
     pushHistorial: caps.pushHistorial,
   });
+  // El color efectivo del hablante es el de su preset .ass (ver
+  // colorHablante): se resuelve acá, en un solo lugar, y CaptionList lo
+  // consume vía sp.color sin saber de dónde sale. useMemo-estable para no
+  // re-renderizar la lista memoizada en cada tick del playhead.
+  const speakerMapResuelto = useMemo(() => {
+    const map = new Map<string, Hablante>();
+    for (const [id, h] of voces.speakerMap) {
+      map.set(id, { ...h, color: colorHablante(h, ass.presetsAss) });
+    }
+    return map;
+  }, [voces.speakerMap, ass.presetsAss]);
   const playheadFrameSkipRef = useRef(0);
   const dragScrollVelocityRef = useRef(0);
   // Auto-scroll vertical del trackArea durante el marquee (px/s). El pan
@@ -2061,11 +2073,11 @@ function App() {
       },
       ...hablantes.map((h) => ({
         label: h.nombre || h.tecla,
-        color: h.color,
+        color: colorHablante(h, ass.presetsAss),
         caps: carrilesAgrupados.porHablante.get(h.id) ?? [],
       })),
     ],
-    [carrilesAgrupados, hablantes],
+    [carrilesAgrupados, hablantes, ass.presetsAss],
   );
 
   function handleClipMouseDown(
@@ -2402,7 +2414,7 @@ function App() {
                         <span
                           className="dot"
                           style={{
-                            backgroundColor: sp ? sp.color : "#4a4853",
+                            backgroundColor: sp ? colorHablante(sp, ass.presetsAss) : "#4a4853",
                           }}
                         />
                         {sp
@@ -2449,7 +2461,6 @@ function App() {
             onTogglePanel={togglePanelHablantes}
             onAgregar={voces.agregarHablante}
             onActualizar={voces.actualizarHablante}
-            onCambiarColor={voces.cambiarColorHablante}
             onEliminar={voces.eliminarHablante}
             onCommit={pushHistorial}
           />
@@ -2541,7 +2552,7 @@ function App() {
             onSelectCaption={handleSelectCaption}
             onEliminarCaption={eliminarCaption}
             rowRefs={rowRefs}
-            speakerMap={voces.speakerMap}
+            speakerMap={speakerMapResuelto}
             terminoResaltado={busquedaAbierta ? terminoLimpio : ""}
             coincidirMayus={coincidirMayus}
             idCoincidenciaActiva={coincidenciaActiva?.id}
@@ -2662,7 +2673,7 @@ function App() {
                             left: `${left}%`,
                             width: `${width}%`,
                             background: `color-mix(in srgb, ${row.color} 18%, transparent)`,
-                            border: `1px solid ${row.color}`,
+                            border: `1px solid #6E7480`,
                           }}
                           onMouseDown={(ev) => handleClipMouseDown(ev, cap, null)}
                           onClick={(ev) => handleClipClick(ev, cap)}

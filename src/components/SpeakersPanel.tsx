@@ -2,6 +2,7 @@ import { memo } from "react";
 import type { Hablante, PresetAss } from "../types";
 import { useLocale } from "../i18n";
 import { familiaCss } from "../utils/fuentes";
+import { colorHablante } from "../utils/colorHablante";
 
 interface Props {
   hablantes: Hablante[];
@@ -10,27 +11,11 @@ interface Props {
   onTogglePanel: () => void;
   onAgregar: () => void;
   onActualizar: (id: string, campo: keyof Hablante, valor: string) => void;
-  onCambiarColor: (id: string, color: string) => void;
   onEliminar: (id: string) => void;
   onCommit: () => void;
 }
 
-function normalizarColor(color: string): string {
-  if (/^#[0-9a-fA-F]{3}$/.test(color)) {
-    return (
-      "#" +
-      color[1] +
-      color[1] +
-      color[2] +
-      color[2] +
-      color[3] +
-      color[3]
-    );
-  }
-  return color;
-}
-
-function SpeakersPanel({ hablantes, presets, panelAbierto, onTogglePanel, onAgregar, onActualizar, onCambiarColor, onEliminar, onCommit }: Props) {
+function SpeakersPanel({ hablantes, presets, panelAbierto, onTogglePanel, onAgregar, onActualizar, onEliminar, onCommit }: Props) {
   const { t } = useLocale();
   const usersSvg = (
     <svg
@@ -89,18 +74,13 @@ function SpeakersPanel({ hablantes, presets, panelAbierto, onTogglePanel, onAgre
             const estilo = presets.find((p) => p.id === h.presetId);
             return (
             <div key={h.id} className="speakerRow">
-              <label className="speakerDotWrap" title={t("speakers.changeColor")}>
-                <span
-                  className="speakerDot"
-                  style={{ backgroundColor: h.color }}
-                />
-                <input
-                  type="color"
-                  value={normalizarColor(h.color)}
-                  onChange={(e) => onCambiarColor(h.id, e.target.value)}
-                  className="speakerColorInput"
-                />
-              </label>
+              // El dot es decorativo: muestra el color del preset .ass del
+              // hablante (o blanco sin preset). El color se edita en Estilos.
+              <span
+                className="speakerDot"
+                style={{ backgroundColor: colorHablante(h, presets) }}
+                title={estilo ? `${estilo.nombre} (${estilo.color})` : t("speakers.presetNone")}
+              />
               <input
                 className="speakerInput"
                 placeholder={t("speakers.namePlaceholder")}

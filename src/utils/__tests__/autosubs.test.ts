@@ -5,7 +5,6 @@ import {
   normalizarTexto,
   parseAutosubsTxt,
 } from "../autosubs";
-import { PALETA } from "../constants";
 import type { Caption } from "../../types";
 
 function cue(inicio: number, fin: number, texto: string): Caption {
@@ -91,22 +90,17 @@ describe("asignarHablantesPorTexto", () => {
 });
 
 describe("hablantesDesdeNombres", () => {
-  it("convención de la app: nombre, tecla dígito, color PALETA", () => {
+  it("convención de la app: nombre y tecla dígito", () => {
     const hs = hablantesDesdeNombres(["1", "2"]);
     expect(hs.map((h) => h.nombre)).toEqual(["Hablante 1", "Hablante 2"]);
     expect(hs.map((h) => h.tecla)).toEqual(["1", "2"]);
-    expect(hs[0].color).toBe("#E85D4E");
     expect(hs[0].id).toMatch(/^sp-autosubs-/);
   });
 
-  // Repro bug 1: PALETA debe cubrir los 9 hablantes (teclas 1-9) sin repetir.
-  it("9 hablantes reciben 9 colores distintos", () => {
-    expect(PALETA.length).toBeGreaterThanOrEqual(9);
-    expect(new Set(PALETA).size).toBe(PALETA.length);
-    const hs = hablantesDesdeNombres(
-      ["1", "2", "3", "4", "5", "6", "7", "8", "9"],
-    );
-    expect(new Set(hs.map((h) => h.color)).size).toBe(9);
+  it("el hablante nuevo nace sin preset, y su color guardado es blanco", () => {
+    const hs = hablantesDesdeNombres(["1", "2"]);
+    expect(hs[0].color).toBe("#FFFFFF");
+    expect(hs[0].presetId).toBeUndefined();
   });
 
   // Repro bug 2: el orden debe ser numérico, no lexicográfico ("2" < "10").

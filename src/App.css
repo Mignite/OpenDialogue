@@ -927,31 +927,6 @@ body {
   flex-shrink: 0;
 }
 
-.speakerDotWrap {
-  position: relative;
-  display: inline-flex;
-  cursor: pointer;
-  border-radius: 50%;
-  padding: 2px;
-  margin: -2px;
-}
-
-.speakerDotWrap:hover {
-  background: var(--surface3);
-}
-
-.speakerColorInput {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
-  border: none;
-  padding: 0;
-  background: transparent;
-}
-
 .speakerInput {
   flex: 1;
   background: var(--surface2);
