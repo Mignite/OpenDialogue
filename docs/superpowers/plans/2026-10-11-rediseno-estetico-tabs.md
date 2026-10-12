@@ -134,7 +134,7 @@ La pieza con más lógica del plan y la única con test real de comportamiento d
 
 **Interfaces:**
 - Consumes: `Hablante` y `PresetAss` de `src/types.ts`.
-- Produces: `colorHablante(h: Hablante, presets: PresetAss[]): string`.
+- Produces: `colorHablante(h: Hablante, presets: PresetAss[]): string`, y un `speakerMap` cuyos valores tienen `color` ya resuelto (App.tsx lo construye; `CaptionList` lo consume sin cambios).
 
 - [ ] **Step 1: Escribir el test que falla**
 
@@ -215,7 +215,7 @@ El carril `"—"` (sin asignar, línea ~2059) **no cambia**: sigue en `#4A505D` 
 - [ ] **Step 6: Cablear los otros tres consumidores**
 
 - `App.tsx:2405` — el dot del `speakerChip` del editor: `sp ? colorHablante(sp, ass.presetsAss) : "#4A505D"`.
-- `CaptionList.tsx:106` y `:117` — `borderLeftColor` y el `captionSpeakerTag`. `CaptionList` recibe `speakerMap` por prop; agregar `presets: PresetAss[]` a su `Props` para que pueda derivar (alternativa: que `App.tsx` le pase el color ya resuelto — **más simple, no cambia la prop `speakerMap`**).
+- `CaptionList.tsx:106` y `:117` — `borderLeftColor` y el `captionSpeakerTag`. **Decisión: `App.tsx` les pasa el color YA RESUELTO**, no la lista de presets. `CaptionList` sigue recibiendo `speakerMap` sin cambios, pero el `Map` pasa a ser de hablantes con el color ya calculado (`{...h, color: colorHablante(h, presetsAss)}`), de modo que `sp.color` en las líneas 106 y 117 ya devuelve el valor correcto sin tocar `CaptionList` para nada. La derivación ocurre en un solo lugar — App — y `CaptionList` no necesita saber de dónde sale el color.
 - `App.tsx:2664` — el `background` del clip sigue siendo `color-mix(in srgb, ${row.color} 18%, transparent)`. **El `border` cambia a `1px solid #6E7480` fijo**, no derivado (ver Review Focus de la spec §6.6: el borde describe "esto es un clip", no "este es el hablante"). El texto del clip (`--text`, 9px) tiene 11.6:1 contra el relleno `#2E2E2E` — el borde a 2.89:1 no compite con él.
 
 - [ ] **Step 7: Quitar el `<input type="color">` de SpeakersPanel**
@@ -401,21 +401,22 @@ El editor de presets gana un preview en vivo que usa `estiloLineaPreview` / `est
 
 **Files:**
 - Create: `src/components/StylePreview.tsx`
-- Modify: `src/components/StylesPanel.tsx` (añadir el preview al pie)
+- Modify: `src/components/StylesPanel.tsx` (añadir el preview al pie, aceptar `textoInicial`)
+- Modify: `src/App.tsx` (pasar `currentCaption?.texto` como `textoInicial`)
 - Modify: `src/App.css` (`.stylePreviewStage`)
 - Modify: `src/i18n/es.json`, `en.json`
 
 **Interfaces:**
 - Consumes: `estiloLineaPreview` y `estiloCajaPreview` de `src/utils/assPreview.ts` (Task 3).
-- Produces: `StylePreview({ preset, onCambio }: { preset: PresetAss; onCambio: (campo: keyof PresetAss, valor: string | number | boolean) => void })`. Lo usa la Task 5.
+- Produces: `StylePreview({ preset, textoInicial }: { preset: PresetAss; textoInicial: string })`. Lo usa la Task 5.
 
 - [ ] **Step 1: Implementar `StylePreview`**
 
-Componente `memo()`. Props `preset` y `onCambio`. Mide su propia caja con `ResizeObserver` (patrón ya establecido en `App.tsx:815-840` para el video) y guarda `{w, h}` en un ref + un tick de re-render, **no** en un `useState` que dispare en cada resize frame.
+Componente `memo()`. Props `preset` y `textoInicial`. Mide su propia caja con `ResizeObserver` (patrón ya establecido en `App.tsx:815-840` para el video) y guarda `{w, h}` en un ref + un tick de re-render, **no** en un `useState` que dispare en cada resize frame.
 
 Calcula `escala = Math.min(w / 1920, h / 1080)` y pasa `recuadro = {left:0, top:0, width:w, height:h}`. Renderiza el texto con `estiloLineaPreview(preset, escala)` dentro de un div con `estiloCajaPreview(preset, recuadro, escala)`.
 
-El texto de ejemplo es un `<input>` **editable**,default al texto del caption bajo el playhead (lo recibe por prop `textoInicial`). Cambia el input → cambia el preview.
+El texto de ejemplo es un `<input>` **editable** cuyo valor inicial es `textoInicial` (el texto del caption bajo el playhead, que App pasa como prop). Cambia el input → cambia el preview. El estado del input vive en `StylePreview` con `useState(textoInicial)`.
 
 - [ ] **Step 2: Estilo `.stylePreviewStage`**
 
@@ -423,11 +424,13 @@ El texto de ejemplo es un `<input>` **editable**,default al texto del caption ba
 
 - [ ] **Step 3: Montar en StylesPanel**
 
-Debajo del último campo (`assFields`), fuera del `assPresetList`. Recibe el `preset` seleccionado (`sel`, que ya existe derivado) y el `textoInicial` desde App.
+Debajo del último campo (`assFields`), fuera del `assPresetList`. Recibe el `preset` seleccionado (`sel`, que ya existe derivado).
+
+`StylesPanel` acepta una prop nueva `textoInicial: string` y la reenvía a `StylePreview`. En `App.tsx`, `<StylesPanel ... textoInicial={currentCaption?.texto ?? t("assExport.sampleText")} />` — `currentCaption` ya existe derivado en App.tsx (~1935) y `styles.previewTextPlaceholder` es el i18n del texto por defecto.
 
 - [ ] **Step 4: i18n**
 
-`es.json` y `en.json`: `styles.previewLabel` ("Vista previa del estilo" / "Style preview"), `styles.previewTextPlaceholder` ("Texto de ejemplo" / "Sample text").
+`es.json` y `en.json`: `styles.previewLabel` ("Vista previa del estilo" / "Style preview"), `styles.previewTextPlaceholder` ("Texto de ejemplo" / "Sample text"), `assExport.sampleText` ("Texto de ejemplo" / "Sample text") — esta última es el fallback en App cuando no hay caption bajo el playhead.
 
 - [ ] **Step 5: Verificar (Review Focus #1 y #2)**
 
@@ -455,6 +458,7 @@ El `<select>` de alineación (StylesPanel.tsx:285-297) se reemplaza por una matr
 **Files:**
 - Modify: `src/components/StylesPanel.tsx`
 - Modify: `src/App.css` (`.assAlignGrid`, `.assAlignBtn`, `.assAlignBtn.activo`)
+- Modify: `src/App.tsx` (guard de teclado en 1510-1516, **solo si** el Step 4 lo justifica)
 
 **Interfaces:**
 - Consumes: `StylePreview` de la Task 4.
