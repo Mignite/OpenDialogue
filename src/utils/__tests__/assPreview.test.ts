@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { estiloLineaPreview, estiloCajaPreview } from "../assPreview";
-import { DEFAULT_PRESET_ASS, ASS_EM_PREVIEW } from "../constants";
+import { DEFAULT_PRESET_ASS } from "../constants";
 import type { PresetAss } from "../../types";
 
 const P = (over: Partial<PresetAss> = {}): PresetAss => ({ ...DEFAULT_PRESET_ASS, ...over });
@@ -9,7 +9,8 @@ const rec = { left: 10, top: 20, width: 600, height: 340 };
 describe("estiloLineaPreview", () => {
   it("escala el tamaño con ASS_EM_PREVIEW (celda ASS vs em CSS)", () => {
     const s = estiloLineaPreview(P({ fontsize: 48 }), 1);
-    expect(s.fontSize).toBeCloseTo(48 * ASS_EM_PREVIEW);
+    // Literal 48 * 0.85: si alguien toca ASS_EM_PREVIEW este test debe fallar.
+    expect(s.fontSize).toBeCloseTo(40.8);
   });
   it("el borde escala pero nunca baja de 1px", () => {
     expect(estiloLineaPreview(P({ outline: 0 }), 0.1).textShadow).toContain("1px");
@@ -37,6 +38,20 @@ describe("estiloCajaPreview", () => {
     const s = estiloCajaPreview(P({ alignment: 2, marginV: 40 }), rec, 0.5);
     expect(s.paddingBottom).toBe(20);
     expect(s.paddingTop).toBeUndefined();
+  });
+  it("alineación alta aplica paddingTop escalado, no paddingBottom", () => {
+    const s = estiloCajaPreview(P({ alignment: 8, marginV: 40 }), rec, 0.5);
+    expect(s.paddingTop).toBe(20);
+    expect(s.paddingBottom).toBeUndefined();
+  });
+  it("los márgenes laterales escalan con la escala", () => {
+    const s = estiloCajaPreview(
+      P({ alignment: 2, marginL: 10, marginR: 30 }),
+      rec,
+      0.5,
+    );
+    expect(s.paddingLeft).toBe(5);
+    expect(s.paddingRight).toBe(15);
   });
   it("alignment 5 (medio) no aplica marginV arriba ni abajo", () => {
     const s = estiloCajaPreview(P({ alignment: 5, marginV: 40 }), rec, 1);
