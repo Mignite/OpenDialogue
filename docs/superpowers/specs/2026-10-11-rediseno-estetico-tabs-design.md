@@ -223,6 +223,11 @@ Los tres efectos de `estiloCajaPreview` son los que hoy están hardcodeados en
 
 - `vertical`: `al >= 7 → top`, `al >= 4 → middle`, si no `bottom`
 - `horizontal`: `1|4|7 → left`, `3|6|9 → right`, si no `center`
+
+O sea: 1 abajo-izq, 2 abajo-centro, 3 abajo-der, 4 medio-izq, 5 medio-centro,
+6 medio-der, 7 arriba-izq, 8 arriba-centro, 9 arriba-der — la disposición del
+numpad, exactamente como lo confirma `es.json`/`en.json` (`assExport.align_7` =
+"7 Arriba izq." / "7 Top left").
 - el padding vertical aplica `marginV` **solo** en la banda correspondiente
   (`paddingTop` si top, `paddingBottom` si bottom); en `middle` no se aplica
   ninguno. Es como funciona libass y es fácil de equivocar al reimplementarlo.

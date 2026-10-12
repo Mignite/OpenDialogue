@@ -335,10 +335,12 @@ describe("estiloCajaPreview", () => {
     expect(s.justifyContent).toBe("center");
     expect(s.alignItems).toBe("flex-end");
   });
-  it("alignment 7 = arriba al centro", () => {
+  it("alignment 7 = arriba a la izquierda", () => {
+    // OJO: 7 es top-LEFT en el numpad de ASS, no top-center. La matriz de
+    // flechas (Task 5) lo pone arriba-izq por esto mismo.
     const s = estiloCajaPreview(P({ alignment: 7 }), rec, 1);
     expect(s.alignItems).toBe("flex-start");
-    expect(s.justifyContent).toBe("center");
+    expect(s.justifyContent).toBe("flex-start");
   });
   it("alignment 1 = abajo a la izquierda", () => {
     expect(estiloCajaPreview(P({ alignment: 1 }), rec, 1).justifyContent).toBe("flex-start");
