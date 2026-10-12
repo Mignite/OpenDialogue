@@ -2,7 +2,9 @@
 
 Fecha: 2026-10-11
 Estado: aprobado por el usuario (secciones de diseño presentadas en chat)
-Alcance: **solo diseño**. Cero cambios de arquitectura, cero features nuevas.
+Alcance: **diseño + un cambio de modelo de color**. §6 elimina `Hablante.color`
+como fuente de verdad — es la única sección que toca lógica de datos, y existe
+porque `Hablante.color` nunca llegaba al archivo exportado.
 
 ---
 
@@ -29,7 +31,8 @@ no deben colarse "de paso":
 | Badge de FPS / "SMPTE DROP" | El FPS no está disponible sin ffprobe, que ya no es requisito |
 | `LATENCIA: 0 ms` | Dato inventado |
 | Métrica de cps | Feature, no diseño — el usuario la descartó |
-| Presets `.ass` como estado del proyecto | `--accent` de mostaza **no** se propaga a `PALETA` |
+| Presets `.ass` como estado del proyecto | `--accent` de mostaza **no** se propaga a los hablantes; el color del timeline viene del preset (§6) |
+| Migrar los `Hablante.color` guardados a presets | Imposible sin inventar N presets nuevos. Fuera de alcance — ver Riesgo en §9 |
 
 ## 3. Tokens
 
@@ -109,7 +112,7 @@ capas de superficie que el modelo actual ya usa)
 
 Sin cambios. Se conserva la pila actual: Space Grotesk (display), Inter (body),
 JetBrains Mono (datos). La dirección "técnica" la produce el **uso** (mayúsculas
-con `letter-spacing` en labels-structured, mono en todo dato numérico), no un
+con `letter-spacing` en los labels estructurados, mono en todo dato numérico), no un
 cambio de familia.
 
 **Decisión sobre densidad:** el estudio dibuja todo a `13px` base; la app está en
@@ -169,9 +172,15 @@ deseable: los `rowRefs` de la lista virtualizada se liberan al cambiar de tab.
 ### 4.4 Paneo Hablantes
 
 `SpeakersPanel` **sin** la envoltura `.speakersAccordion`. Pierde las props
-`panelAbierto` y `onTogglePanel`. Se conserva todo lo demás: el color con picker,
-el nombre, la tecla, el select de preset con su `title`, el botón de eliminar y
-`onCommit` en `onFocus` (patrón de undo del proyecto).
+`panelAbierto` y `onTogglePanel`, y con §6 pierde además el `<input type="color">`
+— el swatch queda como elemento decorativo leyendo el color derivado.
+
+Se conservan el nombre, la tecla, el select de preset con su `title`, el botón de
+eliminar y `onCommit` en `onFocus` (patrón de undo del proyecto).
+
+> El swatch pasa a ser **informativo, no editable**: muestra el color que el
+> hablante va a tener de verdad. Como ya no hay nada que editar, un `<input
+> type="color">` ahí sería un control que miente sobre lo que hace.
 
 ### 4.5 Paneo Estilos
 
@@ -294,7 +303,120 @@ tarde.
 `StylesPanel` se reescribe pero **no cambia su contrato**: sigue recibiendo
 `presets` y `onGuardar`. El debounce y el flush siguen en el hook, no en el panel.
 
-## 6. Corrección sobre el estudio
+## 6. El color del hablante se deriva del preset (fin de `Hablante.color`)
+
+### 6.1 El hallazgo
+
+`Hablante.color` **nunca llega al archivo `.ass`**. Todo el camino de color en el
+export resuelve por preset:
+
+```
+presetDe(hablanteId) → lineaStyle()  (ass.ts:193)
+                     → overridesDeLinea()  (ass.ts:130-131)
+                     → línea overlay  (ass.ts:475)
+                     → preset.color  (ass.ts:158, 412)
+```
+
+`buildAss` recibe `hablante: Hablante[]` y **solo lee `h.id`**. El campo describe
+un color que el formato de salida no tiene concepto.
+
+Consecuencia observable hoy: se puede tener H1 en coral en el panel de hablantes
+y que el `.ass` salga blanco. **La UI afirma algo que el archivo no dice.** Es la
+misma clase de bug que el flag `dirty`/`saved` desincronizado ya corregido en el
+2026-10-10: estado local que miente sobre el destino real.
+
+### 6.2 Resolución
+
+El color de un hablante **se deriva del preset que tiene asignado**. Sin preset,
+blanco.
+
+```ts
+colorHablante(h: Hablante, presets: PresetAss[]): string {
+  return presets.find(p => p.id === h.presetId)?.color ?? "#FFFFFF";
+}
+```
+
+Una sola fuente de verdad. La UI y el `.ass` no pueden discrepar porque leen lo
+mismo.
+
+`Hablante.color` **permanece en `types.ts` y en el `struct` de Rust**, sin leer.
+No se borra: los `.cdp` guardados lo traen en el JSON y quitarlo del `struct`
+rompería la deserialización de proyectos existentes. Queda como campo muerto,
+documentado como tal.
+
+### 6.3 Qué se elimina
+
+| Pieza | Dónde | Nota |
+|---|---|---|
+| `PALETA` | `constants.ts:17-27` | Muere. Solo la usaban `autosubs.ts:92` y `useHablantes.ts:52` para colorear hablantes nuevos |
+| `cambiarColorHablante` | `useHablantes.ts:72` | Sin consumidor |
+| `<input type="color">` | `SpeakersPanel.tsx:96-104` | El swatch queda, decorativo, leyendo el color derivado. Ver §4.4 |
+| `normalizarColor` | `SpeakersPanel.tsx:18-28` | Era solo para el `<input type="color">` |
+| Test de convención PALETA | `autosubs.test.ts:94-109` | Se reescribe: verifica que el hablante nuevo no trae color, no que toma PALETA |
+
+**El test de roundtrip se mantiene** (`ass.test.ts:444,641`): `Hablante.color`
+sigue viajando en el JSON, solo dejó de leerse en la UI.
+
+### 6.4 Consecuencia aceptada: instalación nueva monocromática
+
+`DEFAULT_PRESET_ASS.color = "#FFFFFF"` (constants.ts:55). Una instalación nueva
+tiene un preset blanco → **todos los carriles blancos**, distinguidos por
+posición y por el label del carril, no por color.
+
+El color-coding pasa a ser algo que se **arma a propósito**: un preset por
+hablante. Es el mismo trabajo que el `.ass` exige igual, así que no se pierde
+capacidad real — pero cambia el flujo de quien hoy marca 9 hablantes con los
+atajos 1-9 sin tocar jamás Estilos.
+
+**Decisión explícita del usuario**, consciente del costo.
+
+### 6.5 El color entra en los panes
+
+`trackRows` (App.tsx:2055-2069) cambia de `color: h.color` a
+`color: colorHablante(h, presetsAss)`. Como `trackRows` es `useMemo` sobre
+`[carrilesAgrupados, hablantes]`, **suma `presetsAss` a las deps**: editar el
+color de un preset tiene que repintar los carriles. Es el mismo bug de deps que
+se corrigió en el slice 3 con `proyecto` (§ Riesgo del dirty-effect).
+
+Los tres consumidores restantes del color:
+
+| Consumidor | Cambio |
+|---|---|
+| `CaptionList.tsx:106` `borderLeftColor` | Color derivado |
+| `CaptionList.tsx:117` `captionSpeakerTag` | Color derivado |
+| `App.tsx:2405` dot del chip del editor | Color derivado |
+
+### 6.6 El borde del clip se tiñe
+
+Hoy: `background: color-mix(in srgb, ${color} 18%, transparent)` +
+`border: 1px solid ${color}` (App.tsx:2664-2665).
+
+Con `#FFFFFF` eso deja un **borde blanco sólido de 1px en cada clip** — más
+brillante que el playhead sobre negro, y en una UI que se define por monolítica
+eso es exactamente lo contrario.
+
+```
+background: color-mix(in srgb, ${color} 18%, transparent);
+border:     1px solid color-mix(in srgb, ${color} 45%, transparent);
+```
+
+El 45% mantiene el borde legible sin que el blanco grite. El borde del clip
+seleccionado pasa a `2px solid var(--accent)` para que la selección se lea por
+encima del tinte.
+
+### 6.7 El carril "—" no se toca
+
+`{ label: "—", color: "#4a4853" }` (App.tsx:2059) es **nadie asignado**, no
+*alguien sin preset*. Si pasa a blanco se vuelve indistinguible de un hablante
+real con el preset default. Se queda en gris neutro `#3A3E48`.
+
+### 6.8 Qué se regresa del §8
+
+El riesgo de §8 sobre H4/H8 cerca del mostaza **desaparece**: la `PALETA` no
+llega al timeline. Solo quedan H4/H8 como colores de hablante en el panel, que ya
+no compiten con nada.
+
+## 7. Corrección sobre el estudio
 
 `IN` / `OUT` se quedan como **inputs numéricos editables**
 (App.tsx:2333-2372), no como `<b>` de solo lectura. Existen desde el commit
@@ -304,16 +426,16 @@ input numérico"*.
 Único agregado: `DUR` como lectura a la derecha de los dos (`fin - inicio`, 2
 decimales, vía `formatTime`). Es información, no un tercer input.
 
-## 7. Verificación
+## 8. Verificación
 
 **El proyecto no tiene jsdom ni testing-library.** Los ~250 tests vitest pasan
 igual si el drag del timeline o el tab se rompen. Eso significa que:
 
 - `npm run build` (typecheck) y `npm test` son **puertas de forma, no de comportamiento**.
-- La verificación real de tabs, numpad, preview y contraste es **manual, sobre la
-  app corriendo**.
+- La verificación real de tabs, numpad, preview, contraste y colores derivados es
+  **manual, sobre la app corriendo**.
 
-### 7.1 Automático
+### 8.1 Automático
 
 ```bash
 npm run build     # typecheck + vite build
@@ -322,10 +444,14 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 ```
 
-Los tests de `assPresets` (nombreLibre, esPresetAss) y `ass` deben seguir verdes
-sin modification: el contrato de `PresetAss` no cambia.
+`assPresets` (nombreLibre, esPresetAss) y `ass` deben seguir verdes sin
+modificación: el contrato de `PresetAss` no cambia.
 
-### 7.2 Manual (obligatorio)
+**Tests que sí cambian** (§6.3): `autosubs.test.ts:94-109` — la convención de
+PALETA desaparece. Se reescribe para verificar que `agregarHablante` **no** asigna
+color.
+
+### 8.2 Manual (obligatorio)
 
 1. **Trampa conocida:** un dev server viejo en el puerto 1420 devuelve HTTP 200
    con el bundle **viejo**. Matar cualquier proceso en 1420 antes de arrancar.
@@ -342,11 +468,31 @@ sin modification: el contrato de `PresetAss` no cambia.
    acento a simple vista.
 9. El video tiene marco visible sobre el fondo.
 
-## 8. Riesgos
+**Derivación de color (§6) — la que más fácil falla en silencio:**
+
+10. Cambiar `preset.color` repinta **los carriles** sin recargar. Si no, es el
+    bug de deps de `useMemo` (§6.5) y está mirando el memo viejo.
+11. Un hablante **con** preset de color muestra el color del preset en el carril,
+    el tag de la lista y el chip del editor.
+12. Un hablante **sin** preset muestra blanco en los tres lugares.
+13. El carril `"—"` (sin asignar) sigue gris y **no** se confunde con un hablante
+    blanco.
+14. Los clips blancos **no** tienen borde blanco sólido: el tinte al 45% se lee
+    como superficie, no como contorno.
+15. Abrir un proyecto viejo: los hablantes con colores guardados pero sin preset
+    salen blancos, sin crash. El campo viaja en el JSON pero no se lee.
+16. Exportar un `.ass` y abrirlo: **el color del texto de cada hablante coincide
+    con el color de su carril en el timeline**. Ese es el criterio de aceptación
+    de toda la sección — la UI y el archivo dicen lo mismo.
+
+## 9. Riesgos
 
 | Riesgo | Mitigación |
 |---|---|
-| Extraer `estiloCajaPreview` cambia el render del video | Es una **extracción** pura, no una reescritura. El diff se lee contra `App.tsx:1991-2013`. §7.2.5 es el test |
+| Extraer `estiloCajaPreview` cambia el render del video | Es una **extracción** pura, no una reescritura. El diff se lee contra `App.tsx:1991-2013`. §8.2.5 es el test |
 | `CaptionList` desmontada pierde la posición de scroll al volver al tab | Aceptado. El follow-scroll del caption activo lo reposiciona en el primer render |
-| Mostaza sobre clips de hablante | H4 (`#E8C34E`) y H8 (`#F67E2C`) están en la misma familia. Se **documenta** y no se toca `PALETA`: el acento no se propaga a los hablantes |
+| Editar `preset.color` no repinta los carriles | `presetsAss` entra a las deps del `useMemo` de `trackRows` (§6.5). Test manual §8.2.10 |
+| Un proyecto viejo pierde los colores que el usuario eligió a mano | **Riesgo real, aceptado.** No hay migración posible sin contradecir el modelo: si se preservara el color guardado, la UI volvería a mentir sobre el `.ass`. El color se recupera asignando un preset con ese color |
+| Instalar y no saber por qué el timeline es blanco | §6.4 lo documenta y el §8.2.12 lo verifica. El preset con color se crea desde el tab Estilos, que ahora es visible en la tab bar |
 | 5 tokens nuevos/renombrados rompen reglas huérfanas | `borderBright`, `surfaceHover`, `textHint` se agregan; `accent`/`warn`/`danger` cambian de valor. Buscar usos al final |
+| `PALETA` queda importada en un archivo y `no-unused` lo-take en clippy | TS no falla por imports muertos en el build de Vite, pero `cargo clippy` sí es estricto con el lado Rust. Buscar referencias a `PALETA` antes de borrar |
