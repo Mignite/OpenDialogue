@@ -429,8 +429,10 @@ vuelve a tener un contorno de 1px en cada clip — lo que se vino a evitar. El
 coral original no era tenue: era de **saturación media**. Un gris claro es claro
 de verdad.
 
-`#6E7480` es el mismo valor que quedó en `--textFaint` (§3.3): un solo número
-para borde de superficie y texto terciario.
+`#6E7480` es un valor **propio del borde de clip**, no un token: no coincide con
+`--textFaint` (`#737B8A`) ni con ningún otro del §3.3. Se escribe literal en
+`App.tsx` porque el borde del clip necesita exactamente esta separación contra
+el relleno `#2E2E2E`, y ningún token del set tiene ese número.
 
 #### Selección
 
