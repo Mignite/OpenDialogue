@@ -13,9 +13,21 @@ interface Props {
   onGuardar: (presets: PresetAss[]) => void;
 }
 
-// Solo el valor; la etiqueta sale de i18n (estaban hardcodeadas en español y
-// se veían también con la app en inglés).
-const ALINEACIONES: number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+// Orden visual de arriba hacia abajo: la fila superior es alineación alta
+// (7-9), la inferior es baja (1-3), como libass piensa la Alignment.
+const ORDEN_ALINEACION: number[] = [7, 8, 9, 4, 5, 6, 1, 2, 3];
+
+// Trazos de las flechas (el centro, 5, no lleva: no apunta a ninguna esquina).
+const FLECHAS_ALINEACION: Record<number, string> = {
+  7: "M12.5 12.5L4 4M4 9V4h5",
+  8: "M8 13V3M4.5 6.5L8 3l3.5 3.5",
+  9: "M3.5 12.5L12 4M7 4h5v5",
+  4: "M13 8H3M6.5 4.5L3 8l3.5 3.5",
+  6: "M3 8h10M9.5 4.5L13 8l-3.5 3.5",
+  1: "M12.5 3.5L4 12M9 12H4V7",
+  2: "M8 3v10M4.5 9.5L8 13l3.5-3.5",
+  3: "M3.5 3.5L12 12M12 7v5H7",
+};
 
 const CAMPOS_NUMERO: (keyof PresetAss)[] = [
   "fontsize",
@@ -98,6 +110,28 @@ function StylesPanel({ presets, panelAbierto, textoInicial, onTogglePanel, onGua
       <path d="M3 6l5 5 5-5" />
     </svg>
   );
+
+  // Glifo de la matriz de alineación: SVG inline currentColor, nunca
+  // carácter Unicode (las flechas tipográficas se renderizan distinto según
+  // la fuente y romperían la grilla).
+  const glifoAlineacion = (valor: number) =>
+    valor === 5 ? (
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="8" cy="8" r="2.6" fill="currentColor" />
+      </svg>
+    ) : (
+      <svg
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d={FLECHAS_ALINEACION[valor]} />
+      </svg>
+    );
 
   return (
     <div className="speakersAccordion">
@@ -286,16 +320,32 @@ function StylesPanel({ presets, panelAbierto, textoInicial, onTogglePanel, onGua
               ))}
               <div className="assField">
                 <label>{t("assExport.field_alignment")}</label>
-                <select
-                  value={sel.alignment}
-                  onChange={(e) => editar("alignment", Number(e.target.value))}
+                <div
+                  className="assAlignGrid"
+                  role="group"
+                  aria-label={t("assExport.field_alignment")}
                 >
-                  {ALINEACIONES.map((valor) => (
-                    <option key={valor} value={valor}>
-                      {t(`assExport.align_${valor}`)}
-                    </option>
+                  {ORDEN_ALINEACION.map((valor) => (
+                    <button
+                      key={valor}
+                      type="button"
+                      className={
+                        "assAlignBtn" +
+                        (sel.alignment === valor ? " activo" : "")
+                      }
+                      aria-pressed={sel.alignment === valor}
+                      aria-label={t(`assExport.align_${valor}`)}
+                      // preventDefault para que el click no robe el foco: sin
+                      // esto el botón quedaría focalizado y la tecla siguiente
+                      // la leería el handler global (p. ej. → = seek +5s).
+                      // Mismo patrón que el caret del selector de fuentes.
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => editar("alignment", valor)}
+                    >
+                      {glifoAlineacion(valor)}
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
               <div className="assField">
                 <label>{t("assExport.field_color")}</label>

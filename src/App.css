@@ -1813,6 +1813,45 @@ button.primary:hover {
   font-style: italic;
 }
 
+/* Matriz de alineación .ass: grilla 3x3 de flechas en el orden en que libass
+   piensa la Alignment (arriba 7-9, medio 4-6, abajo 1-3). */
+.assAlignGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 30px);
+  gap: 2px;
+}
+
+.assAlignBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--textFaint);
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+
+.assAlignBtn:hover {
+  background: var(--surfaceHover);
+  color: var(--text);
+}
+
+.assAlignBtn.activo {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.assAlignBtn svg {
+  width: 14px;
+  height: 14px;
+}
+
 .assPreviewWrap {
   border-top: 1px solid var(--border);
   padding-top: 12px;
