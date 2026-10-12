@@ -19,7 +19,6 @@
   "app.editor.editing": "Editing",
   "app.editor.noSpeaker": "no speaker assigned",
   "app.editor.placeholder": "No subtitle at this position",
-  "app.editor.hint": "E to edit · Enter to exit (resumes play/pause) · Shift+Enter new line · Alt+←/→ jump between subtitles · A to add · ↑/↓ cycle simultaneous · Delete to remove selected subtitle",
   "app.editor.newFragment": "+ New fragment",
   "app.timeline.analyzing": "Analyzing audio... {seconds}s processed",
   "app.timeline.zoom": "Zoom: {seconds}s · Shift+scroll zoom · scroll to navigate · drag edges with snap",

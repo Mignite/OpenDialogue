@@ -19,7 +19,6 @@
   "app.editor.editing": "Editando",
   "app.editor.noSpeaker": "sin hablante asignado",
   "app.editor.placeholder": "Sin subtítulo en este punto del video",
-  "app.editor.hint": "E para editar · Enter para salir (retoma play/pausa anterior) · Shift+Enter salto de línea · Alt+←/→ salta entre subtítulos · A para añadir · ↑/↓ cambiar entre simultaneos · Delete para eliminar subtitulo seleccionado",
   "app.editor.newFragment": "+ Nuevo fragmento",
   "app.timeline.analyzing": "Analizando audio... {seconds}s procesados",
   "app.timeline.zoom": "Zoom: {seconds}s · Shift+scroll zoom · scroll navegar · arrastrar bordes con snap",

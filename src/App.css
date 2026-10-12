@@ -729,13 +729,6 @@ body {
   color: var(--textFaint);
 }
 
-.captionEditorHint {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--textFaint);
-  margin-top: 4px;
-}
-
 .addFragmentBtn {
   margin-top: 8px;
   width: 100%;

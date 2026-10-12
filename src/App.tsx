@@ -2415,9 +2415,6 @@ function App() {
               onBlur={handleEditorBlur}
               onKeyDown={handleEditorKeyDown}
             />
-            <div className="captionEditorHint">
-              {t("app.editor.hint")}
-            </div>
             <button className="addFragmentBtn" onClick={agregarFragmento}>
               {t("app.editor.newFragment")}
             </button>
