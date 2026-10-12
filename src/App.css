@@ -1010,6 +1010,53 @@ body {
   padding-top: 6px;
 }
 
+/* ===== PREVIEW EN VIVO DEL PRESET (StylesPanel) ===== */
+/* El stage renderiza con estiloLineaPreview/estiloCajaPreview — el mismo
+   código que el overlay sobre el video. El display:flex del stage lo pone
+   esta clase (igual que .videoSubOverlay); la alineación y los márgenes
+   vienen del style inline. */
+.stylePreviewBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.stylePreviewLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--textFaint);
+}
+
+.stylePreviewInput {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 5px 7px;
+  width: 100%;
+}
+
+.stylePreviewInput:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.stylePreviewStage {
+  background: #000;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  display: flex;
+  overflow: hidden;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
 /* Wordmark mínima en la barra de estado: firma sin espacio muerto. */
 .wordmark {
   display: inline-flex;

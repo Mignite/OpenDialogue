@@ -3,10 +3,12 @@ import type { PresetAss } from "../types";
 import { useLocale } from "../i18n";
 import { nuevoPreset, nombreLibre } from "../utils/assPresets";
 import { fuentesDisponibles, fuenteResuelve, familiaCss } from "../utils/fuentes";
+import StylePreview from "./StylePreview";
 
 interface Props {
   presets: PresetAss[];
   panelAbierto: boolean;
+  textoInicial: string;
   onTogglePanel: () => void;
   onGuardar: (presets: PresetAss[]) => void;
 }
@@ -28,7 +30,7 @@ const CAMPOS_NUMERO: (keyof PresetAss)[] = [
  *  puede editar en cualquier momento, sin subtítulos ni export de por medio.
  *  Todo cambio se auto-guarda (nivel usuario, fuera del undo del proyecto):
  *  no hay borrador ni confirmación de descarte posibles. */
-function StylesPanel({ presets, panelAbierto, onTogglePanel, onGuardar }: Props) {
+function StylesPanel({ presets, panelAbierto, textoInicial, onTogglePanel, onGuardar }: Props) {
   const { t } = useLocale();
   const [seleccionId, setSeleccionId] = useState<string>(presets[0]?.id ?? "");
   const [fuentes, setFuentes] = useState<string[]>([]);
@@ -313,6 +315,7 @@ function StylesPanel({ presets, panelAbierto, onTogglePanel, onGuardar }: Props)
               </div>
             </div>
           )}
+          {sel && <StylePreview preset={sel} textoInicial={textoInicial} />}
         </div>
       )}
     </div>

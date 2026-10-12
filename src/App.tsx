@@ -2426,6 +2426,7 @@ function App() {
           <StylesPanel
             presets={ass.presetsAss}
             panelAbierto={panelEstilosAbierto}
+            textoInicial={currentCaption?.texto ?? t("assExport.sampleText")}
             onTogglePanel={togglePanelEstilos}
             onGuardar={ass.persistirPresets}
           />
