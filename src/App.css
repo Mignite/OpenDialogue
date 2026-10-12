@@ -48,30 +48,34 @@
      Sin esto WebKitGTK los pinta claros y los popups cantan en blanco. */
   color-scheme: dark;
 
-  /* neutros (precisión fría) */
-  --bg: #0e0f11;
-  --surface: #131416;
-  --surface2: #16181b;
-  --surface3: #1a1c1f;
-  --border: #1e2024;
-  --borderStrong: #2c2f36;
-  --text: #e8eaed;
-  --textDim: #9a9ea6;
-  --textFaint: #55585e;
+  /* neutros (negro puro; los escalones de superficie dan la profundidad) */
+  --bg: #000000;
+  --surface: #08090C;
+  --surface2: #101318;
+  --surface3: #191D24;
+  --surfaceHover: #1F242C;
+  --border: #1C212B;
+  --borderStrong: #2A313D;
+  --borderBright: #3A4353;
+  --text: #EDEDF0;
+  --textDim: #9AA1AE;
+  --textFaint: #737B8A;
+  --textHint: #5A6272;
 
-  /* acentos: 1 acción + 2 semánticos + 1 aviso */
-  --accent: #e85d4e;
-  --accentSoft: rgba(232, 93, 78, 0.14);
+  /* dial cálido: mostaza (acción) → naranja quemado (aviso) → rojo (peligro).
+     --info y --success quedan fuera del dial. */
+  --accent: #D4A017;
+  --accentSoft: rgba(212, 160, 23, 0.14);
   --info: #4ea8e8;
   --success: #7ed957;
-  --warn: #e8c34e;
-  --danger: #f87171;
+  --warn: #E8683C;
+  --danger: #FF4D4D;
 
-  /* radios (precisión fría: aristas contenidas) */
-  --r-sm: 5px;
-  --r-md: 6px;
-  --r-lg: 6px;
-  --r-xl: 8px;
+  /* radios (precisión técnica: aristas casi rectas) */
+  --r-sm: 2px;
+  --r-md: 2px;
+  --r-lg: 2px;
+  --r-xl: 2px;
 
   /* tipos */
   --font-display: "Space Grotesk", "Inter", "Segoe UI", sans-serif;
@@ -238,10 +242,14 @@ body {
   flex-shrink: 0;
 }
 
-/* Contenedor para el live preview de subtítulos sobre el video */
+/* Contenedor para el live preview de subtítulos sobre el video.
+   Con --bg en negro puro, el video necesita un asiento propio: sin esto la
+   imagen se derrama y se pierde el marco (spec 3.5). */
 .videoWrap {
   position: relative;
   flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
 }
 
 .videoSubOverlay {
@@ -489,7 +497,7 @@ body {
 }
 
 .clip.selected {
-  outline: 1.5px solid var(--text);
+  outline: 1.5px solid var(--accent);
   outline-offset: -1.5px;
 }
 
