@@ -21,7 +21,6 @@ import {
   EDGE_TRIGGER,
   NEW_MARGIN,
   LERP_FACTOR,
-  ASS_EM_PREVIEW,
   VELOCIDADES_REPRODUCCION,
 } from "./utils/constants";
 import { formatTime, parseTimeInput } from "./utils/time";
@@ -48,6 +47,7 @@ import {
 } from "./utils/selection";
 import { picoEnRango } from "./utils/audioIslands";
 import { lineasOverlayActivas } from "./utils/ass";
+import { estiloLineaPreview, estiloCajaPreview } from "./utils/assPreview";
 import { cargarAjustes, guardarAjustes, type Ajustes } from "./utils/ajustes";
 
 import { useAssEstilos } from "./hooks/useAssEstilos";
@@ -1986,49 +1986,8 @@ function App() {
     };
   })();
   const overlayEscala = overlayRecuadro?.escala ?? 0.3;
-  const estiloLineaOverlay = (preset: PresetAss) => {
-    // Sin clamp: en preview chico o grande el tamaño debe ser el real
-    // escalado, como en el render. ASS_EM compensa celda ASS vs em CSS.
-    const px = preset.fontsize * overlayEscala * ASS_EM_PREVIEW;
-    const borde = Math.max(1, preset.outline * overlayEscala);
-    return {
-      fontFamily: `"${preset.fontname}", sans-serif`,
-      fontSize: px,
-      color: preset.color,
-      textShadow: `0 0 ${borde}px ${preset.outlineColor}, 0 1px 2px rgba(0,0,0,.8)`,
-    } as const;
-  };
-  const overlayStyle = (() => {
-    if (!overlayBase) return undefined;
-    const al = overlayBase.alignment;
-    const vertical = al >= 7 ? "top" : al >= 4 ? "middle" : "bottom";
-    const horizontal =
-      al === 1 || al === 4 || al === 7 ? "left"
-      : al === 3 || al === 6 || al === 9 ? "right"
-      : "center";
-    return {
-      // Caja = video visible (no el elemento con letterbox); sin recuadro,
-      // vale el inset:0 del CSS. Márgenes del preset escalados, no % fijos.
-      ...(overlayRecuadro
-        ? {
-            left: overlayRecuadro.left,
-            top: overlayRecuadro.top,
-            width: overlayRecuadro.width,
-            height: overlayRecuadro.height,
-          }
-        : {}),
-      justifyContent:
-        horizontal === "left" ? "flex-start"
-        : horizontal === "right" ? "flex-end"
-        : "center",
-      textAlign: horizontal as "left" | "center" | "right",
-      alignItems: vertical === "top" ? "flex-start" : vertical === "middle" ? "center" : "flex-end",
-      paddingLeft: overlayBase.marginL * overlayEscala,
-      paddingRight: overlayBase.marginR * overlayEscala,
-      paddingBottom: vertical === "bottom" ? overlayBase.marginV * overlayEscala : undefined,
-      paddingTop: vertical === "top" ? overlayBase.marginV * overlayEscala : undefined,
-    } as const;
-  })();
+  const estiloLineaOverlay = (p: PresetAss) => estiloLineaPreview(p, overlayEscala);
+  const overlayStyle = overlayBase ? estiloCajaPreview(overlayBase, overlayRecuadro, overlayEscala) : undefined;
 
   // Follow-scroll de la lista virtual: mantiene visible el caption activo.
   // scrollIntoView con "nearest" no mueve nada si la fila ya es visible, así
