@@ -246,7 +246,7 @@ Importar `colorHablante` en `AssExportModal.tsx`. Ya tiene `presets` en scope: n
 
 `Hablante.color` **se queda** en `types.ts` y en el `struct Hablante` de Rust (`lib.rs:148`): los `.cdp` guardados lo traen en el JSON y borrarlo rompe la deserialización. Queda como campo muerto, sin leer.
 
-- [ ] **Step 9: Reescribir el test de convención PALETA**
+- [ ] **Step 11: Reescribir el test de convención PALETA**
 
 `src/utils/__tests__/autosubs.test.ts:94-109` — los tres tests que verifican que el hablante nuevo tome un color de `PALETA` y que la paleta tenga 9 colores distintos **se borran**. En su lugar, un test que fija el comportamiento nuevo:
 
@@ -260,12 +260,12 @@ it("el hablante nuevo nace sin preset, y su color guardado es blanco", () => {
 
 Y borrar el import de `PALETA` de la línea 8 del test.
 
-- [ ] **Step 10: Correr toda la suite**
+- [ ] **Step 12: Correr toda la suite**
 
 Run: `npm test`
 Expected: PASS. Si `ass.test.ts:444` o `:641` fallan, es porque usan `color` en fixtures — esos **deben seguir pasando** porque el campo sigue viajando en el JSON; solo dejó de leerse en la UI.
 
-- [ ] **Step 11: Verificar manualmente (Review Focus de la spec §6)**
+- [ ] **Step 13: Verificar manualmente (Review Focus de la spec §6)**
 
 Con la app corriendo y un proyecto con hablantes:
 - Editar el color de un preset en el tab Estilos → **los carriles del timeline se repintan sin recargar**.
@@ -275,7 +275,7 @@ Con la app corriendo y un proyecto con hablantes:
 - **Abrir un proyecto viejo** (con colores guardados): los hablantes salen blancos, sin crash.
 - Exportar un `.ass`, abrirlo en un editor de texto: el color de cada hablante **coincide con el color de su carril**. Ese es el criterio de aceptación de la sección entera.
 
-- [ ] **Step 12: Commit**
+- [ ] **Step 14: Commit**
 
 ```bash
 git add src/utils/colorHablante.ts src/utils/__tests__/colorHablante.test.ts \
