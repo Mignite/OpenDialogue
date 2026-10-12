@@ -29,8 +29,9 @@ Cinco condiciones que el spec implica pero que ningún test unitario va a cubrir
 1. **`preview` y overlay del video no pueden divergir.** Si el texto del preview del editor se ve más grande o más chico que el del video, §5.1 no compartió el código. Es el criterio de aceptación del rediseño.
 2. **Editar `preset.fontsize` debe actualizar el preview sin reiniciar** — un `useState` stale o un `key` mal puesto deja el preview congelado.
 3. **El tab activo no debe perder la selección al volver.** Volver a Subtítulos después de estar en Estilos tiene que mostrar la misma fila activa.
-4. **El filtro de búsqueda tiene que funcionar desde el tab de Subtítulos**, que es donde se mueve el `searchBox` — si el input pierde foco al cambiar de tab, el término se queda a medias.
-5. **`ASS_EM_PREVIEW` sin tocar** — el preview sobre el video se ve idéntico antes y después del refactor. Cualquier cambio de tamaño es un bug.
+4. **Los botones de la matriz de alineación no pueden robar el foco.** El guard global de teclado (App.tsx:1510-1516) corta para `INPUT`/`TEXTAREA`/`SELECT` pero no para `BUTTON`, así que un botón focalizado convierte la tecla siguiente en atajo global: `→` hace seek de +5s, `↓` salta de caption. Probado en Task 5 Step 5.
+5. **El filtro de búsqueda tiene que funcionar desde el tab de Subtítulos**, que es donde se mueve el `searchBox` — si el input pierde foco al cambiar de tab, el término se queda a medias.
+6. **`ASS_EM_PREVIEW` sin tocar** — el preview sobre el video se ve idéntico antes y después del refactor. Cualquier cambio de tamaño es un bug.
 
 ---
 
@@ -39,10 +40,10 @@ Cinco condiciones que el spec implica pero que ningún test unitario va a cubrir
 | Archivo | Acción | Responsabilidad |
 |---|---|---|
 | `src/App.css` | modificar | Tokens (`:root`), `PanelTabs`, borde de clip, stage de preview, `.videoWrap` |
-| `src/App.tsx` | modificar | `paneActivo`, `trackRows` con color derivado, borrar acordeones, evento de menú |
+| `src/App.tsx` | modificar | `paneActivo`, `trackRows` con color derivado, borrar acordeones, evento de menú, guard de teclado |
 | `src/components/PanelTabs.tsx` | crear | Barra de 3 tabs (browser-style) |
 | `src/components/SpeakersPanel.tsx` | modificar | Quitar acordeón + quitar `<input type="color">` |
-| `src/components/StylesPanel.tsx` | modificar | Inspector con numpad + preview embebido |
+| `src/components/StylesPanel.tsx` | modificar | Inspector con matriz de flechas + preview embebido |
 | `src/utils/assPreview.ts` | crear | `estiloLineaPreview` / `estiloCajaPreview` puros y compartidos |
 | `src/utils/__tests__/assPreview.test.ts` | crear | Tests de las dos funciones puras |
 | `src/utils/colorHablante.ts` | crear | `colorHablante(h, presets)` — la derivación |
@@ -447,39 +448,84 @@ git commit -m "estilos: preview en vivo del preset con el render compartido"
 
 ---
 
-## Task 5: Numpad de alineación y reflow del inspector
+## Task 5: Matriz de alineación con flechas
 
-El `<select>` de alineación (StylesPanel.tsx:285-297) se reemplaza por una matriz 3×3 — la forma en que libass piensa la alineación, y la única pieza del rediseño que habla el idioma del formato en vez de traducido.
+El `<select>` de alineación (StylesPanel.tsx:285-297) se reemplaza por una matriz 3×3 de flechas. Es la forma en que libass piensa la alineación: las bandas 1-3 son abajo, 4-6 medio, 7-9 arriba; las columnas izquierda/centro/derecha.
 
 **Files:**
 - Modify: `src/components/StylesPanel.tsx`
-- Modify: `src/App.css` (`.assNumpad`, `.assNumBtn`, `.assNumBtn.activo`)
+- Modify: `src/App.css` (`.assAlignGrid`, `.assAlignBtn`, `.assAlignBtn.activo`)
 
 **Interfaces:**
 - Consumes: `StylePreview` de la Task 4.
 - Produces: nada (reemplaza un control existente).
 
-- [ ] **Step 1: Reemplazar el `<select>` por la matriz**
+- [ ] **Step 1: Reemplazar el `<select>` por la matriz de flechas**
 
-Borrar el bloque `assField` de `alignment` y su `ALINEACIONES`/`t(\`assExport.align_${valor}\`)` si quedan sin uso. En su lugar, un grid 3×3 con botones `7 8 9 / 4 5 6 / 1 2 3` (el orden **de arriba hacia abajo** del numpad real: `7` arriba-izq, `1` abajo-izq).
+Borrar el bloque `assField` de `alignment`. `ALINEACIONES` sigue viva — es el `[1..9]` que mapea las claves i18n; borrar solo si al terminar no quedan referencias.
 
-Cada botón: `onClick={() => editar("alignment", n)}`, `aria-pressed={sel.alignment === n}`, `aria-label` con el nombre translated de la alineación (`assExport.align_1..9`, que ya existe en i18n). `.activo` con `background: var(--accent)`.
+La grilla, **en el orden de arriba hacia abajo** (fila superior = alineación alta):
+
+```
+↖  ↑  ↗        ← alignment 7, 8, 9
+←  ●  →        ← alignment 4, 5, 6
+↙  ↓  ↘        ← alignment 1, 2, 3
+```
+
+Cada botón: `onClick={() => editar("alignment", n)}`, `aria-pressed={sel.alignment === n}`, `aria-label` con el nombre translated (`assExport.align_1..9`, que ya existe en ambos `es.json` y `en.json` — verificado, no hay que crearlas). El glifo es un SVG inline `currentColor`, no un carácter Unicode: los emoji y los glifos de flecha se renderizan distinto según la fuente y rompen la alineación en una grilla.
+
+El centro (`●`) es alignment 5 y **no** lleva flecha: no apunta a ninguna esquina.
 
 - [ ] **Step 2: Estilo**
 
-`.assNumpad { display:grid; grid-template-columns: repeat(3, 28px); gap:2px; }` — celdas cuadradas, `--r-sm`, fondo `--surface2`, hover `--surfaceHover`.
+`.assAlignGrid { display:grid; grid-template-columns: repeat(3, 30px); gap:2px; }` — celdas cuadradas, `--r-sm`, fondo `--surface2`, hover `--surfaceHover`. `.activo { background: var(--accent); color: var(--text); }`.
 
-- [ ] **Step 3: Verificar**
+- [ ] **Step 3: Impedir que el botón robe el foco — CRÍTICO**
+
+Cada botón de la matriz lleva:
+
+```tsx
+onMouseDown={(e) => e.preventDefault()}
+```
+
+**Por qué es obligatorio y no cosmético.** El guard del teclado global (App.tsx:1510-1516) corta el handler para `INPUT`/`TEXTAREA`/`SELECT` pero **no** para `BUTTON`. Sin el `preventDefault`, hacer click en un botón lo deja focalizado, y la tecla siguiente la lee el handler global:
+
+| Botón | Tecla | Sin el fix |
+|---|---|---|
+| `↘` (alignment 3) | `→` | **seek +5s** |
+| `↓` (alignment 2) | `↓` | **salto de caption** |
+| cualquier `1`-`9` anterior | `1`-`9` | **asigna hablante H1-H9** |
+
+Es el mismo patrón que **ya usa** el caret del selector de fuentes (StylesPanel.tsx:182), con un comentario que explica por qué. No es una invención: es la solución que el proyecto ya eligió para este mismo problema.
+
+`preventDefault` en `mousedown` impide que el click mueva el foco; el botón se sigue activando por `onClick`.
+
+**Esto no arregla el caso del tabulador.** `Tab` sí enfoca botones y no pasa por `mousedown`. Un usuario que navegue solo con teclado **sí** puede disparar el atajo global después de enfocar un botón. Ver Review Focus #4 — la defensa completa es el Step 4.
+
+- [ ] **Step 4: Decidir el guard de `BUTTON` (lectura previa, no cambio a ciegas)**
+
+El guard de App.tsx:1510-1516 no cubre `BUTTON`. Agregarlo es la defensa en profundidad, pero tiene un costo que hay que medir antes:
+
+`searchToggleCase` (App.tsx:2499-2504) es un `<button>` que muestra "Aa" y alterna `coincidirMayus`. Si `BUTTON` entra al guard, **el botón deja de responder a la tecla `A`** que hoy muestra como atajo en su label.
+
+Antes de cambiar nada, confirmar en `es.json`/`en.json` si `app.search.matchCase` describe `A` como atajo. Si lo describe como atajo real, **no agregar `BUTTON` al guard** — el `preventDefault` del Step 3 es la solución suficiente para el caso del mouse, y el caso del tabulador se acepta como limitación documentada. Si solo dice "Coincidir mayúsculas", agregar `BUTTON` al guard es gratis y se hace en este step.
+
+Esta decisión se toma leyendo, no asumiendo. El implementer reporta qué encontró en el JSON y qué decidió.
+
+- [ ] **Step 5: Verificar**
 
 Run: `npm run build` → PASS.
 
-Con la app corriendo: cada una de las 9 posiciones mueve el texto del preview a la esquina correspondiente. **Ese es el test vivo de que Task 3 compartió bien el código** — si el preview y el overlay se mueven distinto, la extracción de Task 3 no se faithfully copió.
+Con la app corriendo, tab Estilos:
+- Cada una de las 9 posiciones mueve el texto del preview a la esquina correspondiente. **Ese es el test vivo de que Task 3 compartió bien el código** — si el preview y el overlay se mueven distinto, la extracción no se copió fielmente.
+- **Click en `↘` (abajo-derecha), después apretar `→`:** el texto NO cambia de esquina y el video **no** hace seek de 5s. Si hace cualquiera de las dos, el `preventDefault` falta.
+- **Click en `↓`, después apretar `↓`:** el playhead no salta de caption.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/components/StylesPanel.tsx src/App.css
-git commit -m "estilos: numpad de alineacion 1-9 en vez de select"
+git add src/components/StylesPanel.tsx src/App.css src/App.tsx
+git commit -m "estilos: matriz de alineacion con flechas; preventDefault para no robar foco"
 ```
 
 ---
