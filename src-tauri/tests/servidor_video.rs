@@ -15,9 +15,27 @@ use opendialogue_lib::servidor_video::{arrancar, estado_nuevo, fijar};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Levanta el servidor con un archivo de `tamano` bytes y devuelve
-/// (puerto, ruta temporal, token).
+/// Contador para dar un archivo UNICO por test.
+///
+/// Los tests corren en paralelo en el mismo proceso y comparten `process::id()`.
+/// Con un nombre compartido, el `fs::write` de un test (que abre con O_TRUNC)
+/// trunca el archivo mientras otro lo esta leyendo: el que lee se queda con 0
+/// bytes y falla. Pasó en CI con `range_abierto_cubre_hasta_al_final` y no se
+/// reproducia en local por suerte de scheduling.
+static SECUENCIA: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn ruta_unicica(tamano: usize, extension: &str) -> std::path::PathBuf {
+    let n = SECUENCIA.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    std::env::temp_dir().join(format!(
+        "od-test-{}-{}-{n}.{extension}",
+        std::process::id(),
+        tamano
+    ))
+}
+
+/// (puerto, ruta temporal).
 async fn servidor_de_prueba(tamano: usize) -> (u16, std::path::PathBuf) {
-    let ruta = std::env::temp_dir().join(format!("od-test-{}-{}.bin", std::process::id(), tamano));
+    let ruta = ruta_unicica(tamano, "bin");
     let datos: Vec<u8> = (0..tamano).map(|i| (i % 251) as u8).collect();
     std::fs::write(&ruta, datos).expect("escribir archivo de prueba");
 
@@ -158,7 +176,7 @@ async fn post_es_rechazado() {
 
 #[tokio::test]
 async fn content_type_segun_extension() {
-    let ruta = std::env::temp_dir().join(format!("od-test-mime-{}.mkv", std::process::id()));
+    let ruta = ruta_unicica(1, "mkv");
     std::fs::write(&ruta, b"x").expect("escribir");
     let estado = estado_nuevo();
     fijar(&estado, 3, ruta.clone());
