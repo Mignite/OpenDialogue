@@ -386,7 +386,7 @@ Los tres consumidores restantes del color:
 | `CaptionList.tsx:117` `captionSpeakerTag` | Color derivado |
 | `App.tsx:2405` dot del chip del editor | Color derivado |
 
-### 6.6 El borde del clip se tiñe
+### 6.6 El borde del clip deja de derivar del hablante
 
 Hoy: `background: color-mix(in srgb, ${color} 18%, transparent)` +
 `border: 1px solid ${color}` (App.tsx:2664-2665).
@@ -396,13 +396,48 @@ brillante que el playhead sobre negro, y en una UI que se define por monolítica
 eso es exactamente lo contrario.
 
 ```
-background: color-mix(in srgb, ${color} 18%, transparent);
-border:     1px solid color-mix(in srgb, ${color} 45%, transparent);
+background: color-mix(in srgb, ${color} 18%, transparent);   /* sigue derivado */
+border:     1px solid #6E7480;                              /* fijo, neutro */
 ```
 
-El 45% mantiene el borde legible sin que el blanco grite. El borde del clip
-seleccionado pasa a `2px solid var(--accent)` para que la selección se lea por
-encima del tinte.
+El **relleno** sigue deriving del color del hablante (18%). El **borde no**.
+
+#### Por qué el borde es fijo y no teñido
+
+El borde describe *"esto es un clip"*, no *"este es el hablante 3"*. Esa
+información ya la dan el label del carril y el color del tag en la lista. Si el
+borde fuera `color-mix(preset.color 45%)`, habría doseckos de borde en la misma
+UI según qué preset tenga asignado cada hablante — un cobalto y un gris
+ conviviendo sin regla que los unifique.
+
+Efecto secundario útil: **el borde ya no puede "pegar fuerte" con ningún
+preset**, porque no depende del preset.
+
+#### El número: `#6E7480`
+
+El borde vive dentro del clip, así que su contraste útil no es contra el fondo
+sino contra **su propio relleno** (`#2E2E2E`, que es 18% de blanco sobre negro):
+
+| Candidato | vs fondo | **vs relleno** | Lectura |
+|---|---|---|---|
+| `#8E94A0` (gris claro, la intuición inicial) | 6.89 | **4.46** | Contorno duro; compite con el texto |
+| **`#6E7480`** | 4.47 | **2.89** | **Borde presente, el texto manda** |
+| `#5A6272` | 3.42 | 2.21 | Borde de superficie, casi se funde |
+
+A `#8E94A0` el texto de 9px sigue legible (11.62:1 contra el relleno), pero se
+vuelve a tener un contorno de 1px en cada clip — lo que se vino a evitar. El
+coral original no era tenue: era de **saturación media**. Un gris claro es claro
+de verdad.
+
+`#6E7480` es el mismo valor que quedó en `--textFaint` (§3.3): un solo número
+para borde de superficie y texto terciario.
+
+#### Selección
+
+`.clip.selected` pasa de `outline: 1.5px solid var(--text)` (App.css:492) a
+`outline: 1.5px solid var(--accent)`. El blanco de antes ya no distingue nada
+sobre un clip de relleno claro, y el mostaza es la señal de "esto está
+seleccionado" en toda la app.
 
 ### 6.7 El carril "—" no se toca
 
@@ -477,11 +512,14 @@ color.
 12. Un hablante **sin** preset muestra blanco en los tres lugares.
 13. El carril `"—"` (sin asignar) sigue gris y **no** se confunde con un hablante
     blanco.
-14. Los clips blancos **no** tienen borde blanco sólido: el tinte al 45% se lee
-    como superficie, no como contorno.
-15. Abrir un proyecto viejo: los hablantes con colores guardados pero sin preset
+14. Los clips blancos **no** tienen borde blanco sólido: `#6E7480` se lee como
+    superficie, no como contorno. El texto de 9px sigue mandando.
+15. El borde es **el mismo** en un clip con preset cobalto y en uno con preset
+    blanco. Si difieren, el borde se está tiñendo todavía.
+16. `.clip.selected` se lee en mostaza, no en blanco.
+17. Abrir un proyecto viejo: los hablantes con colores guardados pero sin preset
     salen blancos, sin crash. El campo viaja en el JSON pero no se lee.
-16. Exportar un `.ass` y abrirlo: **el color del texto de cada hablante coincide
+18. Exportar un `.ass` y abrirlo: **el color del texto de cada hablante coincide
     con el color de su carril en el timeline**. Ese es el criterio de aceptación
     de toda la sección — la UI y el archivo dicen lo mismo.
 
@@ -492,7 +530,7 @@ color.
 | Extraer `estiloCajaPreview` cambia el render del video | Es una **extracción** pura, no una reescritura. El diff se lee contra `App.tsx:1991-2013`. §8.2.5 es el test |
 | `CaptionList` desmontada pierde la posición de scroll al volver al tab | Aceptado. El follow-scroll del caption activo lo reposiciona en el primer render |
 | Editar `preset.color` no repinta los carriles | `presetsAss` entra a las deps del `useMemo` de `trackRows` (§6.5). Test manual §8.2.10 |
-| Un proyecto viejo pierde los colores que el usuario eligió a mano | **Riesgo real, aceptado.** No hay migración posible sin contradecir el modelo: si se preservara el color guardado, la UI volvería a mentir sobre el `.ass`. El color se recupera asignando un preset con ese color |
+| Un proyecto viejo pierde los colores que el usuario eligió a mano | **Aceptado sin reserva** — el usuario es el único de la app (confirmado 2026-10-11). No hay migración posible sin contradecir el modelo: preservar el color guardado haría que la UI vuelva a mentir sobre el `.ass`. Se recupera asignando un preset con ese color. Anotado aquí porque en 6 meses la razón se olvida |
 | Instalar y no saber por qué el timeline es blanco | §6.4 lo documenta y el §8.2.12 lo verifica. El preset con color se crea desde el tab Estilos, que ahora es visible en la tab bar |
 | 5 tokens nuevos/renombrados rompen reglas huérfanas | `borderBright`, `surfaceHover`, `textHint` se agregan; `accent`/`warn`/`danger` cambian de valor. Buscar usos al final |
 | `PALETA` queda importada en un archivo y `no-unused` lo-take en clippy | TS no falla por imports muertos en el build de Vite, pero `cargo clippy` sí es estricto con el lado Rust. Buscar referencias a `PALETA` antes de borrar |
