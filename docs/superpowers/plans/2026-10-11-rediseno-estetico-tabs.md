@@ -639,9 +639,15 @@ Las tres cosas que sobran del spec y que conviene cerrar juntas.
 
 El `captionTimeRow` (App.tsx:2333-2372) ya tiene los dos inputs numéricos editables. **Se conservan tal cual** — existen desde `ee04b7b` con el motivo "el timing es el 80% del oficio y necesitaba un input numérico". Agregar a la derecha un `<span>` de solo lectura con `DUR: {(currentCaption.fin - currentCaption.inicio).toFixed(2)}s`.
 
-- [ ] **Step 2: Auditar tokens huérfanos**
+- [ ] **Step 2: Auditar tokens huérfanos y rgba del coral viejo**
 
-`grep -rn 'var(--textHint)' src/` y `grep -rn 'var(--surfaceHover)' src/`. Si un token no se usa, o se le da un uso (§3 lo Pensó para hover de fila y hint de statusBar) o se borra del `:root`. Un token definido y nunca usado es deuda silenciosa.
+**(a) Tokens definidos y nunca usados.** `grep -rn 'var(--textHint)' src/` y `grep -rn 'var(--surfaceHover)' src/` y `grep -rn 'var(--borderBright)' src/`. Si un token no se usa, o se le da un uso (§3 lo pensó para hover de fila, hint de statusBar y anillo de foco) o se borra del `:root`. Un token definido y nunca usado es deuda silenciosa.
+
+**(b) Los 7 `rgba(232, 93, 78, …)` del coral viejo — ENRUTADO desde la review de Task 1.** El acento pasó a mostaza (`#D4A017`) pero siete `box-shadow`/`background` quedaron con el coral hardcodeado. **El caso grave es `.playheadLine`** (App.css:771): tiene `background: var(--accent)` [mostaza] junto a `box-shadow: 0 0 8px rgba(232,93,78,0.8)` [coral] — dos tonos distintos en el mismo elemento, y es el objeto más visible del timeline.
+
+Reemplazar cada `rgba(232, 93, 78, X)` por `color-mix(in srgb, var(--accent) Y%, transparent)` con Y ≈ X × 53 (la conversión de 14% de opacidad `--accentSoft` a porcentaje es 0.14 × 100; los valores existentes van de 0.08 a 0.8, o sea 8% a 80%). El proyecto ya usa `color-mix()` en App.tsx, así que no es una primitiva nueva.
+
+Las 7 ubicaciones (verificadas en App.css post-T1): **334** (`.playBtn` glow), **408** (`select:focus`), **510** y **514** (`.track.dropTarget`), **771** (`.playheadLine` — la prioritaria), **815** (`.marqueeOverlay`), **1302** (`.dropOverlay`).
 
 - [ ] **Step 3: Auditar imports y clases muertos**
 
