@@ -224,7 +224,19 @@ En `SpeakersPanel.tsx:92-104`, reemplazar el `<label className="speakerDotWrap">
 
 Borrar la función `normalizarColor` (líneas 18-28) — solo existía para normalizar el valor del `<input type="color">`.
 
-- [ ] **Step 8: Borrar `cambiarColorHablante` y `PALETA`**
+- [ ] **Step 8: `AssExportModal.tsx` — 4ª superficie (ENRUTADO desde la review de Task 2)**
+
+`AssExportModal.tsx:66` sigue haciendo `style={{ background: h.color }}` — el campo muerto. **El modal ya recibe `presets` por prop** (línea 6), así que el fix es de una línea:
+
+```tsx
+style={{ background: colorHablante(h, presets) }}
+```
+
+Por qué es el peor caso de todos los de §6: el modal es donde el usuario **elige a qué preset asigna cada hablante**. Si muestra el color guardado y el timeline muestra el derivado, ve dos colores distintos para el mismo hablante en dos superficies de la misma pantalla — y el que está en el modal es el que va a gobiernar el `.ass` exportado. La UI miente en la superficie donde la decisión se toma.
+
+Importar `colorHablante` en `AssExportModal.tsx`. Ya tiene `presets` en scope: no hace falta cambiar ninguna prop.
+
+- [ ] **Step 9: Borrar `cambiarColorHablante` y `PALETA`**
 
 - `useHablantes.ts:71-83`: borrar el `useCallback` completo y su línea en el `return`.
 - `useHablantes.ts:52`: `color: PALETA[...]` → `color: "#FFFFFF"` (el hablante nuevo nace sin preset, igual que el resto).
