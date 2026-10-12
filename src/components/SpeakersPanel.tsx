@@ -7,44 +7,14 @@ import { colorHablante } from "../utils/colorHablante";
 interface Props {
   hablantes: Hablante[];
   presets: PresetAss[];
-  panelAbierto: boolean;
-  onTogglePanel: () => void;
   onAgregar: () => void;
   onActualizar: (id: string, campo: keyof Hablante, valor: string) => void;
   onEliminar: (id: string) => void;
   onCommit: () => void;
 }
 
-function SpeakersPanel({ hablantes, presets, panelAbierto, onTogglePanel, onAgregar, onActualizar, onEliminar, onCommit }: Props) {
+function SpeakersPanel({ hablantes, presets, onAgregar, onActualizar, onEliminar, onCommit }: Props) {
   const { t } = useLocale();
-  const usersSvg = (
-    <svg
-      className="icon"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.4}
-      strokeLinecap="round"
-    >
-      <circle cx="6" cy="5.5" r="2.6" />
-      <path d="M1.8 13.5c0-2.5 1.9-4 4.2-4s4.2 1.5 4.2 4" />
-      <circle cx="11.5" cy="6" r="2.2" />
-      <path d="M11 9.7c2.1.2 3.4 1.6 3.4 3.8" />
-    </svg>
-  );
-
-  const chevronSvg = (
-    <svg
-      className={"icon xs chevron" + (panelAbierto ? " up" : "")}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-    >
-      <path d="M3 6l5 5 5-5" />
-    </svg>
-  );
 
   const xSvg = (
     <svg
@@ -60,14 +30,8 @@ function SpeakersPanel({ hablantes, presets, panelAbierto, onTogglePanel, onAgre
   );
 
   return (
-    <div className="speakersAccordion">
-      <button className="speakersAccordionHeader" onClick={onTogglePanel}>
-        <span>{usersSvg} {t("speakers.title", { count: hablantes.length })}</span>
-        {chevronSvg}
-      </button>
-      {panelAbierto && (
-        <div className="speakersPanel">
-          {hablantes.map((h) => {
+    <div className="speakersPanel">
+      {hablantes.map((h) => {
             // Firma visual: la fila muestra su propio estilo .ass (fuente +
             // subrayado en su color). Solo fuente y subrayado, nunca el color
             // de texto: presets como negro puro serían ilegibles sobre dark.
@@ -134,8 +98,6 @@ function SpeakersPanel({ hablantes, presets, panelAbierto, onTogglePanel, onAgre
               {t("speakers.add")}
             </button>
           )}
-        </div>
-      )}
     </div>
   );
 }

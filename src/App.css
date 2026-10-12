@@ -231,6 +231,68 @@ body {
   color: var(--textFaint);
 }
 
+/* ===== TABS DE LA COLUMNA DERECHA (browser-style) ===== */
+.panelTabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.panelTab {
+  height: 29px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  position: relative;
+  top: 1px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--textFaint);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.panelTab:hover {
+  background: var(--surfaceHover);
+  color: var(--textDim);
+}
+
+.panelTab.activo {
+  background: var(--surface);
+  border-color: var(--border);
+  border-top: 2px solid var(--accent);
+  color: var(--text);
+}
+
+.tabCounterBadge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--textFaint);
+  background: var(--surface3);
+  border-radius: var(--r-sm);
+  padding: 0 5px;
+}
+
+.panelTab.activo .tabCounterBadge {
+  color: var(--textDim);
+}
+
+.tabPaneContainer {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 10px;
+}
+
 /* ===== VIDEO PLAYER ===== */
 .videoPlayer {
   width: 100%;
