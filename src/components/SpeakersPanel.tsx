@@ -38,8 +38,8 @@ function SpeakersPanel({ hablantes, presets, onAgregar, onActualizar, onEliminar
             const estilo = presets.find((p) => p.id === h.presetId);
             return (
             <div key={h.id} className="speakerRow">
-              // El dot es decorativo: muestra el color del preset .ass del
-              // hablante (o blanco sin preset). El color se edita en Estilos.
+              {/* El dot es decorativo: muestra el color del preset .ass del
+                  hablante (o blanco sin preset). El color se edita en Estilos. */}
               <span
                 className="speakerDot"
                 style={{ backgroundColor: colorHablante(h, presets) }}
