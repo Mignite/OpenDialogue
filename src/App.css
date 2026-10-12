@@ -852,7 +852,10 @@ body {
 
 .captionRow {
   border-radius: 0;
-  padding: 6px 2px;
+  /* 10px a la izquierda (no 2px): el padding izquierdo se suma al border-left
+   * de 2px del color del hablante, y con 2px el texto quedaba pegado a la línea
+   * de color. La derecha se queda en 8px porque el botón de borrar va ahí. */
+  padding: 6px 8px 6px 10px;
   cursor: pointer;
   border-left: 2px solid transparent;
   border-bottom: 1px solid var(--border);
