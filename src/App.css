@@ -558,7 +558,13 @@ body {
 }
 
 .clip.selected {
-  outline: 1.5px solid var(--accent);
+  /* Blanco, no --accent: un clip seleccionado es un ESTADO, no una acción. El
+   * acento queda para el playhead, el tab activo y los bordes de foco.
+   * Además el borde compite con el color del hablante en un rectángulo de 24px:
+   * con mostaza, un clip cian parecía mostaza (el borde pesa más que el relleno),
+   * y para un hablante cuyo preset fuera mostaza el borde sería invisible contra
+   * su propio clip. Con --text el contraste es alto y funciona para todos. */
+  outline: 1.5px solid var(--text);
   outline-offset: -1.5px;
 }
 
