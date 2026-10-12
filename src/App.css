@@ -297,10 +297,10 @@ body {
   width: 100%;
   border-radius: var(--r-lg);
   background: #000;
-  max-height: 45vh;
-  min-height: 120px;
+  /* El alto lo da el wrap (flex:1) — el max-height fijo de antes era lo que
+   * empujaba el scrollbar en .leftCol al agrandar el dock. */
+  height: 100%;
   object-fit: contain;
-  flex-shrink: 0;
 }
 
 /* Contenedor para el live preview de subtítulos sobre el video.
@@ -308,7 +308,12 @@ body {
    imagen se derrama y se pierde el marco (spec 3.5). */
 .videoWrap {
   position: relative;
-  flex-shrink: 0;
+  /* El video cede espacio cuando el dock del timeline crece; todo lo demas de
+   * la columna (controles, tiempos, editor) es alto fijo y chico, y si el
+   * video los aplasta el scroll vuelve igual. min-height es el piso duro: por
+   * debajo de ahi el wrap deja de encogerse y .leftCol scrollea. */
+  flex: 1 1 auto;
+  min-height: 120px;
   background: var(--surface);
   border: 1px solid var(--border);
 }
