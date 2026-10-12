@@ -1047,6 +1047,7 @@ body {
 }
 
 .stylePreviewStage {
+  position: relative;
   background: #000;
   aspect-ratio: 16 / 9;
   border: 1px solid var(--border);

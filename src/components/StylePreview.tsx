@@ -35,7 +35,11 @@ function StylePreview({ preset, textoInicial }: Props) {
   }, []);
 
   const { w, h } = cajaRef.current;
-  const escala = w > 0 && h > 0 ? Math.min(w / 1920, h / 1080) : 0;
+  const medido = w > 0 && h > 0;
+  // Antes del primer ResizeObserver la caja es 0x0. Escala 0 da fontSize 0 y
+  // márgenes 0 — el texto desaparece. Se usa 1 como escala nominal hasta que
+  // haya medida real; el observer dispara un re-render en cuanto la hay.
+  const escala = medido ? Math.min(w / 1920, h / 1080) : 1;
 
   return (
     <div className="stylePreviewBlock">
@@ -49,13 +53,13 @@ function StylePreview({ preset, textoInicial }: Props) {
       <div
         ref={stageRef}
         className="stylePreviewStage"
-        style={estiloCajaPreview(
-          preset,
-          { left: 0, top: 0, width: w, height: h },
-          escala,
-        )}
+        style={medido
+          ? estiloCajaPreview(preset, { left: 0, top: 0, width: w, height: h }, escala)
+          : undefined}
       >
-        <span style={estiloLineaPreview(preset, escala)}>{texto}</span>
+        <span style={medido ? estiloLineaPreview(preset, escala) : undefined}>
+          {texto}
+        </span>
       </div>
     </div>
   );
