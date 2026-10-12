@@ -58,6 +58,7 @@ import {
   leerPortapapeles,
 } from "./utils/clipboard";
 import { resolverRutaVideo } from "./utils/rutaVideo";
+import { urlDeReproduccion } from "./utils/urlVideo";
 import { useCaptions } from "./hooks/useCaptions";
 import { useTransporte } from "./hooks/useTransporte";
 import { useHablantes } from "./hooks/useHablantes";
@@ -455,10 +456,28 @@ function App() {
   // useCallback-estable (solo refs, setters estables y fns estables de onda):
   // se inyecta al slice useProyecto sin re-suscripciones.
   const { reiniciar: reiniciarOnda, analizarVolumenDe, estaEnAnalisis } = onda;
+  // Request-id de carga de video: descarta respuestas obsoletas del comando
+  // url_video_local (ver cargarVideoDesdeRuta).
+  const cargaVideoRequestRef = useRef(0);
   const cargarVideoDesdeRuta = useCallback(
-    (path: string) => {
+    async (path: string) => {
       setVideoPath(path);
-      setVideoSrc(convertFileSrc(path));
+      // Linux: WebKitGTK no reproduce `asset://` (tauri#3725), asi que el
+      // backend sirve el archivo por loopback. En Windows/macOS el comando
+      // devuelve null y sigue mandando convertFileSrc.
+      //
+      // El comando es async: si el usuario abre A y luego B, la respuesta de A
+      // puede llegar despues y pisar el src de B. El request-id descarta la
+      // respuesta obsoleta (mismo patron que el analisis de volumen).
+      const requestId = ++cargaVideoRequestRef.current;
+      let urlLocal: string | null = null;
+      try {
+        urlLocal = await invoke<string | null>("url_video_local", { ruta: path });
+      } catch {
+        // Sin servidor local (o sin ese comando): el asset es el plan B.
+      }
+      if (cargaVideoRequestRef.current !== requestId) return;
+      setVideoSrc(urlDeReproduccion(path, urlLocal, convertFileSrc));
       setVideoNoEncontrado(false);
       windowStartRef.current = 0;
       windowTargetRef.current = 0;

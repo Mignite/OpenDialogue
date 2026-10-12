@@ -5,6 +5,8 @@ use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::Emitter;
 use tauri::Manager;
 
+pub mod servidor_video;
+
 // Guard de concurrencia: evita dos análisis de volumen del mismo track
 // emitiendo chunks duplicados al frontend.
 static ANALIZANDO: std::sync::LazyLock<
@@ -518,6 +520,7 @@ fn escribir_archivo_en_carpeta(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .manage(servidor_video::estado_nuevo())
         .invoke_handler(tauri::generate_handler![
             guardar_proyecto,
             cargar_proyecto,
@@ -531,8 +534,24 @@ pub fn run() {
             listar_fuentes_sistema,
             guardar_recovery,
             leer_recovery,
+            servidor_video::url_video_local,
         ])
         .setup(|app| {
+            // Solo Linux: WebKitGTK no resuelve asset:// para media
+            // (tauri#3725). En Windows/macOS el comando devuelve None y el
+            // frontend sigue usando convertFileSrc, sin servidor de por medio.
+            // `arrancar` es async y solo hace bind + spawn, asi que no hace
+            // falta block_on en el hilo de setup (que bloquearia el runtime).
+            #[cfg(target_os = "linux")]
+            {
+                let estado = app.state::<servidor_video::EstadoVideo>().inner().clone();
+                tauri::async_runtime::spawn(async move {
+                    match servidor_video::arrancar(estado).await {
+                        Ok(puerto) => servidor_video::fijar_puerto(puerto),
+                        Err(e) => eprintln!("No se pudo iniciar el servidor de video local: {e}"),
+                    }
+                });
+            }
             let nuevo = MenuItemBuilder::new("Nuevo proyecto")
                 .id("nuevo_proyecto")
                 .build(app)?;
