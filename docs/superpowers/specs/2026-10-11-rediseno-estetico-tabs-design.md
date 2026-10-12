@@ -443,9 +443,12 @@ seleccionado" en toda la app.
 
 ### 6.7 El carril "—" no se toca
 
-`{ label: "—", color: "#4a4853" }` (App.tsx:2059) es **nadie asignado**, no
+`{ label: "—", color: "#4a4853" }` (App.tsx:2071) es **nadie asignado**, no
 *alguien sin preset*. Si pasa a blanco se vuelve indistinguible de un hablante
-real con el preset default. Se queda en gris neutro `#3A3E48`.
+real con el preset default. Se queda en su gris actual — `#4a4853`, que es lo que
+ya tienen el `trackRow`, el fallback del chip del editor (`App.tsx:2417`) y
+`.dropTarget` (`App.css`). Unificarlo a un token del §3.3 es cosmético y
+separado.
 
 ### 6.8 Qué se regresa del §8
 

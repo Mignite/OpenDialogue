@@ -210,11 +210,11 @@ color: colorHablante(h, ass.presetsAss),
 
 **El `useMemo` de `trackRows` (deps `[carrilesAgrupados, hablantes]`) debe sumar `ass.presetsAss`.** Sin esto, editar el color de un preset no repinta los carriles hasta recargar — es el mismo bug de deps que ya se corrigió con `proyecto` en el dirty-effect. Review Focus #2 de la spec.
 
-El carril `"—"` (sin asignar, línea ~2059) **no cambia**: sigue en `#4A505D` con su etiqueta `—`. Es *nadie asignado*, no *alguien sin preset*; si pasa a blanco se confunde con un hablante real sin preset.
+El carril `"—"` (sin asignar, línea ~2059) **no cambia**: sigue en `#4a4853` con su etiqueta `—`. Ese gris es el que ya usan el chip del editor (App.tsx:~2417) y .dropTarget (App.css) — no introduzcas un tono nuevo. Es *nadie asignado*, no *alguien sin preset*; si pasa a blanco se confunde con un hablante real sin preset.
 
 - [ ] **Step 6: Cablear los otros tres consumidores**
 
-- `App.tsx:2405` — el dot del `speakerChip` del editor: `sp ? colorHablante(sp, ass.presetsAss) : "#4A505D"`.
+- `App.tsx:2405` — el dot del `speakerChip` del editor: `sp ? colorHablante(sp, ass.presetsAss) : "#4a4853"`.
 - `CaptionList.tsx:106` y `:117` — `borderLeftColor` y el `captionSpeakerTag`. **Decisión: `App.tsx` les pasa el color YA RESUELTO**, no la lista de presets. `CaptionList` sigue recibiendo `speakerMap` sin cambios, pero el `Map` pasa a ser de hablantes con el color ya calculado (`{...h, color: colorHablante(h, presetsAss)}`), de modo que `sp.color` en las líneas 106 y 117 ya devuelve el valor correcto sin tocar `CaptionList` para nada. La derivación ocurre en un solo lugar — App — y `CaptionList` no necesita saber de dónde sale el color.
 - `App.tsx:2664` — el `background` del clip sigue siendo `color-mix(in srgb, ${row.color} 18%, transparent)`. **El `border` cambia a `1px solid #6E7480` fijo**, no derivado (ver Review Focus de la spec §6.6: el borde describe "esto es un clip", no "este es el hablante"). El texto del clip (`--text`, 9px) tiene 11.6:1 contra el relleno `#2E2E2E` — el borde a 2.89:1 no compite con él.
 
