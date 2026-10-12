@@ -246,6 +246,10 @@ Importar `colorHablante` en `AssExportModal.tsx`. Ya tiene `presets` en scope: n
 
 `Hablante.color` **se queda** en `types.ts` y en el `struct Hablante` de Rust (`lib.rs:148`): los `.cdp` guardados lo traen en el JSON y borrarlo rompe la deserialización. Queda como campo muerto, sin leer.
 
+- [ ] **Step 10: Quitar `onCambiarColor` de las props de `SpeakersPanel`**
+
+En `App.tsx`, el JSX que renderiza `<SpeakersPanel ... />` (~línea 2445) pasa `onCambiarColor={voces.cambiarColorHablante}`. Esa prop desaparece en el Step 7 (el `<input type="color">` ya no existe) y `cambiarColorHablante` se borra del hook en el Step 9 — si queda el cableado, el build falla por una prop que ya no está en la interfaz del componente.
+
 - [ ] **Step 11: Reescribir el test de convención PALETA**
 
 `src/utils/__tests__/autosubs.test.ts:94-109` — los tres tests que verifican que el hablante nuevo tome un color de `PALETA` y que la paleta tenga 9 colores distintos **se borran**. En su lugar, un test que fija el comportamiento nuevo:
