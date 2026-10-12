@@ -2345,6 +2345,12 @@ function App() {
                     }}
                     title={t("app.timeInput.captionEnd")}
                   />
+                  <span
+                    className="captionTimeLabel"
+                    title={t("app.timeInput.captionDuration")}
+                  >
+                    DUR: {(currentCaption.fin - currentCaption.inicio).toFixed(2)}s
+                  </span>
                 </div>
               )}
             </>

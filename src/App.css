@@ -56,7 +56,6 @@
   --surfaceHover: #1F242C;
   --border: #1C212B;
   --borderStrong: #2A313D;
-  --borderBright: #3A4353;
   --text: #EDEDF0;
   --textDim: #9AA1AE;
   --textFaint: #737B8A;
@@ -393,7 +392,7 @@ body {
   font-size: 18px;
   padding: 8px 20px;
   border-color: var(--accent);
-  box-shadow: 0 0 10px rgba(232, 93, 78, 0.35);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .playBtn svg {
@@ -467,7 +466,7 @@ body {
 .playbackControls select:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 8px rgba(232, 93, 78, 0.2);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 /* ===== TIMELINE ===== */
@@ -569,11 +568,11 @@ body {
 }
 
 .track.dropTarget {
-  background: rgba(232, 93, 78, 0.08);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .track.dropTarget .trackClips {
-  box-shadow: inset 0 0 0 1px rgba(232, 93, 78, 0.35);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .clipEdge {
@@ -830,7 +829,7 @@ body {
   bottom: 16px;
   width: 1px;
   background: var(--accent);
-  box-shadow: 0 0 8px rgba(232, 93, 78, 0.8);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 80%, transparent);
   pointer-events: none;
   z-index: 5;
   display: none;
@@ -874,7 +873,7 @@ body {
 .marqueeOverlay {
   position: fixed;
   pointer-events: none;
-  background: rgba(232, 93, 78, 0.15);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
   border: 1px dashed var(--accent);
   z-index: 1000;
 }
@@ -925,55 +924,11 @@ body {
 }
 
 /* ===== HABLANTES ===== */
-.speakersAccordion {
-  background: var(--surface2);
-  border-radius: var(--r-md);
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.speakersAccordionHeader {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  padding: 9px 12px;
-  font-family: var(--font-display);
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text);
-  cursor: pointer;
-  transition: background-color 0.15s;
-}
-
-.speakersAccordionHeader:hover {
-  background: var(--surface3);
-}
-
-.speakersAccordionHeader .chev {
-  color: var(--textFaint);
-  display: inline-flex;
-  transition: transform 0.2s;
-}
-
-.speakersAccordionHeader .chev svg {
-  width: 9px;
-  height: 9px;
-}
-
-.speakersAccordionHeader.open .chev {
-  transform: rotate(90deg);
-}
-
 .speakersPanel {
   padding: 10px 12px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-top: 1px solid var(--border);
 }
 
 .speakerRow {
@@ -1047,14 +1002,13 @@ body {
 }
 
 /* ===== PANEL DE ESTILOS (presets .ass de primera clase) ===== */
-/* Reutiliza el contenedor acordeón de hablantes y los controles .ass* del
-   modal: misma familia visual, sin duplicar el sistema. */
+/* Reutiliza los controles .ass* del modal: misma familia visual, sin
+   duplicar el sistema. */
 .stylesPanel {
   padding: 10px 12px 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border-top: 1px solid var(--border);
 }
 
 .stylesPanel .assPresetList {
@@ -1268,7 +1222,7 @@ button.primary:hover {
   margin-left: auto;
   font-family: var(--font-mono);
   font-size: 10.5px;
-  color: var(--textFaint);
+  color: var(--textHint);
   white-space: nowrap;
 }
 
@@ -1384,7 +1338,7 @@ button.primary:hover {
 .dropOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(232, 93, 78, 0.15);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
   border: 3px dashed var(--accent);
   z-index: 100;
   display: flex;

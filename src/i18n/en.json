@@ -13,6 +13,7 @@
   "app.timeInput.captionTimes": "Caption",
   "app.timeInput.captionStart": "Subtitle start (Enter applies)",
   "app.timeInput.captionEnd": "Subtitle end (Enter applies)",
+  "app.timeInput.captionDuration": "Subtitle duration (read-only)",
   "app.editor.multiSelected": "{count} selected",
   "app.editor.disabledMulti": "E disabled with multiple",
   "app.editor.editing": "Editing",
