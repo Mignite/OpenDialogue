@@ -35,10 +35,16 @@ function StylePreview({ preset, textoInicial }: Props) {
   }, []);
 
   const { w, h } = cajaRef.current;
+  // Antes del primer ResizeObserver la caja es 0x0: escala 0 daría fontSize 0
+  // y márgenes 0. Se usa 1 como nominal hasta que haya medida real.
+  //
+  // `recuadro` va null a propósito: el helper emite left/top/width/height desde
+  // el recuadro, y acá el recuadro sería el tamaño del propio stage. Con
+  // box-sizing:border-box global, setear width = clientWidth (que NO incluye el
+  // borde) encoge el contenido 2px por ciclo de observer: el stage colapsa a 0,
+  // `medido` se apaga, y el ciclo se repite. El overlay del video sí necesita
+  // el recuadro porque vive en un contenedor padre; el stage se posiciona solo.
   const medido = w > 0 && h > 0;
-  // Antes del primer ResizeObserver la caja es 0x0. Escala 0 da fontSize 0 y
-  // márgenes 0 — el texto desaparece. Se usa 1 como escala nominal hasta que
-  // haya medida real; el observer dispara un re-render en cuanto la hay.
   const escala = medido ? Math.min(w / 1920, h / 1080) : 1;
 
   return (
@@ -53,13 +59,9 @@ function StylePreview({ preset, textoInicial }: Props) {
       <div
         ref={stageRef}
         className="stylePreviewStage"
-        style={medido
-          ? estiloCajaPreview(preset, { left: 0, top: 0, width: w, height: h }, escala)
-          : undefined}
+        style={estiloCajaPreview(preset, null, escala)}
       >
-        <span style={medido ? estiloLineaPreview(preset, escala) : undefined}>
-          {texto}
-        </span>
+        <span style={estiloLineaPreview(preset, escala)}>{texto}</span>
       </div>
     </div>
   );
