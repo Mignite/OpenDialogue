@@ -223,6 +223,11 @@ Los tres efectos de `estiloCajaPreview` son los que hoy están hardcodeados en
 
 - `vertical`: `al >= 7 → top`, `al >= 4 → middle`, si no `bottom`
 - `horizontal`: `1|4|7 → left`, `3|6|9 → right`, si no `center`
+
+O sea: 1 abajo-izq, 2 abajo-centro, 3 abajo-der, 4 medio-izq, 5 medio-centro,
+6 medio-der, 7 arriba-izq, 8 arriba-centro, 9 arriba-der — la disposición del
+numpad, exactamente como lo confirma `es.json`/`en.json` (`assExport.align_7` =
+"7 Arriba izq." / "7 Top left").
 - el padding vertical aplica `marginV` **solo** en la banda correspondiente
   (`paddingTop` si top, `paddingBottom` si bottom); en `middle` no se aplica
   ninguno. Es como funciona libass y es fácil de equivocar al reimplementarlo.
@@ -429,8 +434,10 @@ vuelve a tener un contorno de 1px en cada clip — lo que se vino a evitar. El
 coral original no era tenue: era de **saturación media**. Un gris claro es claro
 de verdad.
 
-`#6E7480` es el mismo valor que quedó en `--textFaint` (§3.3): un solo número
-para borde de superficie y texto terciario.
+`#6E7480` es un valor **propio del borde de clip**, no un token: no coincide con
+`--textFaint` (`#737B8A`) ni con ningún otro del §3.3. Se escribe literal en
+`App.tsx` porque el borde del clip necesita exactamente esta separación contra
+el relleno `#2E2E2E`, y ningún token del set tiene ese número.
 
 #### Selección
 
@@ -441,9 +448,12 @@ seleccionado" en toda la app.
 
 ### 6.7 El carril "—" no se toca
 
-`{ label: "—", color: "#4a4853" }` (App.tsx:2059) es **nadie asignado**, no
+`{ label: "—", color: "#4a4853" }` (App.tsx:2071) es **nadie asignado**, no
 *alguien sin preset*. Si pasa a blanco se vuelve indistinguible de un hablante
-real con el preset default. Se queda en gris neutro `#3A3E48`.
+real con el preset default. Se queda en su gris actual — `#4a4853`, que es lo que
+ya tienen el `trackRow`, el fallback del chip del editor (`App.tsx:2417`) y
+`.dropTarget` (`App.css`). Unificarlo a un token del §3.3 es cosmético y
+separado.
 
 ### 6.8 Qué se regresa del §8
 

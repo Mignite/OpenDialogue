@@ -1,7 +1,6 @@
 import { useCallback, useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Caption, Hablante } from "../types";
-import { PALETA } from "../utils/constants";
 
 export interface HablantesDeps {
   hablantes: Hablante[];
@@ -14,8 +13,8 @@ export interface HablantesDeps {
 
 // Hablantes: CRUD + speakerMap memoizado. El ref `hablantesRef` se queda en
 // App (lo leen ~15 sitios del drag/editor; su identidad nunca cambia) y el
-// mirror bare lo sigue sincronizando ahí. Los callbacks que escriben el ref
-// a mano (actualizar/cambiarColor) lo hacen igual que antes, para listeners
+// mirror bare lo sigue sincronizando ahí. El callback que escribe el ref
+// a mano (actualizar) lo hace igual que antes, para listeners
 // síncronos entre el setState y el effect.
 export function useHablantes({
   hablantes,
@@ -49,7 +48,7 @@ export function useHablantes({
         id: `sp-${Date.now()}`,
         nombre: "",
         tecla,
-        color: PALETA[prev.length % PALETA.length],
+        color: "#FFFFFF",
       };
       return [...prev, nuevo];
     });
@@ -66,20 +65,6 @@ export function useHablantes({
       });
     },
     [setHablantes, hablantesRef],
-  );
-
-  const cambiarColorHablante = useCallback(
-    (id: string, color: string) => {
-      pushHistorial();
-      setHablantes((prev) => {
-        const newHablantes = prev.map((h) =>
-          h.id === id ? { ...h, color } : h,
-        );
-        hablantesRef.current = newHablantes;
-        return newHablantes;
-      });
-    },
-    [pushHistorial, hablantesRef],
   );
 
   const eliminarHablante = useCallback(
@@ -103,7 +88,6 @@ export function useHablantes({
     speakerMap,
     agregarHablante,
     actualizarHablante,
-    cambiarColorHablante,
     eliminarHablante,
   };
 }

@@ -1,4 +1,3 @@
-import { PALETA } from "./constants";
 import type { Caption, Hablante } from "../types";
 
 export interface TurnoAutosubs {
@@ -74,7 +73,8 @@ export function asignarHablantesPorTexto(
 }
 
 // Hablantes con la convención de la app (ver import de transcripción y
-// agregarHablante en App.tsx): nombre "Hablante N", tecla dígito, PALETA.
+// agregarHablante en App.tsx): nombre "Hablante N", tecla dígito, color
+// blanco (el color efectivo sale del preset .ass, ver colorHablante).
 export function hablantesDesdeNombres(numeros: string[]): Hablante[] {
   const base = Date.now();
   // Orden numérico: el llamador pasa un Set ordenado lexicográficamente
@@ -89,6 +89,6 @@ export function hablantesDesdeNombres(numeros: string[]): Hablante[] {
     id: `sp-autosubs-${base}-${i}`,
     nombre: `Hablante ${n}`,
     tecla: String((i % 9) + 1),
-    color: PALETA[i % PALETA.length],
+    color: "#FFFFFF",
   }));
 }

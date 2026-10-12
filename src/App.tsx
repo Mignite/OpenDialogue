@@ -21,10 +21,10 @@ import {
   EDGE_TRIGGER,
   NEW_MARGIN,
   LERP_FACTOR,
-  ASS_EM_PREVIEW,
   VELOCIDADES_REPRODUCCION,
 } from "./utils/constants";
 import { formatTime, parseTimeInput } from "./utils/time";
+import { colorHablante } from "./utils/colorHablante";
 import {
   coincide,
   normalizarTermino,
@@ -47,6 +47,7 @@ import {
 } from "./utils/selection";
 import { picoEnRango } from "./utils/audioIslands";
 import { lineasOverlayActivas } from "./utils/ass";
+import { estiloLineaPreview, estiloCajaPreview } from "./utils/assPreview";
 import { cargarAjustes, guardarAjustes, type Ajustes } from "./utils/ajustes";
 
 import { useAssEstilos } from "./hooks/useAssEstilos";
@@ -64,6 +65,8 @@ import { useProyecto } from "./hooks/useProyecto";
 import { useWaveform } from "./hooks/useWaveform";
 import SpeakersPanel from "./components/SpeakersPanel";
 import StylesPanel from "./components/StylesPanel";
+import PanelTabs from "./components/PanelTabs";
+import type { PaneId, PaneTab } from "./components/PanelTabs";
 import CaptionList from "./components/CaptionList";
 import { getLocale, useLocale } from "./i18n";
 import "./App.css";
@@ -89,10 +92,10 @@ function App() {
   const [dockHeight, setDockHeight] = useState<number>(240);
   const [arrastrando, setArrastrando] = useState<boolean>(false);
   const [hablantes, setHablantes] = useState<Hablante[]>([]);
-  const [panelHablantesAbierto, setPanelHablantesAbierto] =
-    useState<boolean>(false);
-  const [panelEstilosAbierto, setPanelEstilosAbierto] =
-    useState<boolean>(false);
+  // Tab activo de la columna derecha: siempre arranca en "subs" (no se
+  // persiste), que es donde se abre el 90% de las sesiones. Reemplaza los dos
+  // acordeones (panelHablantesAbierto/panelEstilosAbierto).
+  const [paneActivo, setPaneActivo] = useState<PaneId>("subs");
   const [autoFollowing, setAutoFollowing] = useState<boolean>(true);
   const autoFollowingRef = useRef(true);
   // Tick de re-render para el recuadro del preview .ass: `overlayRecuadro` mide
@@ -420,6 +423,29 @@ function App() {
     setCaptions: caps.setCaptions,
     pushHistorial: caps.pushHistorial,
   });
+  // El color efectivo del hablante es el de su preset .ass (ver
+  // colorHablante): se resuelve acá, en un solo lugar, y CaptionList lo
+  // consume vía sp.color sin saber de dónde sale. useMemo-estable para no
+  // re-renderizar la lista memoizada en cada tick del playhead.
+  const speakerMapResuelto = useMemo(() => {
+    const map = new Map<string, Hablante>();
+    for (const [id, h] of voces.speakerMap) {
+      map.set(id, { ...h, color: colorHablante(h, ass.presetsAss) });
+    }
+    return map;
+  }, [voces.speakerMap, ass.presetsAss]);
+  // Tabs de la columna derecha (memo-estable: PanelTabs es memo() y el
+  // playhead tickea ~10×/s — un array nuevo por render lo re-renderizaría
+  // junto con los paneles memoizados). `t` es module-level estable; `locale`
+  // en deps re-etiqueta al cambiar de idioma.
+  const panesTabs = useMemo<PaneTab[]>(
+    () => [
+      { id: "subs", label: t("app.tabs.subs"), title: t("app.tabs.subsTitle"), contador: captions.length },
+      { id: "hablantes", label: t("app.tabs.speakers"), title: t("app.tabs.speakersTitle"), contador: hablantes.length },
+      { id: "estilos", label: t("app.tabs.styles"), title: t("app.tabs.stylesTitle"), contador: ass.presetsAss.length },
+    ],
+    [locale, captions.length, hablantes.length, ass.presetsAss.length],
+  );
   const playheadFrameSkipRef = useRef(0);
   const dragScrollVelocityRef = useRef(0);
   // Auto-scroll vertical del trackArea durante el marquee (px/s). El pan
@@ -692,16 +718,6 @@ function App() {
     persistirAjustes({ locale });
   }
 
-  const togglePanelHablantes = useCallback(
-    () => setPanelHablantesAbierto((v) => !v),
-    [],
-  );
-
-  const togglePanelEstilos = useCallback(
-    () => setPanelEstilosAbierto((v) => !v),
-    [],
-  );
-
   // Ajustes del usuario (idioma) desde ajustes.json, con
   // localStorage como respaldo/migración; se reescribe para unificar.
   // (Los presets los carga useAssEstilos en su propio effect.)
@@ -756,11 +772,12 @@ function App() {
       handleExportarAss(),
     );
     const unlistenGestionarPresets = listen("gestionar_presets", async () => {
-      // El menú "Estilos..." abre el panel de estilos (ya no un modal de
-      // export): los presets son nivel usuario y se editan en cualquier
-      // momento, sin subtítulos de por medio.
+      // El menú "Estilos..." salta al tab de estilos: los presets son nivel
+      // usuario y se editan en cualquier momento, sin subtítulos de por medio.
+      // recargarPresets relee presets_ass.json del disco (un .ass importado
+      // desde afuera puede haber grabado presets nuevos mientras tanto).
       void ass.recargarPresets();
-      setPanelEstilosAbierto(true);
+      setPaneActivo("estilos");
     });
     const unlistenCargarAss = listen("cargar_ass", () => proyecto.handleCargarAss());
 
@@ -1511,7 +1528,8 @@ function App() {
       if (
         target.tagName === "INPUT" ||
         target.tagName === "TEXTAREA" ||
-        target.tagName === "SELECT"
+        target.tagName === "SELECT" ||
+        target.tagName === "BUTTON"
       )
         return;
 
@@ -1974,49 +1992,8 @@ function App() {
     };
   })();
   const overlayEscala = overlayRecuadro?.escala ?? 0.3;
-  const estiloLineaOverlay = (preset: PresetAss) => {
-    // Sin clamp: en preview chico o grande el tamaño debe ser el real
-    // escalado, como en el render. ASS_EM compensa celda ASS vs em CSS.
-    const px = preset.fontsize * overlayEscala * ASS_EM_PREVIEW;
-    const borde = Math.max(1, preset.outline * overlayEscala);
-    return {
-      fontFamily: `"${preset.fontname}", sans-serif`,
-      fontSize: px,
-      color: preset.color,
-      textShadow: `0 0 ${borde}px ${preset.outlineColor}, 0 1px 2px rgba(0,0,0,.8)`,
-    } as const;
-  };
-  const overlayStyle = (() => {
-    if (!overlayBase) return undefined;
-    const al = overlayBase.alignment;
-    const vertical = al >= 7 ? "top" : al >= 4 ? "middle" : "bottom";
-    const horizontal =
-      al === 1 || al === 4 || al === 7 ? "left"
-      : al === 3 || al === 6 || al === 9 ? "right"
-      : "center";
-    return {
-      // Caja = video visible (no el elemento con letterbox); sin recuadro,
-      // vale el inset:0 del CSS. Márgenes del preset escalados, no % fijos.
-      ...(overlayRecuadro
-        ? {
-            left: overlayRecuadro.left,
-            top: overlayRecuadro.top,
-            width: overlayRecuadro.width,
-            height: overlayRecuadro.height,
-          }
-        : {}),
-      justifyContent:
-        horizontal === "left" ? "flex-start"
-        : horizontal === "right" ? "flex-end"
-        : "center",
-      textAlign: horizontal as "left" | "center" | "right",
-      alignItems: vertical === "top" ? "flex-start" : vertical === "middle" ? "center" : "flex-end",
-      paddingLeft: overlayBase.marginL * overlayEscala,
-      paddingRight: overlayBase.marginR * overlayEscala,
-      paddingBottom: vertical === "bottom" ? overlayBase.marginV * overlayEscala : undefined,
-      paddingTop: vertical === "top" ? overlayBase.marginV * overlayEscala : undefined,
-    } as const;
-  })();
+  const estiloLineaOverlay = (p: PresetAss) => estiloLineaPreview(p, overlayEscala);
+  const overlayStyle = overlayBase ? estiloCajaPreview(overlayBase, overlayRecuadro, overlayEscala) : undefined;
 
   // Follow-scroll de la lista virtual: mantiene visible el caption activo.
   // scrollIntoView con "nearest" no mueve nada si la fila ya es visible, así
@@ -2061,11 +2038,11 @@ function App() {
       },
       ...hablantes.map((h) => ({
         label: h.nombre || h.tecla,
-        color: h.color,
+        color: colorHablante(h, ass.presetsAss),
         caps: carrilesAgrupados.porHablante.get(h.id) ?? [],
       })),
     ],
-    [carrilesAgrupados, hablantes],
+    [carrilesAgrupados, hablantes, ass.presetsAss],
   );
 
   function handleClipMouseDown(
@@ -2368,6 +2345,12 @@ function App() {
                     }}
                     title={t("app.timeInput.captionEnd")}
                   />
+                  <span
+                    className="captionTimeLabel"
+                    title={t("app.timeInput.captionDuration")}
+                  >
+                    DUR: {(currentCaption.fin - currentCaption.inicio).toFixed(2)}s
+                  </span>
                 </div>
               )}
             </>
@@ -2402,7 +2385,7 @@ function App() {
                         <span
                           className="dot"
                           style={{
-                            backgroundColor: sp ? sp.color : "#4a4853",
+                            backgroundColor: sp ? colorHablante(sp, ass.presetsAss) : "#4a4853",
                           }}
                         />
                         {sp
@@ -2432,9 +2415,6 @@ function App() {
               onBlur={handleEditorBlur}
               onKeyDown={handleEditorKeyDown}
             />
-            <div className="captionEditorHint">
-              {t("app.editor.hint")}
-            </div>
             <button className="addFragmentBtn" onClick={agregarFragmento}>
               {t("app.editor.newFragment")}
             </button>
@@ -2442,110 +2422,116 @@ function App() {
         </div>
 
         <div className="rightCol">
-          <SpeakersPanel
-            hablantes={hablantes}
-            presets={ass.presetsAss}
-            panelAbierto={panelHablantesAbierto}
-            onTogglePanel={togglePanelHablantes}
-            onAgregar={voces.agregarHablante}
-            onActualizar={voces.actualizarHablante}
-            onCambiarColor={voces.cambiarColorHablante}
-            onEliminar={voces.eliminarHablante}
-            onCommit={pushHistorial}
-          />
-          <StylesPanel
-            presets={ass.presetsAss}
-            panelAbierto={panelEstilosAbierto}
-            onTogglePanel={togglePanelEstilos}
-            onGuardar={ass.persistirPresets}
-          />
-
-          <div className="rightColHeader">
-            <span className="rightColTitle">{t("app.rightCol.title")}</span>
-            {captions.length > 0 && (
-              <span className="rightColHeaderActions">
-                <span className="captionCount">{t("app.rightCol.lines", { count: captions.length })}</span>
-                <button
-                  className={`iconBtnSmall searchToggle ${busquedaAbierta ? "active" : ""}`}
-                  onClick={() => setBusquedaAbierta((v) => !v)}
-                  title={t("app.search.open")}
-                >
-                  <svg
-                    className="icon xs"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.6}
-                    strokeLinecap="round"
+          <PanelTabs panes={panesTabs} activo={paneActivo} onCambiar={setPaneActivo} />
+          <div className="tabPaneContainer">
+            {paneActivo === "subs" && (
+              <>
+              <div className="rightColHeader">
+                <span className="rightColTitle">{t("app.rightCol.title")}</span>
+                {captions.length > 0 && (
+                  <span className="rightColHeaderActions">
+                    <span className="captionCount">{t("app.rightCol.lines", { count: captions.length })}</span>
+                    <button
+                      className={`iconBtnSmall searchToggle ${busquedaAbierta ? "active" : ""}`}
+                      onClick={() => setBusquedaAbierta((v) => !v)}
+                      title={t("app.search.open")}
+                    >
+                      <svg
+                        className="icon xs"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={1.6}
+                        strokeLinecap="round"
+                      >
+                        <circle cx="7" cy="7" r="4.4" />
+                        <path d="M10.4 10.4l3 3" />
+                      </svg>
+                    </button>
+                  </span>
+                )}
+              </div>
+              {busquedaAbierta && captions.length > 0 && (
+                <div className="searchBox">
+                  <input
+                    ref={busquedaInputRef}
+                    className="searchInput"
+                    placeholder={t("app.search.placeholder")}
+                    value={terminoBusqueda}
+                    onChange={(e) => setTerminoBusqueda(e.target.value)}
+                    onKeyDown={handleBusquedaKeyDown}
+                  />
+                  <button
+                    className={`searchToggleCase ${coincidirMayus ? "active" : ""}`}
+                    onClick={() => setCoincidirMayus((v) => !v)}
+                    title={t("app.search.matchCase")}
                   >
-                    <circle cx="7" cy="7" r="4.4" />
-                    <path d="M10.4 10.4l3 3" />
-                  </svg>
-                </button>
-              </span>
+                    Aa
+                  </button>
+                  <span
+                    className={`searchCount ${terminoLimpio && coincidencias.length === 0 ? "none" : ""}`}
+                  >
+                    {terminoLimpio
+                      ? coincidencias.length === 0
+                        ? "0"
+                        : `${indiceCoincidencia + 1}/${coincidencias.length}`
+                      : "\u00a0"}
+                  </span>
+                  <input
+                    className="searchInput replace"
+                    placeholder={t("app.search.replacePlaceholder")}
+                    value={terminoReemplazo}
+                    onChange={(e) => setTerminoReemplazo(e.target.value)}
+                    onKeyDown={handleBusquedaKeyDown}
+                  />
+                  <button
+                    className="searchBtn"
+                    onClick={reemplazarCoincidencia}
+                    disabled={coincidencias.length === 0}
+                  >
+                    {t("app.search.replace")}
+                  </button>
+                  <button
+                    className="searchBtn"
+                    onClick={reemplazarTodas}
+                    disabled={coincidencias.length === 0}
+                  >
+                    {t("app.search.replaceAll")}
+                  </button>
+                </div>
+              )}
+              <CaptionList
+                captions={captions}
+                currentCaptionIdx={currentCaptionIdx}
+                selectedCaptionIds={selectedCaptionIds}
+                onSelectCaption={handleSelectCaption}
+                onEliminarCaption={eliminarCaption}
+                rowRefs={rowRefs}
+                speakerMap={speakerMapResuelto}
+                terminoResaltado={busquedaAbierta ? terminoLimpio : ""}
+                coincidirMayus={coincidirMayus}
+                idCoincidenciaActiva={coincidenciaActiva?.id}
+                />
+              </>
+            )}
+            {paneActivo === "hablantes" && (
+              <SpeakersPanel
+                hablantes={hablantes}
+                presets={ass.presetsAss}
+                onAgregar={voces.agregarHablante}
+                onActualizar={voces.actualizarHablante}
+                onEliminar={voces.eliminarHablante}
+                onCommit={pushHistorial}
+              />
+            )}
+            {paneActivo === "estilos" && (
+              <StylesPanel
+                presets={ass.presetsAss}
+                textoInicial={currentCaption?.texto ?? t("assExport.sampleText")}
+                onGuardar={ass.persistirPresets}
+              />
             )}
           </div>
-          {busquedaAbierta && captions.length > 0 && (
-            <div className="searchBox">
-              <input
-                ref={busquedaInputRef}
-                className="searchInput"
-                placeholder={t("app.search.placeholder")}
-                value={terminoBusqueda}
-                onChange={(e) => setTerminoBusqueda(e.target.value)}
-                onKeyDown={handleBusquedaKeyDown}
-              />
-              <button
-                className={`searchToggleCase ${coincidirMayus ? "active" : ""}`}
-                onClick={() => setCoincidirMayus((v) => !v)}
-                title={t("app.search.matchCase")}
-              >
-                Aa
-              </button>
-              <span
-                className={`searchCount ${terminoLimpio && coincidencias.length === 0 ? "none" : ""}`}
-              >
-                {terminoLimpio
-                  ? coincidencias.length === 0
-                    ? "0"
-                    : `${indiceCoincidencia + 1}/${coincidencias.length}`
-                  : "\u00a0"}
-              </span>
-              <input
-                className="searchInput replace"
-                placeholder={t("app.search.replacePlaceholder")}
-                value={terminoReemplazo}
-                onChange={(e) => setTerminoReemplazo(e.target.value)}
-                onKeyDown={handleBusquedaKeyDown}
-              />
-              <button
-                className="searchBtn"
-                onClick={reemplazarCoincidencia}
-                disabled={coincidencias.length === 0}
-              >
-                {t("app.search.replace")}
-              </button>
-              <button
-                className="searchBtn"
-                onClick={reemplazarTodas}
-                disabled={coincidencias.length === 0}
-              >
-                {t("app.search.replaceAll")}
-              </button>
-            </div>
-          )}
-          <CaptionList
-            captions={captions}
-            currentCaptionIdx={currentCaptionIdx}
-            selectedCaptionIds={selectedCaptionIds}
-            onSelectCaption={handleSelectCaption}
-            onEliminarCaption={eliminarCaption}
-            rowRefs={rowRefs}
-            speakerMap={voces.speakerMap}
-            terminoResaltado={busquedaAbierta ? terminoLimpio : ""}
-            coincidirMayus={coincidirMayus}
-            idCoincidenciaActiva={coincidenciaActiva?.id}
-          />
         </div>
       </div>
 
@@ -2662,7 +2648,7 @@ function App() {
                             left: `${left}%`,
                             width: `${width}%`,
                             background: `color-mix(in srgb, ${row.color} 18%, transparent)`,
-                            border: `1px solid ${row.color}`,
+                            border: `1px solid #6E7480`,
                           }}
                           onMouseDown={(ev) => handleClipMouseDown(ev, cap, null)}
                           onClick={(ev) => handleClipClick(ev, cap)}

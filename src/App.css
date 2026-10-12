@@ -48,30 +48,33 @@
      Sin esto WebKitGTK los pinta claros y los popups cantan en blanco. */
   color-scheme: dark;
 
-  /* neutros (precisión fría) */
-  --bg: #0e0f11;
-  --surface: #131416;
-  --surface2: #16181b;
-  --surface3: #1a1c1f;
-  --border: #1e2024;
-  --borderStrong: #2c2f36;
-  --text: #e8eaed;
-  --textDim: #9a9ea6;
-  --textFaint: #55585e;
+  /* neutros (negro puro; los escalones de superficie dan la profundidad) */
+  --bg: #000000;
+  --surface: #08090C;
+  --surface2: #101318;
+  --surface3: #191D24;
+  --surfaceHover: #1F242C;
+  --border: #1C212B;
+  --borderStrong: #2A313D;
+  --text: #EDEDF0;
+  --textDim: #9AA1AE;
+  --textFaint: #737B8A;
+  --textHint: #5A6272;
 
-  /* acentos: 1 acción + 2 semánticos + 1 aviso */
-  --accent: #e85d4e;
-  --accentSoft: rgba(232, 93, 78, 0.14);
+  /* dial cálido: mostaza (acción) → naranja quemado (aviso) → rojo (peligro).
+     --info y --success quedan fuera del dial. */
+  --accent: #D4A017;
+  --accentSoft: rgba(212, 160, 23, 0.14);
   --info: #4ea8e8;
   --success: #7ed957;
-  --warn: #e8c34e;
-  --danger: #f87171;
+  --warn: #E8683C;
+  --danger: #FF4D4D;
 
-  /* radios (precisión fría: aristas contenidas) */
-  --r-sm: 5px;
-  --r-md: 6px;
-  --r-lg: 6px;
-  --r-xl: 8px;
+  /* radios (precisión técnica: aristas casi rectas) */
+  --r-sm: 2px;
+  --r-md: 2px;
+  --r-lg: 2px;
+  --r-xl: 2px;
 
   /* tipos */
   --font-display: "Space Grotesk", "Inter", "Segoe UI", sans-serif;
@@ -227,21 +230,92 @@ body {
   color: var(--textFaint);
 }
 
+/* ===== TABS DE LA COLUMNA DERECHA (browser-style) ===== */
+.panelTabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.panelTab {
+  height: 29px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  position: relative;
+  top: 1px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--textFaint);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.panelTab:hover {
+  background: var(--surfaceHover);
+  color: var(--textDim);
+}
+
+.panelTab.activo {
+  background: var(--surface);
+  border-color: var(--border);
+  border-top: 2px solid var(--accent);
+  color: var(--text);
+}
+
+.tabCounterBadge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--textFaint);
+  background: var(--surface3);
+  border-radius: var(--r-sm);
+  padding: 0 5px;
+}
+
+.panelTab.activo .tabCounterBadge {
+  color: var(--textDim);
+}
+
+.tabPaneContainer {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 10px;
+}
+
 /* ===== VIDEO PLAYER ===== */
 .videoPlayer {
   width: 100%;
   border-radius: var(--r-lg);
   background: #000;
-  max-height: 45vh;
-  min-height: 120px;
+  /* El alto lo da el wrap (flex:1) — el max-height fijo de antes era lo que
+   * empujaba el scrollbar en .leftCol al agrandar el dock. */
+  height: 100%;
   object-fit: contain;
-  flex-shrink: 0;
 }
 
-/* Contenedor para el live preview de subtítulos sobre el video */
+/* Contenedor para el live preview de subtítulos sobre el video.
+   Con --bg en negro puro, el video necesita un asiento propio: sin esto la
+   imagen se derrama y se pierde el marco (spec 3.5). */
 .videoWrap {
   position: relative;
-  flex-shrink: 0;
+  /* El video cede espacio cuando el dock del timeline crece; todo lo demas de
+   * la columna (controles, tiempos, editor) es alto fijo y chico, y si el
+   * video los aplasta el scroll vuelve igual. min-height es el piso duro: por
+   * debajo de ahi el wrap deja de encogerse y .leftCol scrollea. */
+  flex: 1 1 auto;
+  min-height: 120px;
+  background: var(--surface);
+  border: 1px solid var(--border);
 }
 
 .videoSubOverlay {
@@ -323,7 +397,7 @@ body {
   font-size: 18px;
   padding: 8px 20px;
   border-color: var(--accent);
-  box-shadow: 0 0 10px rgba(232, 93, 78, 0.35);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .playBtn svg {
@@ -397,7 +471,7 @@ body {
 .playbackControls select:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 8px rgba(232, 93, 78, 0.2);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 /* ===== TIMELINE ===== */
@@ -489,6 +563,12 @@ body {
 }
 
 .clip.selected {
+  /* Blanco, no --accent: un clip seleccionado es un ESTADO, no una acción. El
+   * acento queda para el playhead, el tab activo y los bordes de foco.
+   * Además el borde compite con el color del hablante en un rectángulo de 24px:
+   * con mostaza, un clip cian parecía mostaza (el borde pesa más que el relleno),
+   * y para un hablante cuyo preset fuera mostaza el borde sería invisible contra
+   * su propio clip. Con --text el contraste es alto y funciona para todos. */
   outline: 1.5px solid var(--text);
   outline-offset: -1.5px;
 }
@@ -499,11 +579,11 @@ body {
 }
 
 .track.dropTarget {
-  background: rgba(232, 93, 78, 0.08);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .track.dropTarget .trackClips {
-  box-shadow: inset 0 0 0 1px rgba(232, 93, 78, 0.35);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .clipEdge {
@@ -654,13 +734,6 @@ body {
   color: var(--textFaint);
 }
 
-.captionEditorHint {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--textFaint);
-  margin-top: 4px;
-}
-
 .addFragmentBtn {
   margin-top: 8px;
   width: 100%;
@@ -760,7 +833,7 @@ body {
   bottom: 16px;
   width: 1px;
   background: var(--accent);
-  box-shadow: 0 0 8px rgba(232, 93, 78, 0.8);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 80%, transparent);
   pointer-events: none;
   z-index: 5;
   display: none;
@@ -777,7 +850,10 @@ body {
 
 .captionRow {
   border-radius: 0;
-  padding: 6px 2px;
+  /* 10px a la izquierda (no 2px): el padding izquierdo se suma al border-left
+   * de 2px del color del hablante, y con 2px el texto quedaba pegado a la línea
+   * de color. La derecha se queda en 8px porque el botón de borrar va ahí. */
+  padding: 6px 8px 6px 10px;
   cursor: pointer;
   border-left: 2px solid transparent;
   border-bottom: 1px solid var(--border);
@@ -804,7 +880,7 @@ body {
 .marqueeOverlay {
   position: fixed;
   pointer-events: none;
-  background: rgba(232, 93, 78, 0.15);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
   border: 1px dashed var(--accent);
   z-index: 1000;
 }
@@ -855,55 +931,11 @@ body {
 }
 
 /* ===== HABLANTES ===== */
-.speakersAccordion {
-  background: var(--surface2);
-  border-radius: var(--r-md);
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.speakersAccordionHeader {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  padding: 9px 12px;
-  font-family: var(--font-display);
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text);
-  cursor: pointer;
-  transition: background-color 0.15s;
-}
-
-.speakersAccordionHeader:hover {
-  background: var(--surface3);
-}
-
-.speakersAccordionHeader .chev {
-  color: var(--textFaint);
-  display: inline-flex;
-  transition: transform 0.2s;
-}
-
-.speakersAccordionHeader .chev svg {
-  width: 9px;
-  height: 9px;
-}
-
-.speakersAccordionHeader.open .chev {
-  transform: rotate(90deg);
-}
-
 .speakersPanel {
   padding: 10px 12px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-top: 1px solid var(--border);
 }
 
 .speakerRow {
@@ -917,31 +949,6 @@ body {
   height: 12px;
   border-radius: 50%;
   flex-shrink: 0;
-}
-
-.speakerDotWrap {
-  position: relative;
-  display: inline-flex;
-  cursor: pointer;
-  border-radius: 50%;
-  padding: 2px;
-  margin: -2px;
-}
-
-.speakerDotWrap:hover {
-  background: var(--surface3);
-}
-
-.speakerColorInput {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
-  border: none;
-  padding: 0;
-  background: transparent;
 }
 
 .speakerInput {
@@ -1002,14 +1009,13 @@ body {
 }
 
 /* ===== PANEL DE ESTILOS (presets .ass de primera clase) ===== */
-/* Reutiliza el contenedor acordeón de hablantes y los controles .ass* del
-   modal: misma familia visual, sin duplicar el sistema. */
+/* Reutiliza los controles .ass* del modal: misma familia visual, sin
+   duplicar el sistema. */
 .stylesPanel {
   padding: 10px 12px 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border-top: 1px solid var(--border);
 }
 
 .stylesPanel .assPresetList {
@@ -1025,6 +1031,54 @@ body {
 
 .stylesPanel .assPresetActions {
   padding-top: 6px;
+}
+
+/* ===== PREVIEW EN VIVO DEL PRESET (StylesPanel) ===== */
+/* El stage renderiza con estiloLineaPreview/estiloCajaPreview — el mismo
+   código que el overlay sobre el video. El display:flex del stage lo pone
+   esta clase (igual que .videoSubOverlay); la alineación y los márgenes
+   vienen del style inline. */
+.stylePreviewBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.stylePreviewLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--textFaint);
+}
+
+.stylePreviewInput {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 5px 7px;
+  width: 100%;
+}
+
+.stylePreviewInput:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.stylePreviewStage {
+  position: relative;
+  background: #000;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  display: flex;
+  overflow: hidden;
+  line-height: 1.35;
+  font-weight: 600;
 }
 
 /* Wordmark mínima en la barra de estado: firma sin espacio muerto. */
@@ -1175,7 +1229,7 @@ button.primary:hover {
   margin-left: auto;
   font-family: var(--font-mono);
   font-size: 10.5px;
-  color: var(--textFaint);
+  color: var(--textHint);
   white-space: nowrap;
 }
 
@@ -1291,7 +1345,7 @@ button.primary:hover {
 .dropOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(232, 93, 78, 0.15);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
   border: 3px dashed var(--accent);
   z-index: 100;
   display: flex;
@@ -1427,8 +1481,8 @@ button.primary:hover {
 .downloadErrorBox {
   font-size: 11px;
   color: var(--danger);
-  background: rgba(248, 113, 113, 0.09);
-  border: 1px solid rgba(248, 113, 113, 0.22);
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 22%, transparent);
   padding: 4px 6px;
   border-radius: var(--r-sm);
   margin-top: 2px;
@@ -1780,6 +1834,45 @@ button.primary:hover {
 
 .assToggleGlyph.italics {
   font-style: italic;
+}
+
+/* Matriz de alineación .ass: grilla 3x3 de flechas en el orden en que libass
+   piensa la Alignment (arriba 7-9, medio 4-6, abajo 1-3). */
+.assAlignGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 30px);
+  gap: 2px;
+}
+
+.assAlignBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--textFaint);
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+
+.assAlignBtn:hover {
+  background: var(--surfaceHover);
+  color: var(--text);
+}
+
+.assAlignBtn.activo {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.assAlignBtn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .assPreviewWrap {

@@ -134,7 +134,7 @@ La pieza con más lógica del plan y la única con test real de comportamiento d
 
 **Interfaces:**
 - Consumes: `Hablante` y `PresetAss` de `src/types.ts`.
-- Produces: `colorHablante(h: Hablante, presets: PresetAss[]): string`.
+- Produces: `colorHablante(h: Hablante, presets: PresetAss[]): string`, y un `speakerMap` cuyos valores tienen `color` ya resuelto (App.tsx lo construye; `CaptionList` lo consume sin cambios).
 
 - [ ] **Step 1: Escribir el test que falla**
 
@@ -210,12 +210,12 @@ color: colorHablante(h, ass.presetsAss),
 
 **El `useMemo` de `trackRows` (deps `[carrilesAgrupados, hablantes]`) debe sumar `ass.presetsAss`.** Sin esto, editar el color de un preset no repinta los carriles hasta recargar — es el mismo bug de deps que ya se corrigió con `proyecto` en el dirty-effect. Review Focus #2 de la spec.
 
-El carril `"—"` (sin asignar, línea ~2059) **no cambia**: sigue en `#4A505D` con su etiqueta `—`. Es *nadie asignado*, no *alguien sin preset*; si pasa a blanco se confunde con un hablante real sin preset.
+El carril `"—"` (sin asignar, línea ~2059) **no cambia**: sigue en `#4a4853` con su etiqueta `—`. Ese gris es el que ya usan el chip del editor (App.tsx:~2417) y .dropTarget (App.css) — no introduzcas un tono nuevo. Es *nadie asignado*, no *alguien sin preset*; si pasa a blanco se confunde con un hablante real sin preset.
 
 - [ ] **Step 6: Cablear los otros tres consumidores**
 
-- `App.tsx:2405` — el dot del `speakerChip` del editor: `sp ? colorHablante(sp, ass.presetsAss) : "#4A505D"`.
-- `CaptionList.tsx:106` y `:117` — `borderLeftColor` y el `captionSpeakerTag`. `CaptionList` recibe `speakerMap` por prop; agregar `presets: PresetAss[]` a su `Props` para que pueda derivar (alternativa: que `App.tsx` le pase el color ya resuelto — **más simple, no cambia la prop `speakerMap`**).
+- `App.tsx:2405` — el dot del `speakerChip` del editor: `sp ? colorHablante(sp, ass.presetsAss) : "#4a4853"`.
+- `CaptionList.tsx:106` y `:117` — `borderLeftColor` y el `captionSpeakerTag`. **Decisión: `App.tsx` les pasa el color YA RESUELTO**, no la lista de presets. `CaptionList` sigue recibiendo `speakerMap` sin cambios, pero el `Map` pasa a ser de hablantes con el color ya calculado (`{...h, color: colorHablante(h, presetsAss)}`), de modo que `sp.color` en las líneas 106 y 117 ya devuelve el valor correcto sin tocar `CaptionList` para nada. La derivación ocurre en un solo lugar — App — y `CaptionList` no necesita saber de dónde sale el color.
 - `App.tsx:2664` — el `background` del clip sigue siendo `color-mix(in srgb, ${row.color} 18%, transparent)`. **El `border` cambia a `1px solid #6E7480` fijo**, no derivado (ver Review Focus de la spec §6.6: el borde describe "esto es un clip", no "este es el hablante"). El texto del clip (`--text`, 9px) tiene 11.6:1 contra el relleno `#2E2E2E` — el borde a 2.89:1 no compite con él.
 
 - [ ] **Step 7: Quitar el `<input type="color">` de SpeakersPanel**
@@ -224,7 +224,19 @@ En `SpeakersPanel.tsx:92-104`, reemplazar el `<label className="speakerDotWrap">
 
 Borrar la función `normalizarColor` (líneas 18-28) — solo existía para normalizar el valor del `<input type="color">`.
 
-- [ ] **Step 8: Borrar `cambiarColorHablante` y `PALETA`**
+- [ ] **Step 8: `AssExportModal.tsx` — 4ª superficie (ENRUTADO desde la review de Task 2)**
+
+`AssExportModal.tsx:66` sigue haciendo `style={{ background: h.color }}` — el campo muerto. **El modal ya recibe `presets` por prop** (línea 6), así que el fix es de una línea:
+
+```tsx
+style={{ background: colorHablante(h, presets) }}
+```
+
+Por qué es el peor caso de todos los de §6: el modal es donde el usuario **elige a qué preset asigna cada hablante**. Si muestra el color guardado y el timeline muestra el derivado, ve dos colores distintos para el mismo hablante en dos superficies de la misma pantalla — y el que está en el modal es el que va a gobiernar el `.ass` exportado. La UI miente en la superficie donde la decisión se toma.
+
+Importar `colorHablante` en `AssExportModal.tsx`. Ya tiene `presets` en scope: no hace falta cambiar ninguna prop.
+
+- [ ] **Step 9: Borrar `cambiarColorHablante` y `PALETA`**
 
 - `useHablantes.ts:71-83`: borrar el `useCallback` completo y su línea en el `return`.
 - `useHablantes.ts:52`: `color: PALETA[...]` → `color: "#FFFFFF"` (el hablante nuevo nace sin preset, igual que el resto).
@@ -234,7 +246,11 @@ Borrar la función `normalizarColor` (líneas 18-28) — solo existía para norm
 
 `Hablante.color` **se queda** en `types.ts` y en el `struct Hablante` de Rust (`lib.rs:148`): los `.cdp` guardados lo traen en el JSON y borrarlo rompe la deserialización. Queda como campo muerto, sin leer.
 
-- [ ] **Step 9: Reescribir el test de convención PALETA**
+- [ ] **Step 10: Quitar `onCambiarColor` de las props de `SpeakersPanel`**
+
+En `App.tsx`, el JSX que renderiza `<SpeakersPanel ... />` (~línea 2445) pasa `onCambiarColor={voces.cambiarColorHablante}`. Esa prop desaparece en el Step 7 (el `<input type="color">` ya no existe) y `cambiarColorHablante` se borra del hook en el Step 9 — si queda el cableado, el build falla por una prop que ya no está en la interfaz del componente.
+
+- [ ] **Step 11: Reescribir el test de convención PALETA**
 
 `src/utils/__tests__/autosubs.test.ts:94-109` — los tres tests que verifican que el hablante nuevo tome un color de `PALETA` y que la paleta tenga 9 colores distintos **se borran**. En su lugar, un test que fija el comportamiento nuevo:
 
@@ -248,12 +264,12 @@ it("el hablante nuevo nace sin preset, y su color guardado es blanco", () => {
 
 Y borrar el import de `PALETA` de la línea 8 del test.
 
-- [ ] **Step 10: Correr toda la suite**
+- [ ] **Step 12: Correr toda la suite**
 
 Run: `npm test`
 Expected: PASS. Si `ass.test.ts:444` o `:641` fallan, es porque usan `color` en fixtures — esos **deben seguir pasando** porque el campo sigue viajando en el JSON; solo dejó de leerse en la UI.
 
-- [ ] **Step 11: Verificar manualmente (Review Focus de la spec §6)**
+- [ ] **Step 13: Verificar manualmente (Review Focus de la spec §6)**
 
 Con la app corriendo y un proyecto con hablantes:
 - Editar el color de un preset en el tab Estilos → **los carriles del timeline se repintan sin recargar**.
@@ -263,7 +279,7 @@ Con la app corriendo y un proyecto con hablantes:
 - **Abrir un proyecto viejo** (con colores guardados): los hablantes salen blancos, sin crash.
 - Exportar un `.ass`, abrirlo en un editor de texto: el color de cada hablante **coincide con el color de su carril**. Ese es el criterio de aceptación de la sección entera.
 
-- [ ] **Step 12: Commit**
+- [ ] **Step 14: Commit**
 
 ```bash
 git add src/utils/colorHablante.ts src/utils/__tests__/colorHablante.test.ts \
@@ -319,10 +335,12 @@ describe("estiloCajaPreview", () => {
     expect(s.justifyContent).toBe("center");
     expect(s.alignItems).toBe("flex-end");
   });
-  it("alignment 7 = arriba al centro", () => {
+  it("alignment 7 = arriba a la izquierda", () => {
+    // OJO: 7 es top-LEFT en el numpad de ASS, no top-center. La matriz de
+    // flechas (Task 5) lo pone arriba-izq por esto mismo.
     const s = estiloCajaPreview(P({ alignment: 7 }), rec, 1);
     expect(s.alignItems).toBe("flex-start");
-    expect(s.justifyContent).toBe("center");
+    expect(s.justifyContent).toBe("flex-start");
   });
   it("alignment 1 = abajo a la izquierda", () => {
     expect(estiloCajaPreview(P({ alignment: 1 }), rec, 1).justifyContent).toBe("flex-start");
@@ -401,21 +419,22 @@ El editor de presets gana un preview en vivo que usa `estiloLineaPreview` / `est
 
 **Files:**
 - Create: `src/components/StylePreview.tsx`
-- Modify: `src/components/StylesPanel.tsx` (añadir el preview al pie)
+- Modify: `src/components/StylesPanel.tsx` (añadir el preview al pie, aceptar `textoInicial`)
+- Modify: `src/App.tsx` (pasar `currentCaption?.texto` como `textoInicial`)
 - Modify: `src/App.css` (`.stylePreviewStage`)
 - Modify: `src/i18n/es.json`, `en.json`
 
 **Interfaces:**
 - Consumes: `estiloLineaPreview` y `estiloCajaPreview` de `src/utils/assPreview.ts` (Task 3).
-- Produces: `StylePreview({ preset, onCambio }: { preset: PresetAss; onCambio: (campo: keyof PresetAss, valor: string | number | boolean) => void })`. Lo usa la Task 5.
+- Produces: `StylePreview({ preset, textoInicial }: { preset: PresetAss; textoInicial: string })`. Lo usa la Task 5.
 
 - [ ] **Step 1: Implementar `StylePreview`**
 
-Componente `memo()`. Props `preset` y `onCambio`. Mide su propia caja con `ResizeObserver` (patrón ya establecido en `App.tsx:815-840` para el video) y guarda `{w, h}` en un ref + un tick de re-render, **no** en un `useState` que dispare en cada resize frame.
+Componente `memo()`. Props `preset` y `textoInicial`. Mide su propia caja con `ResizeObserver` (patrón ya establecido en `App.tsx:815-840` para el video) y guarda `{w, h}` en un ref + un tick de re-render, **no** en un `useState` que dispare en cada resize frame.
 
 Calcula `escala = Math.min(w / 1920, h / 1080)` y pasa `recuadro = {left:0, top:0, width:w, height:h}`. Renderiza el texto con `estiloLineaPreview(preset, escala)` dentro de un div con `estiloCajaPreview(preset, recuadro, escala)`.
 
-El texto de ejemplo es un `<input>` **editable**,default al texto del caption bajo el playhead (lo recibe por prop `textoInicial`). Cambia el input → cambia el preview.
+El texto de ejemplo es un `<input>` **editable** cuyo valor inicial es `textoInicial` (el texto del caption bajo el playhead, que App pasa como prop). Cambia el input → cambia el preview. El estado del input vive en `StylePreview` con `useState(textoInicial)`.
 
 - [ ] **Step 2: Estilo `.stylePreviewStage`**
 
@@ -423,11 +442,13 @@ El texto de ejemplo es un `<input>` **editable**,default al texto del caption ba
 
 - [ ] **Step 3: Montar en StylesPanel**
 
-Debajo del último campo (`assFields`), fuera del `assPresetList`. Recibe el `preset` seleccionado (`sel`, que ya existe derivado) y el `textoInicial` desde App.
+Debajo del último campo (`assFields`), fuera del `assPresetList`. Recibe el `preset` seleccionado (`sel`, que ya existe derivado).
+
+`StylesPanel` acepta una prop nueva `textoInicial: string` y la reenvía a `StylePreview`. En `App.tsx`, `<StylesPanel ... textoInicial={currentCaption?.texto ?? t("assExport.sampleText")} />` — `currentCaption` ya existe derivado en App.tsx (~1935) y `styles.previewTextPlaceholder` es el i18n del texto por defecto.
 
 - [ ] **Step 4: i18n**
 
-`es.json` y `en.json`: `styles.previewLabel` ("Vista previa del estilo" / "Style preview"), `styles.previewTextPlaceholder` ("Texto de ejemplo" / "Sample text").
+`es.json` y `en.json`: `styles.previewLabel` ("Vista previa del estilo" / "Style preview"), `styles.previewTextPlaceholder` ("Texto de ejemplo" / "Sample text"), `assExport.sampleText` ("Texto de ejemplo" / "Sample text") — esta última es el fallback en App cuando no hay caption bajo el playhead.
 
 - [ ] **Step 5: Verificar (Review Focus #1 y #2)**
 
@@ -455,6 +476,7 @@ El `<select>` de alineación (StylesPanel.tsx:285-297) se reemplaza por una matr
 **Files:**
 - Modify: `src/components/StylesPanel.tsx`
 - Modify: `src/App.css` (`.assAlignGrid`, `.assAlignBtn`, `.assAlignBtn.activo`)
+- Modify: `src/App.tsx` (guard de teclado en 1510-1516, **solo si** el Step 4 lo justifica)
 
 **Interfaces:**
 - Consumes: `StylePreview` de la Task 4.
@@ -635,9 +657,15 @@ Las tres cosas que sobran del spec y que conviene cerrar juntas.
 
 El `captionTimeRow` (App.tsx:2333-2372) ya tiene los dos inputs numéricos editables. **Se conservan tal cual** — existen desde `ee04b7b` con el motivo "el timing es el 80% del oficio y necesitaba un input numérico". Agregar a la derecha un `<span>` de solo lectura con `DUR: {(currentCaption.fin - currentCaption.inicio).toFixed(2)}s`.
 
-- [ ] **Step 2: Auditar tokens huérfanos**
+- [ ] **Step 2: Auditar tokens huérfanos y rgba del coral viejo**
 
-`grep -rn 'var(--textHint)' src/` y `grep -rn 'var(--surfaceHover)' src/`. Si un token no se usa, o se le da un uso (§3 lo Pensó para hover de fila y hint de statusBar) o se borra del `:root`. Un token definido y nunca usado es deuda silenciosa.
+**(a) Tokens definidos y nunca usados.** `grep -rn 'var(--textHint)' src/` y `grep -rn 'var(--surfaceHover)' src/` y `grep -rn 'var(--borderBright)' src/`. Si un token no se usa, o se le da un uso (§3 lo pensó para hover de fila, hint de statusBar y anillo de foco) o se borra del `:root`. Un token definido y nunca usado es deuda silenciosa.
+
+**(b) Los 7 `rgba(232, 93, 78, …)` del coral viejo — ENRUTADO desde la review de Task 1.** El acento pasó a mostaza (`#D4A017`) pero siete `box-shadow`/`background` quedaron con el coral hardcodeado. **El caso grave es `.playheadLine`** (App.css:771): tiene `background: var(--accent)` [mostaza] junto a `box-shadow: 0 0 8px rgba(232,93,78,0.8)` [coral] — dos tonos distintos en el mismo elemento, y es el objeto más visible del timeline.
+
+Reemplazar cada `rgba(232, 93, 78, X)` por `color-mix(in srgb, var(--accent) Y%, transparent)` con Y ≈ X × 53 (la conversión de 14% de opacidad `--accentSoft` a porcentaje es 0.14 × 100; los valores existentes van de 0.08 a 0.8, o sea 8% a 80%). El proyecto ya usa `color-mix()` en App.tsx, así que no es una primitiva nueva.
+
+Las 7 ubicaciones (verificadas en App.css post-T1): **334** (`.playBtn` glow), **408** (`select:focus`), **510** y **514** (`.track.dropTarget`), **771** (`.playheadLine` — la prioritaria), **815** (`.marqueeOverlay`), **1302** (`.dropOverlay`).
 
 - [ ] **Step 3: Auditar imports y clases muertos**
 
