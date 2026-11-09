@@ -12,20 +12,21 @@ Tauri v2 + React 19 + Rust. Multi-speaker subtitle editor (color-coding); auto-s
 - `src/utils/constants.ts` — `VENTANAS_POR_SEGUNDO`, `PALETA`, `SNAP_THRESHOLD`, `HISTORY_LIMIT`
 - `src/utils/srt.ts` — `parseSrt()`, `buildSrt()`, `formatSrtTimestamp()`
 - `src/utils/captions.ts` — `findSnapTime()`, `BuildOverlapReport()` (no `computeCaptionLanes` — carriles ahora por hablante, ver session log)
+- `src/utils/audioIslands.ts` — `buscarTramoAudio()` (tramo de audio que cubre un fragmento nuevo: snap al onset + isla con histéresis), `picoEnRango()` (waveform por píxel, sin prerender)
 - `src/utils/time.ts` — `formatTime()`, `parseTimeInput()`
 - `src/utils/ass.ts` — Todo el formato `.ass`: `hexToAssColor`/`assColorToHex` (BGR invertido), `formatAssTime`/`parseAssTime` (centisegundos), `escapeAssText`/`unescapeAssText`, `segmentarPorSolape` (barrido), `overridesDeLinea`/`fusionarLineas`, `buildAss()`, `parseAss()`
 - `src/utils/assPresets.ts` — Presets globales en `appConfigDir()/presets_ass.json` (sin comandos Rust nuevos)
 - `src/utils/fuentes.ts` — `limpiarNombresFuentes`, `detectarFamilias`, `fuenteResuelve`, `fuentesDisponibles`
 - `src/components/AssExportModal.tsx` — Modal de export `.ass`: lista de presets, editor, filas hablante→preset (efímeras), selector de fuentes con caret
 - `src/hooks/useHistory.ts` — `pushHistorial`/`deshacer`/`rehacer` snapshot undo
-- `src/utils/__tests__/` — vitest suites for srt, time, captions, selection, audioIslands, autosubs, ass, assPresets (127 tests)
+- `src/utils/__tests__/` — vitest suites for srt, time, captions, selection, audioIslands, autosubs, ass, assPresets, ajustes, busqueda, clipboard, fuentes, … (306 tests)
 - `src-tauri/src/lib.rs` — All Rust commands + menu
 - `src-tauri/Cargo.toml` — Dependencies: tauri 2, symphonia, tokio
 - `design/mockup.html` — Approved design study (tokens, typography, track-per-speaker timeline)
 
 ## Commands
 - `npm run build` — tsc + vite build (typecheck gate; run before finishing)
-- `npm test` — vitest run (127 tests: srt/time/captions/selection/audioIslands/autosubs/ass/assPresets)
+- `npm test` — vitest run (306 tests: srt/time/captions/selection/audioIslands/autosubs/ass/assPresets/…)
 - `npm run dev` — browser-only Vite
 - `npm run tauri` — desktop dev
 - `npm run tauri:build:release` — release build (~10 min en target limpio: 261 crates + LTO). Instalador en `src-tauri\target\release\bundle\nsis\colordubber_0.1.0_x64-setup.exe` (2.2 MB). Per-user (`currentUser`): instalar en silencio con `/S`, sin admin
@@ -275,6 +276,16 @@ Tauri v2 + React 19 + Rust. Multi-speaker subtitle editor (color-coding); auto-s
 - **Release 1.3.0**: 211 vitest + 11 Rust, fmt/clippy/build en verde. Minor (no patch) por las 2 features nuevas.
 - **Pendiente a propósito**: `useTimelineVista` / `useTimelineGestos` (slices 7-8) NO se hicieron. El rAF loop (857-957) es el punto de integración entre vista y gestos — en un solo tick lee/escribe refs de ambos y llama `pintarMarquee`/`aplicarTransformBodyDrag`/`drawCanvasFrame`; no tiene dueño claro. El proyecto NO tiene jsdom/testing-library: los 211 tests pasan igual si se rompe el drag, nada lo detecta. Siguiente paso con criterio: **extraer la matemática del body-drag a funciones puras en utils/ y testearla** (igual que `findSnapBlockDelta`/`filasDestinoRelativas`), y recién después el hook que la orquesta.
 - **Trampa de verificación**: un dev server viejo ocupando el puerto 1420 devuelve HTTP 200 con el bundle VIEJO → falsos "funcionó"/"no funcionó". Confirmar siempre contra un server recién levantado. Y los selectores `.transport`/`.sinVideo` NO existen (son `.transportBtnGroup`/`.playbackControls`/`.videoMissing`/`.wordmark`): un `false` ahí no significa que falte el elemento.
+
+## Session log (2026-11-09) — el fragmento nuevo cubre la voz (isla + onset)
+- **Motivo**: el fragmento creado con `a`/Ctrl+V duraba `fin de isla − playhead`, pero **nunca movía el inicio** y el fondo se estimaba con la **media** de los 2s previos. Medido sobre los 10 cachés de volumen reales (barrido cada 0.1s, 900s por archivo, ground truth = runs de RMS sobre el p25×2.5 global): con el playhead en el silencio previo (0.6s de media antes de la voz) el 40% de los fragmentos **cortaba >0.3s de habla**; dentro de la frase, 34%. Causa doble: (1) la media de los 2s previos incluye el habla misma → umbral 2.5× la voz → `null` → fallback ciego de 1.5s; (2) sin snap al onset, el fin de isla se calculaba desde un punto en silencio.
+- **Fix** (`buscarTramoAudio(volumen, playhead) → {inicio, fin} | null`, reemplaza a `buscarFinIslaAudio`): fondo = **percentil 25** de los 2s previos; si el playhead está sobre habla, retrocede al onset (máx. `ISLA_SNAP_ATRAS_SEG` 0.5s); si está en silencio, busca el próximo onset hasta `ISLA_BUSQUEDA_ONSET_SEG` 2s y arranca en el playhead o hasta `ISLA_LEAD_MAX_SEG` 0.3s antes de la voz; el barrido de fin y los topes 1.5/5s se cuentan **desde el onset** (no desde el inicio del caption, o el tope de 5s se comía la frase cuando el lead era largo).
+- **Regla de diseño**: `inicio` NUNCA queda después del playhead. Si quedara, el effect de follow (`currentCaption` = captions que contienen el playhead) deselecciona el fragmento recién creado en el mismo render.
+- **Medido después** (misma metodología, función real): cortes >0.3s 19% dentro de frase y 10% en el silencio previo; lead medio 0.62s (el caption arranca donde pulsaste). 40% de posiciones siguen devolviendo `null` (silencio sin habla a 2s) → fallback 1.5s, correcto.
+- **Variantes descartadas con datos**: "pico literal" (la ventana más fuerte en ±1.5s y su isla) rinde igual que el onset en esta muestra, pero un golpe/música fuerte cercano se roba el subtítulo y no hay control del lead. Sin snap atrás pierde 1-3 puntos.
+- **Tope de 5s**: sigue cortando monólogos (26 frases >5s en un caché). Es decisión de producto, no bug; las 3 variantes lo sufren igual.
+- **Verificado**: TDD (13 tests nuevos en `audioIslands.test.ts`, rojo por `buscarTramoAudio is not a function`), `npm test` 303/303, `tsc --noEmit` y `vite build` OK. El harness de medición era temporal (leía los cachés de esta máquina) y se borró.
+- **Cola de silencio (reporte de Eche, mismo día)**: el fragmento cubría el pico pero **arrastraba silencio**: `ISLA_MIN_DURACION` 1.5s contaba desde el onset, así que una frase de 0.6s salía como 1.5s (0.9s de aire detrás; caso `RobloxTerror.json` 152.4 → 153.9). Medido sobre los 11 cachés (45.128 playheads): 39% de los fragmentos salían con >0.3s de aire al final, p75 0.70s, p90 1.23s. **Decisión de Eche**: cerrar con la voz + 0.25s de cola, y **sin piso de duración**. Implementación: `fin = (últimoAlto+1)/vps + ISLA_COLA_SEG` (0.25); `ISLA_MIN_DURACION` se eliminó (1.5 → 0.8 → fuera) junto con su clamp. Motivo del "fuera": en gameplays el **39% de las frases dura menos de 1s** (3.861 runs reales: p10 0.13s, p25 0.53s, p50 1.40s), y el piso las estiraba con silencio muerto — eso es lo que hacía que el tracking de picos "no pareciera funcionar". Resultado medido: mismo caso 152.4 → 153.32 (0.25s de aire); global >0.3s de aire 39% → 26% (piso 0.8) → **2%** (sin piso), p90 de aire 0.25s; duración por playhead p10 0.72s / p25 1.12s / p50 1.92s (3% de los fragmentos <0.5s, 20% <1s). `ISLA_FALLBACK` sigue en 1.5s (caso sin habla cerca: fragmento vacío para escribir). Tests: 306/306 (cola de 0.25s, frase corta = frase+0.25 sin piso, blip de una ventana que no se infla, y una regresión del caso reportado que fallaba con exactamente 0.8999s de aire).
 
 
 ## IPC Surface (commands)

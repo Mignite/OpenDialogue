@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Caption, Hablante } from "../types";
-import { buscarFinIslaAudio } from "../utils/audioIslands";
+import { buscarTramoAudio } from "../utils/audioIslands";
 import { clampCaptionTiempos } from "../utils/captionTiempos";
 import { ISLA_FALLBACK } from "../utils/constants";
 import { useHistory } from "./useHistory";
@@ -113,22 +113,22 @@ export function useCaptions({
     });
   }
 
-  // Duración de un fragmento nuevo: usa la isla de audio (fin del diálogo
-  // bajo el playhead) si hay análisis de volumen; fallback a ISLA_FALLBACK.
-  function duracionFragmento(inicio: number): number {
-    const finIsla = buscarFinIslaAudio(ondaVolumenRef.current, inicio);
-    return finIsla !== null ? finIsla - inicio : ISLA_FALLBACK;
+  // Tramo de un fragmento nuevo: cubre la isla de audio (voz) alrededor del
+  // playhead si hay análisis de volumen; fallback a ISLA_FALLBACK.
+  function tramoFragmento(inicio: number): { inicio: number; fin: number } {
+    const tramo = buscarTramoAudio(ondaVolumenRef.current, inicio);
+    return tramo ?? { inicio, fin: inicio + ISLA_FALLBACK };
   }
 
   function agregarFragmento() {
     pushHistorial();
     const video = videoRef.current;
-    const inicio = video ? video.currentTime : 0;
-    const duracion = duracionFragmento(inicio);
+    const playhead = video ? video.currentTime : 0;
+    const tramo = tramoFragmento(playhead);
     const nuevo: Caption = {
       id: `cap-frag-${Date.now()}`,
-      inicio,
-      fin: inicio + duracion,
+      inicio: tramo.inicio,
+      fin: tramo.fin,
       texto: "",
       hablante_id: null,
     };
@@ -153,12 +153,12 @@ export function useCaptions({
   function pegarFragmento(texto: string) {
     pushHistorial();
     const video = videoRef.current;
-    const inicio = video ? video.currentTime : 0;
-    const duracion = duracionFragmento(inicio);
+    const playhead = video ? video.currentTime : 0;
+    const tramo = tramoFragmento(playhead);
     const nuevo: Caption = {
       id: `cap-paste-${Date.now()}`,
-      inicio,
-      fin: inicio + duracion,
+      inicio: tramo.inicio,
+      fin: tramo.fin,
       texto,
       hablante_id: null,
     };
@@ -389,7 +389,7 @@ export function useCaptions({
     asignarHablante,
     actualizarTextoCaption,
     actualizarTextos,
-    duracionFragmento,
+    tramoFragmento,
     agregarFragmento,
     pegarFragmento,
     eliminarCaption,

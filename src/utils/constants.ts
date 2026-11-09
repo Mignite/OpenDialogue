@@ -24,8 +24,21 @@ export const ISLA_FACTOR_UMBRAL = 2.5;
 export const ISLA_PISO = 0.01;
 export const ISLA_HISTERESIS_MUESTRAS = 8;
 export const ISLA_MAX_DURACION = 5;
-export const ISLA_MIN_DURACION = 1.5;
+// Aire que se deja tras el último sonido detectado. NO hay piso de duración a
+// propósito: con un mínimo (1.5s, luego 0.8s) las frases cortas se estiraban
+// con silencio muerto y el fragmento dejaba de coincidir con el pico (en
+// gameplays el 43% de las frases dura <1s). La cola ya da el mínimo práctico.
+export const ISLA_COLA_SEG = 0.25;
 export const ISLA_FALLBACK = 1.5;
+// Nivel de fondo: percentil (no media) de la ventana previa, para que el
+// propio habla no suba el umbral y tape la frase.
+export const ISLA_FONDO_PERCENTIL = 0.25;
+// Búsqueda del próximo onset desde el playhead en silencio.
+export const ISLA_BUSQUEDA_ONSET_SEG = 2;
+// Aire máximo antes de la voz (nunca arranca después del playhead).
+export const ISLA_LEAD_MAX_SEG = 0.3;
+// Cuánto retrocede el inicio al onset si el playhead cae dentro del habla.
+export const ISLA_SNAP_ATRAS_SEG = 0.5;
 
 // ==== Export .ass (Advanced SubStation Alpha) ====
 export const ASS_PRESETS_ARCHIVO = "presets_ass.json";
