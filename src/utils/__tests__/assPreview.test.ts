@@ -15,6 +15,17 @@ describe("estiloLineaPreview", () => {
   it("el borde escala pero nunca baja de 1px", () => {
     expect(estiloLineaPreview(P({ outline: 0 }), 0.1).textShadow).toContain("1px");
   });
+  // El peso/cursiva del preset son campos del Style:, pero el preview es CSS:
+  // sin estas dos propiedades el overlay del video y el stage del creador de
+  // estilos pintaban el texto normal aunque el Style: exportado dijera -1.
+  it("aplica el peso del preset (bold true = 700)", () => {
+    expect(estiloLineaPreview(P({ bold: true }), 1).fontWeight).toBe(700);
+    expect(estiloLineaPreview(P({ bold: false }), 1).fontWeight).toBe(400);
+  });
+  it("aplica la cursiva del preset", () => {
+    expect(estiloLineaPreview(P({ italic: true }), 1).fontStyle).toBe("italic");
+    expect(estiloLineaPreview(P({ italic: false }), 1).fontStyle).toBe("normal");
+  });
 });
 
 describe("estiloCajaPreview", () => {

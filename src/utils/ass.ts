@@ -127,6 +127,12 @@ export function overridesDeLinea(linea: PresetAss, base: PresetAss): string {
   const p: string[] = [];
   if (linea.fontname !== base.fontname) p.push(`\\fn${linea.fontname}`);
   if (linea.fontsize !== base.fontsize) p.push(`\\fs${linea.fontsize}`);
+  // Bold/Italic solo existen en el Style: del evento, que es compartido por
+  // todas las líneas fusionadas: sin override, la línea que no es el base
+  // hereda el peso del base. (Son opcionales en PresetAss; comparar por
+  // truthiness evita un \b0 por un `undefined` contra un `false`.)
+  if (!!linea.bold !== !!base.bold) p.push(linea.bold ? "\\b1" : "\\b0");
+  if (!!linea.italic !== !!base.italic) p.push(linea.italic ? "\\i1" : "\\i0");
   if (linea.color.toLowerCase() !== base.color.toLowerCase())
     p.push(`\\c${hexToAssColor(linea.color)}&`);
   if (linea.outlineColor.toLowerCase() !== base.outlineColor.toLowerCase())

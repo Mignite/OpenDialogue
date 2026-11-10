@@ -595,6 +595,30 @@ describe("fusionarLineas", () => {
     );
   });
 
+  // Bold/Italic viven SOLO en el Style: del evento. En un evento fusionado
+  // todas las líneas comparten ese Style:, así que una línea con otro
+  // preset perdía su negrita/cursiva (quedaba la del base). Igual que \c,
+  // \b y \i tienen que viajar en el override de la línea que difiere.
+  it("emite \\b y \\i cuando la linea difiere en peso o cursiva", () => {
+    const negrita: PresetAss = { ...base, bold: true, italic: true };
+    const texto = fusionarLineas(
+      [cap("a", 0, 3, "uno"), cap("b", 0, 3, "dos")],
+      (c) => (c.id === "a" ? base : negrita),
+      base,
+    );
+    expect(texto).toBe("uno\\N{\\b1\\i1}dos");
+  });
+
+  it("apaga el \\b y \\i del base en la linea que no los trae", () => {
+    const negrita: PresetAss = { ...base, bold: true, italic: true };
+    const texto = fusionarLineas(
+      [cap("a", 0, 3, "uno"), cap("b", 0, 3, "dos")],
+      (c) => (c.id === "a" ? negrita : base),
+      negrita,
+    );
+    expect(texto).toBe("uno\\N{\\b0\\i0}dos");
+  });
+
   it("no emite override para la primera linea si usa el base", () => {
     const texto = fusionarLineas(
       [cap("a", 0, 3, "uno"), cap("b", 0, 3, "dos")],

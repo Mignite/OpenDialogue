@@ -17,6 +17,10 @@ export function estiloLineaPreview(preset: PresetAss, escala: number): CSSProper
   return {
     fontFamily: `"${preset.fontname}", sans-serif`,
     fontSize: px,
+    // El peso y la cursiva son campos del Style: del .ass; en CSS hay que
+    // llevarlos explícitos o el preview miente respecto al render.
+    fontWeight: preset.bold ? 700 : 400,
+    fontStyle: preset.italic ? "italic" : "normal",
     color: preset.color,
     textShadow: `0 0 ${borde}px ${preset.outlineColor}, 0 1px 2px rgba(0,0,0,.8)`,
   };
