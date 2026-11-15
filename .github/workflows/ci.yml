@@ -32,6 +32,13 @@ jobs:
             libxrandr-dev libxi-dev libxcursor-dev \
             libmpv-dev
 
+      - name: Dependencias de sistema (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          vcpkg install libass:x64-windows
+          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+
       - name: fmt
         run: cargo fmt --all -- --check
 

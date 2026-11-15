@@ -6,21 +6,24 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=ASS_DIR");
 
-    let dir = buscar().unwrap_or_else(|| {
-        panic!(
-            "no encuentro libass. Instálalo con `vcpkg install libass:x64-windows` \
-             o define ASS_DIR apuntando a installed/x64-windows"
-        )
-    });
-
-    println!(
-        "cargo:rustc-link-search=native={}",
-        dir.join("lib").display()
-    );
-    println!("cargo:rustc-link-lib=ass");
-
     if cfg!(windows) {
+        let dir = buscar().unwrap_or_else(|| {
+            panic!(
+                "no encuentro libass. Instálalo con `vcpkg install libass:x64-windows` \
+                 o define ASS_DIR apuntando a installed/x64-windows"
+            )
+        });
+
+        println!(
+            "cargo:rustc-link-search=native={}",
+            dir.join("lib").display()
+        );
+        println!("cargo:rustc-link-lib=ass");
         copiar_dlls(&dir.join("bin"));
+    } else {
+        pkg_config::Config::new()
+            .probe("libass")
+            .expect("no encuentro libass. Instala el paquete de desarrollo libass");
     }
 }
 
@@ -33,6 +36,9 @@ fn buscar() -> Option<PathBuf> {
         candidatos.push(PathBuf::from(dir));
     }
     if let Ok(root) = std::env::var("VCPKG_ROOT") {
+        candidatos.push(Path::new(&root).join("installed/x64-windows"));
+    }
+    if let Ok(root) = std::env::var("VCPKG_INSTALLATION_ROOT") {
         candidatos.push(Path::new(&root).join("installed/x64-windows"));
     }
     if let Ok(home) = std::env::var("USERPROFILE") {
