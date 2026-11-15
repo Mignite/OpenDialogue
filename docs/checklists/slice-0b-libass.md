@@ -85,21 +85,36 @@ libertad de memoria (`ass_free_track`), composición alfa.
       alineación 5 cae centrado en y=300: el frame está a 1920×1080 y `stride`
       sale 512 porque libass alinea las máscaras.
 
-- [ ] **4. Componer en CPU.** Volcar los bitmaps sobre un buffer RGBA con
+- [x] **4. Componer en CPU.** Volcar los bitmaps sobre un buffer RGBA con
       `dst = rgb·(a·A/255) + dst·(1 − a·A/255)` y escribirlo a PNG.
       *Verificación*: se lee el texto, con su borde y su color, en la posición
       correcta. Sin wgpu todavía: primero la matemática, después la GPU.
+      *Hecho:* `crates/subs/examples/componer.rs`, que compone sobre
+      `testdata/frame-sin-subs.png` (el frame del oráculo sin subtítulos) y
+      guarda `testdata/render-propio.png`. En la fórmula, `a` es la máscara
+      (`Bitmap::alpha()`) y `A` es la opacidad del color,
+      `255 - (color & 0xFF)`; se hace en `u32` porque en `u8` los productos se
+      desbordan.
 
-- [ ] **5. El oráculo.** El mismo `.ass`, el mismo instante, renderizado por mpv:
+- [x] **5. El oráculo.** El mismo `.ass`, el mismo instante, renderizado por mpv:
       `mpv --no-config --vo=image --sub-file=fixture.ass --sub-ass-override=no
       --start=1 --frames=1`. Comparar los dos PNG.
       *Verificación*: porcentaje de píxeles distintos. Anotar el número, la
       versión de libass y la fuente usada. Si difiere en más de un 1 %, averiguar
       si es escala, fuente o versión **antes** de dar el paso por bueno.
+      *Hecho:* `crates/player/examples/oracle_subs.rs` (sin `mpv.exe`: usa el
+      libass que trae la DLL de libmpv) contra `componer`. **0.000 %** de
+      píxeles con diferencia > 8/255; 0.064 % con cualquier diferencia y máximo
+      2/255, que es el redondeo de la mezcla. El PNG de diferencias
+      (`testdata/diff.png`) sale negro.
+      *Con la compatibilidad de color de VSFilter encendida* (el default de
+      mpv) el rojo `(255,0,0)` volvía como `(255,24,0)` y la diferencia subía a
+      0.426 %. Ver el hallazgo: no es un defecto del render propio.
 
-- [ ] **6. Cerrar.** Escribir en `BITACORA.md` la versión de libass, el proveedor
+- [x] **6. Cerrar.** Escribir en `BITACORA.md` la versión de libass, el proveedor
       de fuentes y el porcentaje de coincidencia. Ese número es la línea base
       del proyecto.
+      *Hecho:* entrada del 2026-11-15.
 
 ## Hallazgos
 
@@ -120,6 +135,18 @@ libertad de memoria (`ass_free_track`), composición alfa.
 - **La máscara viene alineada.** `stride` (512) no es `w` (490), y la última
   fila puede ser más corta: `stride * (h - 1) + w` es el tamaño garantizado.
   `Bitmap::alpha()` recorta a eso a propósito.
+- **mpv manglea los colores de subtítulo por defecto, y no es un bug propio.**
+  Con `--sub-ass-override=no` pero sin tocar `--sub-ass-vsfilter-color-compat`,
+  el rojo `(255,0,0)` del `.ass` sale `(255,24,0)`: VSFilter codificaba el color
+  asumiendo BT.601 y lo mezclaba en un video BT.709, y mpv lo emula. Los grises
+  no se enteran (el texto blanco coincidía exacto), así que el síntoma es
+  "solo fallan los colores saturados". En el oráculo se apaga con
+  `sub-ass-vsfilter-color-compat=no`; en la app no se emula: sería adoptar un
+  defecto ajeno. Es la primera decisión de fidelidad del proyecto, y va en la
+  misma familia que "el preview es el export".
+- **La comparación RGB contra mpv solo vale con esa compatibilidad apagada.**
+  mpv mezcla los subtítulos en el espacio del video (YUV), no en RGB; cualquier
+  comparación píxel a píxel contra su frame pasa por su conversión de color.
 
 ## Qué NO hacer en este slice
 

@@ -24,6 +24,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     player.mpv().set_property("hr-seek", "yes")?;
     // No dejar que mpv reinterpreta los estilos del .ass.
     player.mpv().set_property("sub-ass-override", "no")?;
+    // VSFilter codificaba el color del subtítulo asumiendo BT.601 y lo mezclaba
+    // en un video BT.709: el rojo (255,0,0) vuelve como (255,24,0). Aquí no
+    // emulamos ese defecto, así que el oráculo tampoco debe hacerlo.
+    player
+        .mpv()
+        .set_property("sub-ass-vsfilter-color-compat", "no")?;
     player.mpv().set_property("pause", "yes")?;
     if !sin_subs {
         player.mpv().command(

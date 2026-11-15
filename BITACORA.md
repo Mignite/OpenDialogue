@@ -63,3 +63,31 @@ cara.
   sola vez).
 - **Dónde quedó:** `crates/app/examples/video.rs`; checklist `slice-0c-iced.md`
   paso 3.
+
+## 2026-11-15 - el rojo del subtítulo no coincide con mpv
+
+- **Intentaba:** cerrar el invariante del slice 0b comparando nuestro render
+  (libass de vcpkg, composición alfa en CPU) contra el frame de mpv con el mismo
+  `.ass` al mismo instante.
+- **Error literal:** ninguno. Resultado de la comparación: 0.426 % de píxeles
+  distintos, máximo 24/255. El PNG de diferencias dibujaba exactamente
+  "Arriba centrado" y nada más.
+  ```
+  (760,320) propio=(255,0,0)   oraculo=(255,24,0)
+  (800,345) propio=(255,241,0) oraculo=(255,241,0)
+  ```
+- **Qué estaba mal:** no era el render propio. mpv emula por defecto el defecto
+  de VSFilter: el color del subtítulo se codifica asumiendo BT.601 y se mezcla
+  en un video BT.709. Codificar `(255,0,0)` como BT.601 y decodificarlo como
+  BT.709 da `(255,24,0)`, ni más ni menos. Por eso el texto blanco coincidía
+  exacto (los grises son invariantes al cambio de matriz) y solo fallaban los
+  colores saturados, que es la firma del problema.
+- **Qué aprendí:** con `sub-ass-vsfilter-color-compat=no` el oráculo coincide:
+  **0.000 %** de píxeles con diferencia > 8/255, 0.064 % con cualquier
+  diferencia y máximo 2/255 (el redondeo de la mezcla). Esa es la línea base:
+  libass 0.17.5 de vcpkg, proveedor de fuentes **directwrite (with GDI)**,
+  Arial → ArialMT. Y la app no va a emular el mangleo: es un defecto ajeno, no
+  una decisión de diseño.
+- **Dónde quedó:** `crates/subs/examples/componer.rs`,
+  `crates/player/examples/oracle_subs.rs`; checklist `slice-0b-libass.md`
+  pasos 4-6 y hallazgos.
