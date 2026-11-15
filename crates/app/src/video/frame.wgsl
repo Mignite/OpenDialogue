@@ -1,7 +1,12 @@
-// Quad a pantalla completa con un frame encima.
+// Quad con un frame encima, dentro del widget.
 //
 // Sin vertex buffer: los 4 vértices salen del índice. Con TriangleStrip,
 // i = 0..3 recorre las esquinas en el orden (0,0) (1,0) (0,1) (1,1).
+//
+// NDC -1..1 es el **widget**, no la ventana: iced_wgpu pone un viewport por
+// primitivo (`set_viewport(bounds…)`) antes de dibujarlo. Por eso aquí no hace
+// falta saber dónde cae el widget en la pantalla; el letterbox se calcula solo
+// por proporción y vive en la CPU (uniform `Escala`).
 
 struct Salida {
     // Posición en clip space. wgpu espera y = +1 arriba.

@@ -7,8 +7,8 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use iced::widget::{column, shader, text};
-use iced::{Element, Length};
+use iced::widget::{column, container, row, shader, space, text};
+use iced::{Background, Color, Element, Length};
 
 use rod_app::video::{Capa, Video};
 
@@ -124,14 +124,7 @@ fn update(lab: &mut Lab, _mensaje: Message) {
 }
 
 fn view(lab: &Lab) -> Element<'_, Message> {
-    column![
-        text(format!(
-            "{:.1} fps — {} capas — mpv {:.1} ms, libass {:.1} ms",
-            lab.fps,
-            lab.capas.len(),
-            lab.ms_mpv,
-            lab.ms_libass
-        )),
+    let video = container(
         shader(Video {
             pixels: Arc::new(lab.buf.clone()),
             width: W as u32,
@@ -140,6 +133,73 @@ fn view(lab: &Lab) -> Element<'_, Message> {
         })
         .width(Length::Fill)
         .height(Length::Fill),
+    )
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .style(|_| container::Style {
+        // El letterbox es negro: el tema claro/oscuro no debe asomar por las
+        // barras.
+        background: Some(Background::Color(Color::BLACK)),
+        ..container::Style::default()
+    });
+
+    // El que se viene en el paso 6b. Por ahora solo reserva su altura para que
+    // el video deje de llenar la ventana y se pueda ver si el letterbox usa el
+    // rect del widget o el de la ventana.
+    let transporte = container(text("transporte — play/pause, seek, pista de audio"))
+        .width(Length::Fill)
+        .height(44)
+        .center_x(Length::Fill)
+        .center_y(44)
+        .style(estilo_panel);
+
+    let columna_video = column![video, transporte].width(Length::FillPortion(3));
+
+    let panel = container(text("Subtitle · Speakers · Styles"))
+        .width(Length::FillPortion(2))
+        .height(Length::Fill)
+        .padding(12)
+        .style(estilo_panel);
+
+    let timeline = container(text("timeline · waveform · carriles"))
+        .width(Length::Fill)
+        .height(140)
+        .padding(12)
+        .style(estilo_panel);
+
+    let estado = container(
+        row![
+            text("RustyOpenDialogue — laboratorio"),
+            space::horizontal(),
+            text(format!(
+                "{:.1} fps — {} capas — mpv {:.1} ms, libass {:.1} ms",
+                lab.fps,
+                lab.capas.len(),
+                lab.ms_mpv,
+                lab.ms_libass
+            )),
+        ]
+        .padding([4, 12]),
+    )
+    .width(Length::Fill)
+    .style(estilo_panel);
+
+    column![
+        row![columna_video, panel].height(Length::Fill),
+        timeline,
+        estado,
     ]
     .into()
+}
+
+fn estilo_panel(_tema: &iced::Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(Color::from_rgb(0.09, 0.09, 0.11))),
+        border: iced::Border {
+            color: Color::from_rgb(0.20, 0.20, 0.24),
+            width: 1.0,
+            radius: 0.0.into(),
+        },
+        ..container::Style::default()
+    }
 }

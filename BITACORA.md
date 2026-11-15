@@ -112,3 +112,25 @@ cara.
   de mpv.
 - **Donde quede:** `crates/app/examples/video.rs`,
   `crates/subs/src/lib.rs` (`Subtitulos`); checklist `slice-0c-iced.md` paso 5.
+
+## 2026-11-15 - "arregle" una geometria que ya estaba bien
+
+- **Intentaba:** meter la barra de transporte debajo del video (paso 6a del slice
+  0c). Di por hecho que el quad del video se dibujaba en NDC del target completo y
+  que iced solo recortaba con scissor, asi que al dejar de llenar la ventana el
+  video se iria hacia abajo. Cambie `Escala` por un rectangulo en NDC calculado
+  desde `bounds` y `viewport`.
+- **Error literal:** ninguno; el video aparecio a 461x305 pegado a la esquina
+  superior izquierda de un widget de 768x507. Los numeros no cuadraban con el
+  uniform (`rect=[-1.0, 0.8956, 0.2, -0.3044]` imprimia `prepare`).
+- **Que estaba mal:** el diagnostico. `iced_wgpu` recorre las primitivas y por
+  cada una hace `set_viewport(bounds.x, bounds.y, w, h, 0.0, 1.0)` antes de
+  dibujar, asi que NDC -1..1 **es el widget**. Al pasarle un rect en NDC de la
+  ventana lo escale dos veces: 461/768 = 0.60 = 768/1280 y 305/432 = 0.70 =
+  507/720. Esas dos razones fueron la pista.
+- **Que aprendi:** para ver la geometria de un quad sin que el contenido del video
+  estorbe, pintar el fragment de magenta y medir el bbox. Tardo un minuto y delata
+  el rectangulo exacto. Y al leer el codigo de iced, `set_viewport` esta a seis
+  lineas de donde estaba mirando (`lib.rs` ~551).
+- **Donde quede:** `docs/checklists/slice-0c-iced.md` paso 6a y hallazgos;
+  `crates/app/examples/video.rs` con el esqueleto de la ventana.

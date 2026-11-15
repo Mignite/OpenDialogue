@@ -100,6 +100,10 @@ impl shader::Primitive for Frame {
 
         // Letterbox: el widget puede tener otra forma que el video. Se encoge el
         // quad en el eje que sobra en vez de deformarlo.
+        //
+        // Solo importa la proporción: iced ya deja el origen del clip space en el
+        // rect del widget (pone un viewport por primitivo), así que el quad
+        // centrado en NDC queda centrado en el widget.
         let (escala_x, escala_y) = if bounds.width > 0.0 && bounds.height > 0.0 {
             let aspecto_widget = bounds.width / bounds.height;
             let aspecto_video = self.width as f32 / self.height as f32;

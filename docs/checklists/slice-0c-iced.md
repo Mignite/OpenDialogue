@@ -55,12 +55,25 @@ del player visto desde la UI (`pause`, `time-pos`, `aid`).
       Captura: `slice-0c-paso-5.png` (60.0 fps, 5 capas, mpv 12.0 ms, libass
       0.2 ms, texto y colores correctos, letterbox intacto).
 
-- [ ] **6. Los controles del reproductor, juntos: play/pause, seek y pista de
-      audio.** `enum Message { PlayPause, Seek(f64), PistaAudio(i64), Tick }`, y un
-      `Row` encima del video con los tres controles: botón play/pause, slider de
-      posición y `pick_list` de pistas (o un `radio` si son pocas). El video se
-      detiene y arranca sin reiniciar el reloj; el seek cae en el frame pedido; y
-      el audio suena por la pista elegida, una a la vez (`aid`).
+- [x] **6a. El esqueleto de la ventana.** La estructura de la app Tauri, en
+      mínimo: columna izquierda (video + transporte), panel derecho, timeline
+      abajo, barra de estado. El video ya no llena la ventana, así que el
+      letterbox se pone a prueba de verdad.
+      *Verificación*: a 1280×720 el video queda 768×432 con barras negras arriba
+      y abajo; a 1600×620 queda con barras a los lados; los subtítulos caen
+      dentro del video y escalan con él. 60.0 fps, 5 capas.
+      *Hecho:* no hizo falta tocar la geometría. `iced_wgpu` pone un **viewport
+      por primitivo** (`set_viewport(bounds…)` en `lib.rs`), así que NDC −1..1 ya
+      es el rect del widget y el letterbox por uniform era correcto desde el
+      paso 4. Lo único que se añadió fue el esqueleto de widgets y un comentario
+      en `frame.wgsl` para que nadie "arregle" lo que funciona.
+
+- [ ] **6b. Los controles del reproductor, juntos: play/pause, seek y pista de
+      audio.** `enum Message { PlayPause, Seek(f64), PistaAudio(i64), Tick }`, y
+      un `Row` en la barra de transporte que ya existe: botón play/pause, slider
+      de posición y `pick_list` de pistas. El video se detiene y arranca sin
+      reiniciar el reloj; el seek cae en el frame pedido; y el audio suena por la
+      pista elegida, una a la vez (`aid`).
       *Verificación*: pausar y reanudar no salta de frame; el seek cae en el frame
       pedido; cambiar de pista cambia el tono (440 ↔ 880 Hz) sin cortar el video.
       Los tres se prueban en la misma corrida, porque leen el mismo estado del
@@ -123,6 +136,15 @@ del player visto desde la UI (`pause`, `time-pos`, `aid`).
   vez mpv exige abandonar `aid` y montar `lavfi-complex` con `amix`, que además
   se lleva por delante la selección normal y el volumen por pista. Se descarta
   (decisión en la spec §4.3): para subtitular estorba oír dos diálogos a la vez.
+- **NDC es el widget, no la ventana.** `iced_wgpu` recorre las primitivas y, por
+  cada una, hace `set_viewport(bounds…, 0.0, 1.0)` + `set_scissor_rect`
+  (`iced_wgpu-0.14.0/src/lib.rs`, ~línea 551). O sea que el clip space −1..1 cae
+  sobre el rectángulo del widget y no hay que trasladar nada a mano. Darlo por
+  hecho al revés (creer que el quad se centraba en la ventana) hace que se
+  "arregle" algo que funcionaba: el video sale escalado por
+  `widget/ventana` —0.6 en x, 0.7 en y— pegado a la esquina. La comprobación
+  barata fue pintar el fragment de magenta: el bbox del quad delata la geometría
+  sin depender del contenido del video.
 
 ## Qué NO hacer en este slice
 
