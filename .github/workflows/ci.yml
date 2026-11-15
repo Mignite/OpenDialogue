@@ -32,11 +32,20 @@ jobs:
             libxrandr-dev libxi-dev libxcursor-dev \
             libmpv-dev
 
+      - name: Cache vcpkg (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_INSTALLATION_ROOT }}/installed
+          key: vcpkg-libass-x64-windows-v1
+
       - name: Dependencias de sistema (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          vcpkg install libass:x64-windows
+          if (-not (Test-Path "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib\ass.lib")) {
+            vcpkg install libass:x64-windows
+          }
           "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
 
       - name: fmt
