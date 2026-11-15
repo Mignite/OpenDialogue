@@ -42,10 +42,17 @@ textura en wgpu, `Subscription` por frame, (re)diseño de `Message`.
       uniform); el alfa se fuerza a 1.0 en el fragment en vez de recorrer 2
       millones de píxeles en CPU.
 
-- [ ] **5. Los bitmaps de libass.** Añadir N quads con blending sobre el de video,
+- [x] **5. Los bitmaps de libass.** Añadir N quads con blending sobre el de video,
       usando el render del slice 0b al `time_pos` actual.
       *Verificación*: los subtítulos coinciden con el PNG de referencia del slice
       0b y con el oráculo de mpv. Es el invariante, ahora en pantalla.
+      *Hecho:* un segundo pipeline en el mismo pase dibuja las capas como
+      instancias (rect en clip space + uv en atlas + color); el atlas es una
+      textura `R8Unorm` de cobertura, así que el color no se duplica por capa.
+      El color del `.ass` se convierte de sRGB a lineal en el fragment porque el
+      target es sRGB y el blending lo hace el hardware en lineal (ver hallazgos).
+      Captura: `slice-0c-paso-5.png` (60.0 fps, 5 capas, mpv 12.0 ms, libass
+      0.2 ms, texto y colores correctos, letterbox intacto).
 
 - [ ] **6. Play/pause y seek.** `enum Message` con `PlayPause`, `Seek(f64)`,
       `Tick`; el video se detiene y arranca sin reiniciar el reloj.
@@ -78,6 +85,26 @@ textura en wgpu, `Subscription` por frame, (re)diseño de `Message`.
   `ffmpeg -f lavfi -i testsrc2=size=1920x1080:rate=60 -t 5 ...`.
 - **El área del letterbox es el fondo del tema.** Para un reproductor debería ser
   negra; pendiente para la UI real (slice 4).
+- **libass necesita warm-up.** La primera rasterización inicializa el proveedor de
+  fuentes y cachea los glifos: sin una llamada de calentamiento en la
+  construcción, el primer segundo cae a ~13 fps con 15.5 ms de media en libass.
+  Después queda en 0.1–0.4 ms por frame con 5 capas. Una sola llamada a
+  `render(ms)` al crear el `Subtitulos` lo resuelve.
+- **El blending de los subtítulos ocurre en espacio lineal.** El target es sRGB y
+  la GPU mezcla en lineal, mientras que la composición de CPU del slice 0b y mpv
+  mezclan en gamma. Los colores sólidos coinciden; los bordes suavizados (AA)
+  difieren por décimas. Es una desviación conocida, no un bug: el invariante
+  preview == export es contra el render de libass, que sí es el mismo.
+  Convertir el color a lineal en el fragment (en vez de dejar que el hardware lo
+  haga) es lo que mantiene los colores puros exactos.
+- **El atlas se rehace por frame.** Las máscaras que devuelve libass solo valen
+  hasta el siguiente `ass_render_frame`, así que hay que copiarlas. Se empaquetan
+  en una sola columna y la textura solo se recrea si cambia el tamaño; el
+  contenido se reescribe. Con 5 capas no se nota, pero es el punto a revisar si
+  algún día hay decenas de carteles simultáneos.
+- **El example todavía clona el frame.** `Arc::new(lab.buf.clone())` copia 8 MB
+  por frame; con la GPU yendo a 60 fps no aparece en la medición, pero sobra.
+  Pendiente: doble buffer o `Arc` reciclado.
 
 ## Qué NO hacer en este slice
 

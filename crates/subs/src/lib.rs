@@ -95,13 +95,7 @@ impl<'a> Renderer<'a> {
     }
 
     pub fn set_frame_size(&mut self, ancho: u32, alto: u32) {
-        unsafe {
-            ffi::ass_set_frame_size(self.ptr, ancho as c_int, alto as c_int);
-            // Tamaño de la imagen de origen: sin esto, `\be`, `\blur` y los
-            // transforms 3D se calculan con un aspecto inventado.
-            ffi::ass_set_storage_size(self.ptr, ancho as c_int, alto as c_int);
-            ffi::ass_set_pixel_aspect(self.ptr, 1.0);
-        }
+        unsafe { configurar(self.ptr, ancho, alto) };
     }
 
     /// Márgenes del video dentro de la ventana. Con `usar = false` libass
@@ -123,50 +117,13 @@ impl<'a> Renderer<'a> {
     /// Inicializa el proveedor de fuentes. Las siguientes llamadas a `log()`
     /// dicen cuál eligió.
     pub fn usar_fuentes(&mut self, proveedor: c_int) {
-        let familia = c"Arial";
-        unsafe {
-            ffi::ass_set_fonts(
-                self.ptr,
-                std::ptr::null(), // fuente por defecto: la de la familia
-                familia.as_ptr(),
-                proveedor,
-                std::ptr::null(), // config: solo lo usa fontconfig
-                1,
-            );
-        }
+        unsafe { fuentes(self.ptr, proveedor) };
     }
 
     /// Rasteriza el instante `ms` y devuelve sus bitmaps. Son válidos hasta la
     /// próxima llamada a `render` (el `&mut self` lo hace cumplir).
     pub fn render(&mut self, track: &Track<'_>, ms: i64) -> &[Bitmap] {
-        let mut cambio = 0;
-        let head = unsafe { ffi::ass_render_frame(self.ptr, track.ptr, ms, &mut cambio) };
-
-        self.bitmaps.clear();
-        let mut nodo = head;
-        while !nodo.is_null() {
-            let imagen = unsafe { &*nodo };
-
-            // La última fila no está rellena hasta `stride`: el tamaño
-            // garantizado es `stride * (h - 1) + w`. Recortar aquí convierte
-            // una lectura fuera de rango en un índice fuera de rango (pánico).
-            let filas = imagen.h.max(1) as usize;
-            let alpha_len = imagen.stride as usize * (filas - 1) + imagen.w as usize;
-
-            self.bitmaps.push(Bitmap {
-                ancho: imagen.w as u32,
-                alto: imagen.h as u32,
-                stride: imagen.stride as usize,
-                color: imagen.color,
-                x: imagen.dst_x,
-                y: imagen.dst_y,
-                alpha: imagen.bitmap,
-                alpha_len,
-            });
-
-            nodo = imagen.next;
-        }
-
+        self.bitmaps = unsafe { recolectar(rasterizar(self.ptr, track.ptr, ms)) };
         &self.bitmaps
     }
 }
@@ -232,6 +189,146 @@ impl Drop for Track<'_> {
     fn drop(&mut self) {
         unsafe { ffi::ass_free_track(self.ptr) };
     }
+}
+
+/// Un `.ass` listo para producir bitmaps: biblioteca, rasterizador y track en un
+/// solo tipo sin lifetimes, para que la app lo guarde en su estado.
+///
+/// Es la misma cosa que `Library` + `Renderer` + `Track` armados a mano, pero
+/// con el orden de liberación resuelto por dentro (track, rasterizador,
+/// biblioteca).
+pub struct Subtitulos {
+    library: Library,
+    renderer: *mut ffi::ASS_Renderer,
+    track: *mut ffi::ASS_Track,
+    bitmaps: Vec<Bitmap>,
+}
+
+impl Subtitulos {
+    /// `ancho` y `alto` son los del video: son el sistema de coordenadas de los
+    /// `\pos` del `.ass` y el tamaño contra el que libass calcula márgenes.
+    pub fn nuevo(ancho: u32, alto: u32, texto: &str) -> Self {
+        let library = Library::new();
+
+        let renderer = unsafe { ffi::ass_renderer_init(library.ptr) };
+        assert!(!renderer.is_null(), "ass_renderer_init devolvió nulo");
+
+        let mut buf = texto.as_bytes().to_vec();
+        let track = unsafe {
+            ffi::ass_read_memory(
+                library.ptr,
+                buf.as_mut_ptr().cast(),
+                buf.len(),
+                c"UTF-8".as_ptr(),
+            )
+        };
+        assert!(!track.is_null(), "ass_read_memory devolvió nulo");
+
+        let mut subtitulos = Self {
+            library,
+            renderer,
+            track,
+            bitmaps: Vec::new(),
+        };
+        subtitulos.configurar(ancho, alto);
+        subtitulos.fuentes(PROVEEDOR_AUTODETECT);
+        subtitulos
+    }
+
+    /// Al cambiar el tamaño del video (o al entrar a pantalla completa) basta
+    /// con este tamaño: las coordenadas del `.ass` se reescalan solas.
+    pub fn configurar(&mut self, ancho: u32, alto: u32) {
+        unsafe { configurar(self.renderer, ancho, alto) };
+    }
+
+    /// Inicializa el proveedor de fuentes que se pida.
+    pub fn fuentes(&mut self, proveedor: c_int) {
+        unsafe { fuentes(self.renderer, proveedor) };
+    }
+
+    pub fn render(&mut self, ms: i64) -> &[Bitmap] {
+        self.bitmaps = unsafe { recolectar(rasterizar(self.renderer, self.track, ms)) };
+        &self.bitmaps
+    }
+
+    pub fn log(&self) -> Vec<String> {
+        self.library.log()
+    }
+}
+
+impl Drop for Subtitulos {
+    fn drop(&mut self) {
+        unsafe {
+            ffi::ass_free_track(self.track);
+            ffi::ass_renderer_done(self.renderer);
+        }
+    }
+}
+
+/// Tamaño del frame y del "storage". Sin el storage, `\be`, `\blur` y los
+/// transforms 3D se calculan con un aspecto inventado.
+unsafe fn configurar(renderer: *mut ffi::ASS_Renderer, ancho: u32, alto: u32) {
+    unsafe {
+        ffi::ass_set_frame_size(renderer, ancho as c_int, alto as c_int);
+        ffi::ass_set_storage_size(renderer, ancho as c_int, alto as c_int);
+        ffi::ass_set_pixel_aspect(renderer, 1.0);
+    }
+}
+
+unsafe fn fuentes(renderer: *mut ffi::ASS_Renderer, proveedor: c_int) {
+    let familia = c"Arial";
+    unsafe {
+        ffi::ass_set_fonts(
+            renderer,
+            std::ptr::null(), // fuente por defecto: la de la familia
+            familia.as_ptr(),
+            proveedor,
+            std::ptr::null(), // config: solo lo usa fontconfig
+            1,
+        );
+    }
+}
+
+unsafe fn rasterizar(
+    renderer: *mut ffi::ASS_Renderer,
+    track: *mut ffi::ASS_Track,
+    ms: i64,
+) -> *mut ffi::ASS_Image {
+    let mut cambio = 0;
+    unsafe { ffi::ass_render_frame(renderer, track, ms, &mut cambio) }
+}
+
+/// Recorre la lista enlazada que devuelve `ass_render_frame`. No se puede
+/// prestar: los punteros valen hasta el siguiente render, así que `Bitmap` los
+/// copia y recorta la última fila.
+unsafe fn recolectar(head: *mut ffi::ASS_Image) -> Vec<Bitmap> {
+    let mut bitmaps = Vec::new();
+    let mut nodo = head;
+
+    while !nodo.is_null() {
+        let imagen = unsafe { &*nodo };
+
+        // La última fila no está rellena hasta `stride`: el tamaño garantizado
+        // es `stride * (h - 1) + w`. Recortar aquí convierte una lectura fuera
+        // de rango en un índice fuera de rango (pánico).
+        let filas = imagen.h.max(1) as usize;
+        let alpha_len = imagen.stride as usize * (filas - 1) + imagen.w as usize;
+
+        bitmaps.push(Bitmap {
+            ancho: imagen.w as u32,
+            alto: imagen.h as u32,
+            stride: imagen.stride as usize,
+            color: imagen.color,
+            x: imagen.dst_x,
+            y: imagen.dst_y,
+            alpha: imagen.bitmap,
+            alpha_len,
+        });
+
+        nodo = imagen.next;
+    }
+
+    bitmaps
 }
 
 unsafe extern "C" fn recibir_mensaje(

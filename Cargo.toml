@@ -11,3 +11,4 @@ rust-version = "1.88"
 rod-core = { path = "crates/core" }
 iced = { version = "0.14.0", features = ["canvas"] }
 rod-player = { path = "crates/player" }
+rod-subs = { path = "crates/subs" }

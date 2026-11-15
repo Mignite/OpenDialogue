@@ -91,3 +91,24 @@ cara.
 - **Dónde quedó:** `crates/subs/examples/componer.rs`,
   `crates/player/examples/oracle_subs.rs`; checklist `slice-0b-libass.md`
   pasos 4-6 y hallazgos.
+
+## 2026-11-15 - los subtitulos hunden el primer segundo a 13 fps
+
+- **Intentaba:** medir el paso 5 del slice 0c (video de mpv + capas de libass
+  con blending) y quedarme con los fps sostenidos.
+- **Error literal:** ninguno; el contador arrancaba en `12.9 fps - 5 capas -
+  mpv 2.4 ms, libass 15.5 ms` y a partir del segundo siguiente saltaba a
+  `60.7 fps - mpv 10.7 ms, libass 0.2 ms`.
+- **Que estaba mal:** no era el render. La primera llamada a
+  `ass_render_frame` hace que libass inicialice el proveedor de fuentes
+  (directwrite) y cachee los glifos de la fuente; esos 15 ms se pagaban en el
+  primer frame visible, con la ventana ya abierta, asi que el primer segundo
+  entero se dibujaba a media cadencia. Al calentar con un `render()` en el
+  constructor del `Subtitulos`, el coste se va antes de que haya ventana.
+- **Que aprendi:** el coste de inicializacion de libass es de decenas de ms y
+  solo aparece una vez, pero cae justo en el peor momento (primer frame). Cualquier
+  medicion de fps de los primeros 1-2 s sin warm-up es basura. Y el coste real
+  de rasterizar 5 capas por frame es 0.2 ms: despreciable frente a los 12 ms
+  de mpv.
+- **Donde quede:** `crates/app/examples/video.rs`,
+  `crates/subs/src/lib.rs` (`Subtitulos`); checklist `slice-0c-iced.md` paso 5.

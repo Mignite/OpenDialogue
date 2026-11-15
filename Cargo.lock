@@ -2556,6 +2556,7 @@ dependencies = [
  "iced",
  "rod-core",
  "rod-player",
+ "rod-subs",
 ]
 
 [[package]]
