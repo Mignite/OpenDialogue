@@ -101,15 +101,16 @@ Conceptos nuevos (uno por paso, no todos juntos): enlace con biblioteca C,
       correcto, sin franjas y con el timecode `00:00:00.033` del segundo frame
       — o sea `stride`, orden de canales y `pts` correctos.
 
-- [ ] **6. Medir.** 100 frames consecutivos de un video 1080p, con
+- [x] **6. Medir.** 100 frames consecutivos de un video 1080p, con
       `std::time::Instant` alrededor de la llamada de render.
-      *Verificación*: tabla con media, p95 y fps teórico. **Criterio de muerte:
-      media > 33 ms** (no da 30 fps). Anota el número en `BITACORA.md` aunque
-      salga bien.
+      *Verificación*: media **1.80 ms**, p95 **2.40 ms** y **556.1 fps**
+      teóricos en `testdata/clip-1080p.mp4`, con `untimed` y 100 frames.
+      **Criterio de muerte: media > 33 ms** (no da 30 fps). El número queda
+      anotado en `BITACORA.md`.
 
-- [ ] **7. Decidir y cerrar.** ¿Se sostiene el plan? Si sí, el PNG y el número
-      van al slice 0c. Si no, se discute el plan B de la spec §7 antes de
-      escribir más código.
+- [x] **7. Decidir y cerrar.** El coste de render SW sostiene el plan: 1.80 ms
+      de media está muy por debajo de los 33 ms. El PNG y la medición pasan al
+      slice 0c; no hace falta activar el plan B de la spec §7.
 
 ## Qué NO hacer en este slice
 

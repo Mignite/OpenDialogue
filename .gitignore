@@ -9,4 +9,5 @@
 
 # videos de prueba: se regeneran con ffmpeg (ver docs/checklists/slice-0a-mpv.md)
 /testdata/
+!/testdata/clip-15s-2audio.mp4
 

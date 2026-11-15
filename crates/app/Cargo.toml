@@ -8,3 +8,4 @@ rod-core.workspace = true
 rod-player.workspace = true
 rod-subs.workspace = true
 iced = { workspace = true, features = ["image-without-codecs"] }
+rfd = "0.15"

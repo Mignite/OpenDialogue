@@ -68,7 +68,7 @@ del player visto desde la UI (`pause`, `time-pos`, `aid`).
       paso 4. Lo único que se añadió fue el esqueleto de widgets y un comentario
       en `frame.wgsl` para que nadie "arregle" lo que funciona.
 
-- [ ] **6b. Los controles del reproductor, juntos: play/pause, seek y pista de
+- [x] **6b. Los controles del reproductor, juntos: play/pause, seek y pista de
       audio.** `enum Message { PlayPause, Seek(f64), PistaAudio(i64), Tick }`, y
       un `Row` en la barra de transporte que ya existe: botón play/pause, slider
       de posición y `pick_list` de pistas. El video se detiene y arranca sin
@@ -91,7 +91,9 @@ del player visto desde la UI (`pause`, `time-pos`, `aid`).
       frames). Sin pérdidas: el contador clava la cadencia de la fuente, que es
       el techo real de `mpv_render_context_update`.
 
-- [ ] **8. Cerrar.** Commit con el número de fps y captura de pantalla. Fin del
+- [x] **8. Cerrar.** Commits `8154b76` y `7537eab` dejan los controles, el
+      esqueleto de ventana y la medición de **60.0 fps** con **5 capas** de
+      libass; la captura es `docs/checklists/slice-0c-paso-5.png`. Fin del
       slice 0.
 
 ## Hallazgos

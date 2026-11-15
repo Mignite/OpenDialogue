@@ -134,3 +134,21 @@ cara.
   lineas de donde estaba mirando (`lib.rs` ~551).
 - **Donde quede:** `docs/checklists/slice-0c-iced.md` paso 6a y hallazgos;
   `crates/app/examples/video.rs` con el esqueleto de la ventana.
+
+## 2026-11-15 — el render SW de mpv deja margen de sobra
+
+- **Intentaba:** medir el coste de 100 renders consecutivos a 1080p para decidir
+  si el pipeline de libmpv por software podía sostener el plan.
+- **Error literal:** ninguno. `cargo run -p rod-player --example measure`
+  terminó correctamente y reportó:
+  ```
+  media 1.80 ms   p95 2.40 ms   fps 556.1
+  ```
+- **Qué estaba mal:** no había evidencia numérica del coste, solo la impresión
+  de que el vídeo iba fluido en la ventana. La medición usa `untimed` y un
+  buffer RGBA de 1920×1080, aislando la llamada de render.
+- **Qué aprendí:** 1.80 ms está muy por debajo del límite de 33 ms para 30 fps,
+  así que el render SW no obliga a cambiar de arquitectura; el techo observado
+  en la ventana viene de la cadencia del vídeo, no de esta conversión.
+- **Dónde quedó:** `crates/player/examples/measure.rs`,
+  `docs/checklists/slice-0a-mpv.md` pasos 6-7.
