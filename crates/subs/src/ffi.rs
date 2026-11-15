@@ -42,11 +42,12 @@ pub struct ASS_Image {
     pub next: *mut ASS_Image,
 }
 
-#[link(name = "legacy_stdio_definitions")]
+#[cfg_attr(windows, link(name = "legacy_stdio_definitions"))]
+#[cfg_attr(unix, link(name = "c"))]
 unsafe extern "C" {
     /// Del CRT: solo se usa para formatear el `va_list` del callback de log.
-    /// `msvcrt.lib` declara `vsnprintf` pero no lo exporta; el stub está en
-    /// `legacy_stdio_definitions.lib`.
+    /// En Windows el stub está en `legacy_stdio_definitions.lib`; en Unix
+    /// pertenece a la libc.
     fn vsnprintf(buf: *mut c_char, size: usize, format: *const c_char, args: va_list) -> c_int;
 }
 
