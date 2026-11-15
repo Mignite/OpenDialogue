@@ -8,7 +8,8 @@ Criterio de salida: una ventana que reproduce el video del slice 0a con los
 subtítulos del slice 0b encima, y un contador de frames real.
 
 Conceptos nuevos: `shader::Primitive` (`prepare`/`render`), ciclo de vida de una
-textura en wgpu, `Subscription` por frame, (re)diseño de `Message`.
+textura en wgpu, `Subscription` por frame, (re)diseño de `Message`, y el estado
+del player visto desde la UI (`pause`, `time-pos`, `aid`).
 
 ## Pasos
 
@@ -54,10 +55,19 @@ textura en wgpu, `Subscription` por frame, (re)diseño de `Message`.
       Captura: `slice-0c-paso-5.png` (60.0 fps, 5 capas, mpv 12.0 ms, libass
       0.2 ms, texto y colores correctos, letterbox intacto).
 
-- [ ] **6. Play/pause y seek.** `enum Message` con `PlayPause`, `Seek(f64)`,
-      `Tick`; el video se detiene y arranca sin reiniciar el reloj.
-      *Verificación*: pausar y reanudar no salta de frame; el seek cae en el
-      frame pedido.
+- [ ] **6. Los controles del reproductor, juntos: play/pause, seek y pista de
+      audio.** `enum Message { PlayPause, Seek(f64), PistaAudio(i64), Tick }`, y un
+      `Row` encima del video con los tres controles: botón play/pause, slider de
+      posición y `pick_list` de pistas (o un `radio` si son pocas). El video se
+      detiene y arranca sin reiniciar el reloj; el seek cae en el frame pedido; y
+      el audio suena por la pista elegida, una a la vez (`aid`).
+      *Verificación*: pausar y reanudar no salta de frame; el seek cae en el frame
+      pedido; cambiar de pista cambia el tono (440 ↔ 880 Hz) sin cortar el video.
+      Los tres se prueban en la misma corrida, porque leen el mismo estado del
+      player: por separado no dicen nada.
+      *Fixture*: `testdata/clip-2audio.mp4`, cinco segundos, dos pistas AAC con
+      idioma y nombre distintos (se regenera con
+      `ffmpeg -f lavfi -i testsrc2=size=1920x1080:rate=60 -f lavfi -i sine=frequency=440:sample_rate=48000 -f lavfi -i sine=frequency=880:sample_rate=48000 -t 5 -map 0:v -map 1:a -map 2:a -c:v libx264 -pix_fmt yuv420p -c:a aac -metadata:s:a:0 language=eng -metadata:s:a:0 title="Tono 440 Hz" -metadata:s:a:1 language=spa -metadata:s:a:1 title="Tono 880 Hz" testdata/clip-2audio.mp4`).
 
 - [x] **7. Medir.** Contador de frames en el título de la ventana durante 30 s de
       reproducción a 1080p.
@@ -105,6 +115,14 @@ textura en wgpu, `Subscription` por frame, (re)diseño de `Message`.
 - **El example todavía clona el frame.** `Arc::new(lab.buf.clone())` copia 8 MB
   por frame; con la GPU yendo a 60 fps no aparece en la medición, pero sobra.
   Pendiente: doble buffer o `Arc` reciclado.
+- **El audio es de mpv, pero estaba apagado.** El slice 0 arrancó con `ao=null`
+  para no mezclar sonido con la medición de video. El player real no lo lleva:
+  quitar esa línea y mpv decodifica y sincroniza sus pistas sin código nuestro.
+- **`aid` es de un solo valor** (`auto`/`no`/número), así que el selector es un
+  `enum` de N variantes y no una lista de casillas. Para oír varias pistas a la
+  vez mpv exige abandonar `aid` y montar `lavfi-complex` con `amix`, que además
+  se lleva por delante la selección normal y el volumen por pista. Se descarta
+  (decisión en la spec §4.3): para subtitular estorba oír dos diálogos a la vez.
 
 ## Qué NO hacer en este slice
 
@@ -112,5 +130,7 @@ textura en wgpu, `Subscription` por frame, (re)diseño de `Message`.
   laboratorio: si metes la app aquí, un fallo del video se confunde con un fallo
   de la UI.
 - No armes `crates/app` como la app final: un `main.rs` de laboratorio es
-  suficiente hasta el slice 4.
+  suficiente hasta el slice 4. La única excepción es la barra de transporte del
+  paso 6: se queda en el example (aunque su `Row` se pueda copiar tal cual al
+  slice 3), no se muda a la app todavía.
 - No optimices el redibujado antes del paso 7.

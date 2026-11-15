@@ -249,9 +249,41 @@ El trait existe por **testabilidad**: un `FakeSource` con frames deterministas
 permite los tests E2E de iced sin abrir un video. No es un plan para añadir
 ffmpeg; si algún día se añade, el trait ya está.
 
+**Audio: lo reproduce mpv, no lo reimplementamos.** Decodificar, sincronizar y
+sacar el sonido es exactamente el trabajo que el ecosistema de crates ya resuelve
+(§3.2: por eso `ffmpeg-next + cpal` está descartado). El player solo expone:
+
+```rust
+pub struct PistaAudio {
+    pub id: i64,                   // el número de `aid`; es lo que se escribe
+    pub idioma: Option<String>,    // "spa", "eng"…
+    pub titulo: Option<String>,    // nombre del track en el contenedor
+    pub canales: Option<u32>,
+}
+
+fn pistas_audio(&self) -> Vec<PistaAudio>;   // de `track-list`, filtrando type == "audio"
+fn pista_audio(&self) -> Option<i64>;        // `aid` efectivo, ya resuelto por mpv
+fn set_pista_audio(&self, id: i64);          // `aid`; `auto` lo elige solo
+```
+
+Los tres piden `&self`: libmpv muta su propio estado por dentro.
+
+**Una pista a la vez.** `aid` acepta un solo ID (`auto`/`no`/número), así que
+"pista seleccionable" es un `enum` de N variantes, no una lista de casillas. Oír
+varias a la vez exigiría abandonar `aid` y montar `lavfi-complex` con
+`amix`: mientras el grafo existe la selección normal deja de mandar, cada cambio
+reconstruye el grafo entero y el volumen por pista pasa a ser un filtro dentro
+del grafo. No compensa para subtitular: se descarta (decisión, no pendiente).
+
+**El reloj.** Con audio, mpv sincroniza contra la salida de audio
+(`video-sync=audio`), que es lo correcto para lip-sync y lo que queremos al
+reproducir. Para stepping frame a frame se pausa y se usa `frame-step`, con el
+reloj de video. En ambos casos el playhead de la app sigue siendo `time-pos`.
+
 Configuración de mpv: `vo=libmpv`, `hwdec=auto-safe`, `hr-seek=yes`,
 `audio-pitch-correction=yes`, `keep-open=yes`, `config=no`,
-`input-default-bindings=no`, `osc=no`, sin pistas de subtítulos.
+`input-default-bindings=no`, `osc=no`, sin pistas de subtítulos. **Sin `ao=null`**:
+ese fue un ajuste del slice 0 para aislar la medición de video, no del player.
 
 El playhead de la app es `time-pos` observado, no un temporizador: el snapping y
 el seguimiento del timeline se mueven con el reloj real del player.
@@ -270,6 +302,12 @@ el seguimiento del timeline se mueven con el reloj real del player.
 - Los paneles (lista de subtítulos, hablantes, estilos, editor) son widgets
   normales. La virtualización de la lista no es necesaria al principio: con
   `iced` el costo es menor que en React y se mide antes de optimizar.
+- **La barra de transporte se hace de una sola vez**: play/pause, seek y
+  selector de pista de audio en un mismo `Row`, encima o debajo del video. Los
+  tres leen y escriben el mismo estado del player (`pause`, `time-pos`, `aid`),
+  así que probarlos por separado no dice nada: o el conjunto funciona o el
+  reproductor no está listo. Los controles restantes (velocidad, volumen,
+  stepping) se cuelgan del mismo `Row` después, sin cambiar el diseño.
 
 ### 4.5 Flujo de un frame
 
@@ -329,8 +367,11 @@ warnings` y `cargo test` en verde, en Windows y en Linux.
 - **Slice 1 — `core`.** Port de `time`, `srt`, `ass`, `islands` con sus tests.
 - **Slice 2 — `subs`.** Render estático de un `.ass` a PNG y comparación contra el
   oráculo de mpv.
-- **Slice 3 — `player`.** Play/pause/seek/velocidad, `time-pos` como playhead,
-  frames a textura.
+- **Slice 3 — `player`.** Play/pause/seek/velocidad, selección de pista de audio
+  (una a la vez, `aid`), `time-pos` como playhead, frames a textura. La barra de
+  transporte de iced (play/pause + seek + pista de audio, juntos) se valida en el
+  slice 0c paso 6 con el mismo player, para que el conjunto esté probado antes de
+  la UI real.
 - **Slice 4 — compositor.** Video + subtítulos con escala y letterbox correctos,
   a resolución de video.
 - **Slice 5 — edición.** Lista de subtítulos, panel de hablantes, editor de texto,
