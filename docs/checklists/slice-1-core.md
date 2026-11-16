@@ -28,11 +28,11 @@ altura de los ~306 tests de `C:/Dev/OpenDialogue`.
 | `editing.rs` | `captions.ts` + `captionTiempos.ts` | 21 | portado, 21/21 |
 | `islands.rs` | `audioIslands.ts` | 19 | portado, 19/19 |
 | `ass.rs` | `ass.ts` | 80 | portado, 80/80 |
-| — | `busqueda.ts` | 18 | sin portar |
-| — | `autosubs.ts` | 13 | sin portar |
-| — | `selection.ts` | 19 | sin portar |
-| — | `assPresets.ts` | 17 | sin portar (necesita serde/JSON) |
-| — | `colorHablante.ts` + `clipboard.ts` | 14 | sin portar |
+| — | `busqueda.ts` | 18 | portado, 18/18 |
+| — | `autosubs.ts` | 13 | portado, 13/13 |
+| — | `selection.ts` | 19 | portado, 18/19 (la última prueba identidad de referencias) |
+| — | `assPresets.ts` | 17 | portado, 17/17 (con `serde_json`) |
+| — | `colorHablante.ts` + `clipboard.ts` | 14 | portado, 14/14 |
 | — | `export-nombres.test.ts` | 16 | portado (repartido entre `srt` y `editing`) |
 
 **No se portan** (y por qué):
@@ -111,19 +111,42 @@ altura de los ~306 tests de `C:/Dev/OpenDialogue`.
       es seguro aquí porque los presets vienen de los mismos valores, no de
       aritmética acumulada.
 
-- [ ] **7. `busqueda`.** 18 casos. Va antes que `selection` porque la lista los
-      usa juntos.
+- [x] **7. `busqueda`.** 18 casos. Se implementa sobre `Vec<char>` y no sobre
+      bytes: un índice de byte en medio de una `ñ` no es límite válido y cortaría
+      el texto al resaltar. El matching sigue siendo literal (`contains`), no
+      regex, para que `(` o `[` en el término no exploten.
 
-- [ ] **8. `autosubs`.** 13 casos: parseo del `.txt` de turnos y asignación de
-      hablantes por texto.
+- [x] **8. `autosubs`.** 13 casos. Dos decisiones:
+      - `normalizar_texto` reproduce `NFD` + borrar diacríticos con una tabla de
+        letras latinas en vez de traer una tabla Unicode entera. Cubre el caso
+        real (español y demás lenguas romances) sin dependencia nueva.
+      - `hablantes_desde_nombres` genera el id con milisegundos **más un
+        contador atómico**: dos altas en el mismo milisegundo darían el mismo id
+        y una pisaría a la otra (`nuevo_preset` hace lo mismo).
 
-- [ ] **9. `selection`.** 19 casos: navegación por filas, carriles y marquesina.
+- [x] **9. `selection`.** 18 de 19 casos. El que falta
+      (*"no colapsa captions mutados: usa las referencias del array recibido"*)
+      prueba **identidad de referencias** de JS: en Rust la agrupación devuelve
+      copias y la prueba no tiene equivalente. En su lugar, `agrupar_captions_por_carril`
+      conserva el orden de entrada de cada carril, que es el requisito que la
+      prueba original protegía.
 
-- [ ] **10. `assPresets`.** 17 casos. Decide aquí si entra `serde_json` (está en
-      el grafo por iced) o un parser propio.
+- [x] **10. `assPresets`.** 17 casos. **Decisión: entra `serde_json`** (una sola
+      dependencia nueva en `rod-core`). El archivo `ass-presets.json` lo comparte
+      la app Tauri; un parser propio sería una segunda fuente de desacuerdo sobre
+      el formato, justo lo contrario de lo que pide el invariante de paridad.
+      Se valida a mano con `Value` en vez de derivar `Deserialize` porque una
+      entrada rota debe **descartarse sin tirar el archivo entero**, y un `bold:
+      "sí"` tiene que caer a `false`, no invalidar el preset.
 
-- [ ] **11. `colorHablante` + `clipboard`.** 14 casos pequeños de formato de texto.
+- [x] **11. `colorHablante` + `clipboard`.** 14 casos, todos puros. El
+      portapapeles real (leer/escribir) es de la app, no de `core`.
 
-- [ ] **12. Cerrar.** `cargo test -p rod-core` en verde con la cuenta de tests
-      portados, diferencia contra los 306 del oráculo anotada aquí, y las
-      divergencias (si hay) en `BITACORA.md`.
+- [x] **12. Cerrar.** `cargo test -p rod-core`: **226 tests** contra los 310 del
+      oráculo (304 contados por archivo). Los 240 casos de los módulos que sí se
+      portan están cubiertos; los 64 restantes son los siete archivos de la lista
+      de "no se portan" (`ajustes` 8, `assPreview` 14, `fuentes` 8, `recovery`
+      12, `recoveryHook` 7, `rutaVideo` 11, `urlVideo` 4). La diferencia 240 →
+      226 son casos del oráculo que comparten un `it` con varios `assert` o que
+      no tienen equivalente en Rust (identidad de referencias, `undefined`), no
+      casos sin portar.
