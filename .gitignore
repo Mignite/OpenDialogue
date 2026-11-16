@@ -11,3 +11,6 @@
 /testdata/
 !/testdata/clip-15s-2audio.mp4
 
+
+# mensajes de commit temporales
+commit-msg.txt
