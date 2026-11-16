@@ -69,11 +69,11 @@ del player visto desde la UI (`pause`, `time-pos`, `aid`).
       en `frame.wgsl` para que nadie "arregle" lo que funciona.
 
 - [x] **6b. Los controles del reproductor, juntos: play/pause, seek y pista de
-      audio.** `enum Message { PlayPause, Seek(f64), PistaAudio(i64), Tick }`, y
-      un `Row` en la barra de transporte que ya existe: botón play/pause, slider
-      de posición y `pick_list` de pistas. El video se detiene y arranca sin
-      reiniciar el reloj; el seek cae en el frame pedido; y el audio suena por la
-      pista elegida, una a la vez (`aid`).
+      audio.** `enum Message { PlayPause, Arrastrar(f32), Soltar, Step(f64),
+      AudioTrack(pista), Tick }`, y un `Row` en la barra de transporte que ya
+      existe: botón play/pause, slider de posición y `pick_list` de pistas. El
+      video se detiene y arranca sin reiniciar el reloj; el seek cae en el frame
+      pedido; y el audio suena por la pista elegida, una a la vez (`aid`).
       *Verificación*: pausar y reanudar no salta de frame; el seek cae en el frame
       pedido; cambiar de pista cambia el tono (440 ↔ 880 Hz) sin cortar el video.
       Los tres se prueban en la misma corrida, porque leen el mismo estado del
@@ -81,6 +81,46 @@ del player visto desde la UI (`pause`, `time-pos`, `aid`).
       *Fixture*: `testdata/clip-2audio.mp4`, cinco segundos, dos pistas AAC con
       idioma y nombre distintos (se regenera con
       `ffmpeg -f lavfi -i testsrc2=size=1920x1080:rate=60 -f lavfi -i sine=frequency=440:sample_rate=48000 -f lavfi -i sine=frequency=880:sample_rate=48000 -t 5 -map 0:v -map 1:a -map 2:a -c:v libx264 -pix_fmt yuv420p -c:a aac -metadata:s:a:0 language=eng -metadata:s:a:0 title="Tono 440 Hz" -metadata:s:a:1 language=spa -metadata:s:a:1 title="Tono 880 Hz" testdata/clip-2audio.mp4`).
+      *Hecho* (`0535a91`): medido con `cargo run -p rod-player --example
+      controles` sobre `testdata/clip-15s-2audio.mp4` —
+
+      | comprobación | medida |
+      |---|---|
+      | seek exacto, pedido 7.370 s | quedó en 7.371 s |
+      | pausa congela el reloj | 0.050 → 0.050 s en 500 ms |
+      | cambio de pista | `aid` 1 → 2, mpv lo reporta activo |
+      | salida de audio | `wasapi` (antes `ao=null`) |
+
+      Y en la ventana real (rod-app), confirmado a ojo: pausar congela el timecode
+      y reanudar sigue desde el mismo instante, `−5 s` retrocede y sigue, y el
+      selector `eng` → `spa` cambia el tono sin cortar el video.
+
+      *Lo que hubo que añadir al player*, y el porqué de cada uno:
+      - `hr-seek=yes`: sin él mpv aterriza en el keyframe anterior y el playhead
+        miente. Es lo único que hace que "el seek cae en el frame pedido" sea
+        cierto y no aproximado.
+      - `keep-open=yes`: al llegar al final se queda en el último frame en vez de
+        cerrar el stream. Un editor sin imagen al final del clip no sirve.
+      - `esperar_carga` acotada a 5 s: el `wait_event(-1.0)` anterior podía
+        bloquear el hilo de la UI para siempre si no llegaba `FileLoaded`.
+      - `seeking()`: entre pedir el seek y que mpv lo ejecute, `time-pos` sigue
+        en el instante viejo 1–2 frames. Sin esta guarda el thumb del slider salta
+        hacia atrás y pelea con el dedo que arrastra.
+      - `audio_track()`: el selector de audio y el botón de pausa releen el
+        estado de mpv en vez de invertir un espejo local. mpv es la fuente; el
+        espejo solo sirve para pintar.
+
+      *Desviaciones conscientes del oráculo* (`C:/Dev/OpenDialogue`):
+      - La app Tauri no tiene slider: el seek viene del timeline o de escribir el
+        tiempo en un input. Aquí el slider es del paso 6 y se queda, con
+        `on_change` + `on_release` (mover el thumb no busca; soltarlo sí).
+      - El timecode del oráculo es `HH:MM:SS.cc` (`utils/time.ts`, centésimas) y
+        solo muestra la posición, editable. El nuestro usa el mismo formato y
+        añade `posición / duración`, que el oráculo pone en el timeline.
+      - **Pendiente 6c**: el selector de velocidad. El oráculo ofrece
+        `[0.5, 0.75, 1, 1.25, 1.5, 2]` vía `<select>`; aquí había un `1x` de
+        mentira y se quitó antes que dejarlo como control muerto.
+
 
 - [x] **7. Medir.** Contador de frames en el título de la ventana durante 30 s de
       reproducción a 1080p.
@@ -91,10 +131,11 @@ del player visto desde la UI (`pause`, `time-pos`, `aid`).
       frames). Sin pérdidas: el contador clava la cadencia de la fuente, que es
       el techo real de `mpv_render_context_update`.
 
-- [x] **8. Cerrar.** Commits `8154b76` y `7537eab` dejan los controles, el
-      esqueleto de ventana y la medición de **60.0 fps** con **5 capas** de
-      libass; la captura es `docs/checklists/slice-0c-paso-5.png`. Fin del
-      slice 0.
+- [x] **8. Cerrar.** Commits `8154b76` (controles del player), `7537eab`
+      (esqueleto de ventana, paso 6a) y `0535a91` (los tres controles juntos en la
+      app, paso 6b) dejan el slice 0 cerrado: **60.0 fps** con **5 capas** de libass
+      y el reproductor con play/pause, seek exacto y pista de audio. La captura de
+      la medición es `docs/checklists/slice-0c-paso-5.png`.
 
 ## Hallazgos
 
@@ -147,6 +188,21 @@ del player visto desde la UI (`pause`, `time-pos`, `aid`).
   `widget/ventana` —0.6 en x, 0.7 en y— pegado a la esquina. La comprobación
   barata fue pintar el fragment de magenta: el bbox del quad delata la geometría
   sin depender del contenido del video.
+- **`PrintWindow` miente con una ventana wgpu ocluida.** Devuelve el último frame
+  compuesto, así que dos capturas separadas 800 ms salen idénticas y parecen una
+  app congelada: primero culpé a mi guarda de `seeking()`, después a mpv. La app
+  estaba a 11.8 s de CPU en 9 s de reloj, o sea vivita. Para verificar
+  reproducción por píxeles sirve `CopyFromScreen` con la ventana al frente
+  (`ShowWindow(SW_RESTORE)` + `SetForegroundWindow` + `MoveWindow` a una posición
+  conocida); `PrintWindow` solo para capturar la geometría de un frame quieto.
+  Y cuando el resultado importa, un ojo humano es más barato: los tres controles
+  de 6b se confirmaron así después de una hora peleando con la captura.
+- **El transporte del oráculo no tiene slider.** `App.tsx` pone `saltar(-5)` ·
+  play/pause · `saltar(+5)` · input de tiempo editable · `<select>` de velocidad
+  (`VELOCIDADES_REPRODUCCION = [0.5, 0.75, 1, 1.25, 1.5, 2]`), y el seek real
+  viene de arrastrar en el timeline o escribir el tiempo. Nuestro slider es una
+  adición del paso 6, no una copia; el formato del timecode (`HH:MM:SS.cc`,
+  centésimas) sí es el mismo (`utils/time.ts`).
 
 ## Qué NO hacer en este slice
 

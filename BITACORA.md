@@ -152,3 +152,24 @@ cara.
   en la ventana viene de la cadencia del vídeo, no de esta conversión.
 - **Dónde quedó:** `crates/player/examples/measure.rs`,
   `docs/checklists/slice-0a-mpv.md` pasos 6-7.
+
+## 2026-11-15 - una hora persiguiendo una captura que mentia
+
+- **Intentaba:** verificar en la ventana real que pausar congela el timecode y que
+  el seek del slider cae donde se pide, sin pedirle a nadie que mirara la pantalla.
+- **Error literal:** ninguna excepcion. Dos capturas separadas 800 ms daban la
+  misma firma de pixeles (`2458368/1656`) en la region del timecode Y en la del
+  video, en tres procesos distintos. Conclui que la app estaba congelada.
+- **Que estaba mal:** la herramienta. `PrintWindow(hdc, 2)` devuelve el ultimo
+  frame compuesto de la ventana; con wgpu y la ventana ocluida no se recompone
+  nada, asi que la captura es una foto vieja. Lo descarte midiendo el proceso:
+  vivo y con 11.8 s de CPU en 9 s de reloj, o sea dibujando a 60 fps.
+- **Que aprendi:** para verificar movimiento hay que capturar la pantalla real
+  (`CopyFromScreen`) con la ventana restaurada y al frente, no la ventana. Y que
+  cuando el resultado es "una persona mira y dice si se congela", pedirlo cuesta
+  treinta segundos: los tres controles se confirmaron asi al primer intento,
+  despues de una hora de scripts. La medicion automatica se queda donde si vale:
+  `cargo run -p rod-player --example controles`, que mide sin ventana y sin
+  capturas (seek 7.370 -> 7.371, pausa 0.050 -> 0.050, aid 1 -> 2, ao wasapi).
+- **Donde quede:** slice 0c cerrado (commit `0535a91`); checklist con las
+  desviaciones frente al oraculo y el paso 6c pendiente (selector de velocidad).
