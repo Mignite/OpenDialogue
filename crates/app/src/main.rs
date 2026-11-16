@@ -20,7 +20,11 @@ enum Message {
     AbrirVideo,
     AudioTrack(AudioTrack),
     PlayPause,
-    Seek(f32),
+    /// El usuario mueve el slider pero todavía no suelta: solo se mueve el
+    /// thumb, no se le pide nada a mpv.
+    Arrastrar(f32),
+    /// Soltó el slider: aquí sí se busca.
+    Soltar,
     Step(f64),
     Seleccionar(String),
     BorrarSeleccion,
@@ -34,6 +38,8 @@ struct Estado {
     layers: Arc<Vec<Capa>>,
     duration: f64,
     position: f64,
+    /// El usuario tiene el slider tomado: `time-pos` no debe pisar el thumb.
+    arrastrando: bool,
     paused: bool,
     video_path: String,
     audio_tracks: Vec<AudioTrack>,
@@ -78,6 +84,7 @@ impl Estado {
             layers: Arc::new(Vec::new()),
             duration,
             position: 0.0,
+            arrastrando: false,
             paused,
             video_path,
             audio_tracks,
@@ -90,7 +97,13 @@ fn update(state: &mut Estado, message: Message) -> Task<Message> {
     match message {
         Message::Tick => {
             let frame_changed = state.player.update() & 1 != 0;
-            state.position = state.player.position();
+
+            // `time-pos` sigue en el instante viejo uno o dos frames después de
+            // pedir un seek, y no se mueve mientras el usuario arrastra. Si se
+            // adopta igual, el thumb salta hacia atrás y pelea con el dedo.
+            if !state.arrastrando && !state.player.seeking() {
+                state.position = state.player.position();
+            }
             state.paused = state.player.paused();
             if frame_changed
                 && state
@@ -139,27 +152,37 @@ fn update(state: &mut Estado, message: Message) -> Task<Message> {
             }
         }
         Message::PlayPause => {
-            if state.paused && state.position >= state.duration - 0.05 {
-                state.position = 0.0;
+            let destino = !state.player.paused();
+            if destino && state.player.position() >= state.duration - 0.05 {
                 if let Err(error) = state.player.seek(0.0) {
                     eprintln!("no se pudo reiniciar el video: {error}");
                     return Task::none();
                 }
+                state.position = 0.0;
             }
-            state.paused = !state.paused;
-            if let Err(error) = state.player.set_paused(state.paused) {
-                eprintln!("no se pudo cambiar pausa: {error}");
-            }
-        }
-        Message::AudioTrack(track) => {
-            if let Err(error) = state.player.set_audio_track(track.id) {
-                eprintln!("no se pudo cambiar la pista de audio: {error}");
-            } else {
-                state.selected_audio = Some(track);
+            match state.player.set_paused(destino) {
+                // Se relee en vez de confiar en el espejo: mpv es la fuente.
+                Ok(()) => state.paused = state.player.paused(),
+                Err(error) => eprintln!("no se pudo cambiar pausa: {error}"),
             }
         }
-        Message::Seek(position) => {
+        Message::AudioTrack(track) => match state.player.set_audio_track(track.id) {
+            Ok(()) => {
+                let activa = state.player.audio_track();
+                state.selected_audio = state
+                    .audio_tracks
+                    .iter()
+                    .find(|pista| Some(pista.id) == activa)
+                    .cloned();
+            }
+            Err(error) => eprintln!("no se pudo cambiar la pista de audio: {error}"),
+        },
+        Message::Arrastrar(position) => {
+            state.arrastrando = true;
             state.position = position as f64;
+        }
+        Message::Soltar => {
+            state.arrastrando = false;
             if let Err(error) = state.player.seek(state.position) {
                 eprintln!("no se pudo hacer seek: {error}");
             }
@@ -197,8 +220,12 @@ fn view(state: &Estado) -> Element<'_, Message> {
         column![
             row![
                 button("Abrir video").on_press(Message::AbrirVideo),
+                // Ancho fijo: si no, el botón cambia de tamaño al alternar y la
+                // fila entera se corre bajo el cursor.
+                button(if state.paused { "▶" } else { "❚❚" })
+                    .on_press(Message::PlayPause)
+                    .width(44),
                 button("−5 s").on_press(Message::Step(-5.0)),
-                button(if state.paused { "▶" } else { "||" }).on_press(Message::PlayPause),
                 button("+5 s").on_press(Message::Step(5.0)),
                 pick_list(
                     state.audio_tracks.clone(),
@@ -211,15 +238,14 @@ fn view(state: &Estado) -> Element<'_, Message> {
                     rod_core::format_time(state.position),
                     rod_core::format_time(state.duration)
                 )),
-                space::horizontal(),
-                text("1x"),
             ]
             .spacing(8),
             slider(
                 0.0..=state.duration.max(0.01) as f32,
-                state.position.min(state.duration) as f32,
-                Message::Seek,
+                state.position.clamp(0.0, state.duration.max(0.01)) as f32,
+                Message::Arrastrar,
             )
+            .on_release(Message::Soltar)
             .step(0.01_f32),
         ]
         .spacing(6)

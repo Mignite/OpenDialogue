@@ -28,6 +28,14 @@ impl Player {
     pub fn open(path: &str) -> libmpv2::Result<Self> {
         let mpv = Mpv::with_initializer(|init| {
             init.set_option("vo", "libmpv".to_string())?;
+            // Buscar exacto: sin esto mpv aterriza en el keyframe anterior y el
+            // playhead no coincide con lo que se pidió.
+            init.set_option("hr-seek", "yes".to_string())?;
+            // Al final del archivo, quedarse en el último frame en vez de
+            // cerrar el stream: el editor sigue mostrando imagen.
+            init.set_option("keep-open", "yes".to_string())?;
+            init.set_option("hwdec", "auto-safe".to_string())?;
+            init.set_option("audio-pitch-correction", "yes".to_string())?;
             init.set_option("config", "no".to_string())?;
             Ok(())
         })?;
@@ -35,25 +43,7 @@ impl Player {
         let render = RenderContext::new(&mpv)?;
 
         mpv.command("loadfile", &[path, "replace"])?;
-
-        loop {
-            match mpv.wait_event(-1.0) {
-                Some(Ok(Event::FileLoaded)) => break,
-                Some(Ok(Event::EndFile(reason))) => {
-                    eprintln!("Se acabo antes de cargar: {reason:?}");
-                    break;
-                }
-                Some(Ok(otro)) => println!("Evento inesperado: {otro:?}"),
-                Some(Err(e)) => {
-                    eprintln!("Error al esperar evento: {e:?}");
-                    break;
-                }
-                None => {
-                    eprintln!("Se acabo el tiempo de espera antes de cargar");
-                    break;
-                }
-            }
-        }
+        esperar_carga(&mpv)?;
 
         Ok(Self {
             render,
@@ -138,6 +128,17 @@ impl Player {
         self.mpv.set_property("aid", id)
     }
 
+    /// La pista que mpv tiene activa de verdad, ya resuelta.
+    pub fn audio_track(&self) -> Option<i64> {
+        self.mpv.get_property::<i64>("aid").ok()
+    }
+
+    /// `true` mientras mpv está buscando. La app lo usa para no pisar la
+    /// posición que pidió el usuario con la que todavía no cambió.
+    pub fn seeking(&self) -> bool {
+        self.mpv.get_property::<bool>("seeking").unwrap_or(false)
+    }
+
     pub fn duration(&self) -> f64 {
         self.mpv.get_property::<f64>("duration").unwrap_or(0.0)
     }
@@ -169,16 +170,11 @@ impl Player {
         match self.mpv.set_property("time-pos", target) {
             Ok(()) => Ok(()),
             Err(libmpv2::Error::Raw(code)) if code == libmpv2::mpv_error::PropertyUnavailable => {
+                // Sin archivo cargado no hay `time-pos` que escribir. Se recarga
+                // y se busca otra vez. `esperar_carga` acota la espera: colgar el
+                // hilo de la UI para siempre es peor que fallar.
                 self.mpv.command("loadfile", &[&self.path, "replace"])?;
-                loop {
-                    match self.mpv.wait_event(-1.0) {
-                        Some(Ok(Event::FileLoaded)) => break,
-                        Some(Ok(Event::EndFile(_))) | Some(Ok(Event::StartFile)) => {}
-                        Some(Ok(_)) => {}
-                        Some(Err(error)) => return Err(error),
-                        None => continue,
-                    }
-                }
+                esperar_carga(&self.mpv)?;
                 self.mpv.set_property("time-pos", target)
             }
             Err(error) => Err(error),
@@ -187,5 +183,27 @@ impl Player {
 
     pub fn render(&self, buf: &mut [u8], width: usize, height: usize) -> libmpv2::Result<()> {
         self.render.render(buf, width, height)
+    }
+}
+
+/// Espera a que mpv termine de cargar el archivo actual.
+///
+/// Acotado a 5 s: si no llega `FileLoaded` se devuelve error en vez de dejar el
+/// hilo (que en la app es el de la UI) esperando un evento que puede no venir.
+fn esperar_carga(mpv: &Mpv) -> libmpv2::Result<()> {
+    loop {
+        match mpv.wait_event(5.0) {
+            Some(Ok(Event::FileLoaded)) => return Ok(()),
+            Some(Ok(Event::EndFile(razon))) => {
+                eprintln!("mpv termino antes de cargar: {razon:?}");
+                return Err(libmpv2::Error::Raw(libmpv2::mpv_error::LoadingFailed));
+            }
+            Some(Ok(_)) => {}
+            Some(Err(error)) => return Err(error),
+            None => {
+                eprintln!("mpv no cargo el archivo en 5 s");
+                return Err(libmpv2::Error::Raw(libmpv2::mpv_error::LoadingFailed));
+            }
+        }
     }
 }
