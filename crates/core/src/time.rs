@@ -49,6 +49,9 @@ mod tests {
         assert_eq!(parse_time_input("90.5"), Some(90.5));
         assert_eq!(parse_time_input("01:30"), Some(90.0));
         assert_eq!(parse_time_input("1:30.5"), Some(90.5));
+        // Los dos casos del oráculo que faltaban (time.test.ts).
+        assert_eq!(parse_time_input("00:01:30"), Some(90.0));
+        assert_eq!(parse_time_input("01:01:01"), Some(3661.0));
         assert_eq!(parse_time_input("01:01:01.001"), Some(3661.001));
     }
 
