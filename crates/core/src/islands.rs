@@ -98,43 +98,171 @@ pub fn pico_en_rango(volumen: &[f64], t0: f64, t1: f64) -> f64 {
 mod tests {
     use super::{buscar_tramo_audio, pico_en_rango};
 
-    fn silencio(seconds: f64) -> Vec<f64> {
-        vec![0.005; (seconds * 15.0).round() as usize]
+    // Casos portados de `__tests__/audioIslands.test.ts`, uno por `it`.
+
+    const VPS: f64 = 15.0;
+
+    fn silencio(segundos: f64) -> Vec<f64> {
+        vec![0.005; (segundos * VPS).round() as usize]
     }
 
-    fn pico(seconds: f64) -> Vec<f64> {
-        vec![0.2; (seconds * 15.0).round() as usize]
+    fn pico(segundos: f64) -> Vec<f64> {
+        vec![0.2; (segundos * VPS).round() as usize]
     }
 
-    #[test]
-    fn finds_an_island_from_silence_and_snaps_inside_speech() {
-        let volume = [silencio(1.0), pico(3.0), silencio(2.0)].concat();
-        let before = buscar_tramo_audio(&volume, 0.3).expect("speech ahead");
-        assert!((before.inicio - 0.3).abs() < 0.01);
-        assert!((before.fin - 4.25).abs() < 0.1);
-
-        let inside = buscar_tramo_audio(&volume, 1.4).expect("speech active");
-        assert!((inside.inicio - 1.0).abs() < 0.1);
+    fn frase() -> Vec<f64> {
+        [silencio(1.0), pico(3.0), silencio(2.0)].concat()
     }
 
     #[test]
-    fn applies_snap_limit_hysteresis_and_duration_cap() {
-        let volume = [silencio(2.0), pico(1.0), silencio(0.3), pico(10.0)].concat();
-        let tramo = buscar_tramo_audio(&volume, 2.0).expect("speech active");
-        assert!(tramo.inicio >= 1.45);
-        assert!(tramo.fin >= 5.2);
-
-        let long = [silencio(1.0), pico(10.0)].concat();
-        let tramo = buscar_tramo_audio(&long, 0.5).expect("speech ahead");
-        assert!(tramo.fin <= 6.0);
+    fn covers_the_whole_phrase_from_the_previous_silence() {
+        // Playhead 0.7 s antes de la voz: arranca donde está, cierra en voz + 0.25.
+        let tramo = buscar_tramo_audio(&frase(), 0.3).expect("hay voz adelante");
+        assert!((tramo.inicio - 0.3).abs() < 0.01, "inicio {}", tramo.inicio);
+        assert!((tramo.fin - 4.25).abs() < 0.1, "fin {}", tramo.fin);
     }
 
     #[test]
-    fn returns_none_without_audio_and_aggregates_range_peaks() {
+    fn leaves_at_most_300ms_of_air_before_the_onset() {
+        let tramo = buscar_tramo_audio(&frase(), 0.75).expect("hay voz adelante");
+        assert!((tramo.inicio - 0.7).abs() < 0.01, "inicio {}", tramo.inicio);
+    }
+
+    #[test]
+    fn never_starts_after_the_playhead() {
+        let tramo = buscar_tramo_audio(&frase(), 0.5).expect("hay voz adelante");
+        assert!(tramo.inicio <= 0.5, "inicio {}", tramo.inicio);
+    }
+
+    #[test]
+    fn snaps_back_to_the_onset_when_the_playhead_is_inside_speech() {
+        let tramo = buscar_tramo_audio(&frase(), 1.4).expect("hay voz");
+        assert!((tramo.inicio - 1.0).abs() < 0.1, "inicio {}", tramo.inicio);
+        assert!((tramo.fin - 4.25).abs() < 0.1, "fin {}", tramo.fin);
+    }
+
+    #[test]
+    fn does_not_snap_back_more_than_500ms() {
+        let tramo = buscar_tramo_audio(&frase(), 2.0).expect("hay voz");
+        assert!(tramo.inicio >= 1.45, "inicio {}", tramo.inicio);
+        assert!(tramo.inicio <= 1.6, "inicio {}", tramo.inicio);
+        assert!((tramo.fin - 4.25).abs() < 0.1, "fin {}", tramo.fin);
+    }
+
+    #[test]
+    fn detects_the_island_even_when_the_recent_background_is_speech() {
+        // Playhead 1.2 s dentro de la frase: la media de los 2 s previos se
+        // inflaría con la voz y taparía el habla; el percentil 25 no.
+        let volumen = [silencio(1.5), pico(3.0), silencio(2.0)].concat();
+        let tramo = buscar_tramo_audio(&volumen, 2.7).expect("hay voz");
+        assert!((tramo.fin - 4.75).abs() < 0.1, "fin {}", tramo.fin);
+    }
+
+    #[test]
+    fn returns_none_without_an_onset_in_the_next_two_seconds() {
+        let volumen = [silencio(1.0), pico(2.0), silencio(5.0), pico(2.0)].concat();
+        assert_eq!(buscar_tramo_audio(&volumen, 4.0), None);
+    }
+
+    #[test]
+    fn returns_none_for_an_empty_analysis() {
         assert_eq!(buscar_tramo_audio(&[], 1.0), None);
-        let volume: Vec<f64> = (0..15).map(|index| index as f64 / 100.0).collect();
-        assert!((pico_en_rango(&volume, 0.2, 0.4) - 0.05).abs() < 1e-6);
-        assert_eq!(pico_en_rango(&volume, 5.0, 6.0), 0.0);
-        assert!((pico_en_rango(&volume, 0.47, 0.475) - 0.07).abs() < 1e-6);
+    }
+
+    #[test]
+    fn returns_none_when_the_playhead_is_outside_the_analysis() {
+        let volumen = [silencio(1.0), pico(2.0)].concat();
+        assert_eq!(buscar_tramo_audio(&volumen, 10.0), None);
+    }
+
+    #[test]
+    fn a_short_fragment_measures_the_phrase_plus_the_tail() {
+        // 0.53 s de habla → 0.78 s de fragmento: sin piso de duración.
+        let volumen = [silencio(1.0), pico(0.5), silencio(2.0)].concat();
+        let tramo = buscar_tramo_audio(&volumen, 0.5).expect("hay voz adelante");
+        assert!((tramo.fin - 1.783).abs() < 0.01, "fin {}", tramo.fin);
+    }
+
+    #[test]
+    fn a_single_window_blip_is_not_inflated() {
+        let mut volumen = silencio(1.0);
+        volumen.push(0.2);
+        volumen.extend(silencio(2.0));
+        let tramo = buscar_tramo_audio(&volumen, 1.0).expect("hay voz");
+        assert!((tramo.inicio - 1.0).abs() < 0.01, "inicio {}", tramo.inicio);
+        assert!((tramo.fin - 1.317).abs() < 0.01, "fin {}", tramo.fin);
+    }
+
+    #[test]
+    fn closes_with_the_tail_after_the_last_sound() {
+        let volumen = [silencio(1.0), pico(0.6), silencio(2.0)].concat();
+        let tramo = buscar_tramo_audio(&volumen, 1.0).expect("hay voz");
+        assert!((tramo.inicio - 1.0).abs() < 0.01, "inicio {}", tramo.inicio);
+        assert!((tramo.fin - 1.85).abs() < 0.01, "fin {}", tramo.fin);
+        assert!(tramo.fin - 1.6 <= 0.3, "cola {}", tramo.fin - 1.6);
+    }
+
+    #[test]
+    fn a_short_phrase_does_not_leave_silence_at_the_end() {
+        // Caso reportado: el mínimo de 1.5 s estiraba el fragmento 0.9 s detrás
+        // de una voz de 0.6 s.
+        let volumen = [silencio(2.0), pico(0.6), silencio(3.0)].concat();
+        let tramo = buscar_tramo_audio(&volumen, 2.0).expect("hay voz");
+        assert!((tramo.inicio - 2.0).abs() < 0.01, "inicio {}", tramo.inicio);
+        assert!(tramo.fin - 2.6 <= 0.3, "cola {}", tramo.fin - 2.6);
+        assert!(tramo.fin - tramo.inicio < 1.0);
+    }
+
+    #[test]
+    fn never_covers_more_than_five_seconds_of_speech() {
+        let volumen = [silencio(1.0), pico(10.0)].concat();
+        let tramo = buscar_tramo_audio(&volumen, 0.5).expect("hay voz adelante");
+        assert!(tramo.fin <= 6.0 + 1e-6, "fin {}", tramo.fin);
+    }
+
+    #[test]
+    fn bridges_micro_pauses_inside_the_phrase() {
+        let volumen = [
+            silencio(2.0),
+            pico(1.0),
+            silencio(0.3),
+            pico(2.0),
+            silencio(2.0),
+        ]
+        .concat();
+        let tramo = buscar_tramo_audio(&volumen, 2.0).expect("hay voz");
+        assert!(tramo.fin >= 5.2, "fin {}", tramo.fin);
+    }
+
+    #[test]
+    fn works_with_the_playhead_at_zero() {
+        let volumen = [pico(3.0), silencio(2.0)].concat();
+        let tramo = buscar_tramo_audio(&volumen, 0.0).expect("hay voz");
+        assert_eq!(tramo.inicio, 0.0);
+        assert!((tramo.fin - 3.25).abs() < 0.1, "fin {}", tramo.fin);
+    }
+
+    fn volumen_lineal() -> Vec<f64> {
+        (0..15).map(|index| index as f64 / 100.0).collect()
+    }
+
+    #[test]
+    fn peaks_over_the_intersected_windows() {
+        // [0.2 s, 0.4 s) cubre las ventanas 3..6 → pico 0.05.
+        let volumen = volumen_lineal();
+        assert!((pico_en_rango(&volumen, 0.2, 0.4) - 0.05).abs() < 1e-6);
+    }
+
+    #[test]
+    fn peak_is_zero_outside_the_audio_or_with_empty_input() {
+        let volumen = volumen_lineal();
+        assert_eq!(pico_en_rango(&volumen, 5.0, 6.0), 0.0);
+        assert_eq!(pico_en_rango(&[], 0.0, 1.0), 0.0);
+    }
+
+    #[test]
+    fn a_range_smaller_than_one_window_evaluates_that_window() {
+        let volumen = volumen_lineal();
+        assert!((pico_en_rango(&volumen, 0.47, 0.475) - 0.07).abs() < 1e-6);
     }
 }

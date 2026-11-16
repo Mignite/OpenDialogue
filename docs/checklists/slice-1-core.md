@@ -23,17 +23,17 @@ altura de los ~306 tests de `C:/Dev/OpenDialogue`.
 
 | módulo Rust | oráculo | tests oráculo | estado |
 |---|---|---|---|
-| `time.rs` | `time.ts` | 7 | portado, faltan 3 asserts literales |
-| `srt.rs` | `srt.ts` | 17 | parcial: falta `nombreArchivoHablanteUnico` |
-| `editing.rs` | `captions.ts` + `captionTiempos.ts` | 21 | parcial: falta `findSnapBlockDelta` |
-| `islands.rs` | `audioIslands.ts` | 19 | funciones completas, cobertura 3/19 |
-| `ass.rs` | `ass.ts` | 79 | 16 funciones portadas, cobertura 5/79 |
+| `time.rs` | `time.ts` | 7 | portado, 7/7 |
+| `srt.rs` | `srt.ts` | 17 | portado, 17/17 |
+| `editing.rs` | `captions.ts` + `captionTiempos.ts` | 21 | portado, 21/21 |
+| `islands.rs` | `audioIslands.ts` | 19 | portado, 19/19 |
+| `ass.rs` | `ass.ts` | 80 | portado, 80/80 |
 | — | `busqueda.ts` | 18 | sin portar |
 | — | `autosubs.ts` | 13 | sin portar |
 | — | `selection.ts` | 19 | sin portar |
 | — | `assPresets.ts` | 17 | sin portar (necesita serde/JSON) |
 | — | `colorHablante.ts` + `clipboard.ts` | 14 | sin portar |
-| — | `export-nombres.test.ts` | 16 | depende de `srt`/`ass` (nombres de archivo) |
+| — | `export-nombres.test.ts` | 16 | portado (repartido entre `srt` y `editing`) |
 
 **No se portan** (y por qué):
 - `assPreview.ts` — calcula CSS para el overlay HTML del `<video>`. Aquí el
@@ -82,16 +82,34 @@ altura de los ~306 tests de `C:/Dev/OpenDialogue`.
       oráculo las saca de `es.json`. Cuando exista i18n en la app se mueven.
 
 
-- [ ] **4. `islands`.** Portar los 19 casos de `audioIslands.test.ts`.
+- [x] **4. `islands`.** Los 19 casos de `audioIslands.test.ts` portados. El port
+      previo era **fiel**: los 18 casos de comportamiento pasan sin tocar el
+      código, lo que confirma que las constantes (`FACTOR_UMBRAL` 2.5, `PISO`
+      0.01, `HISTERESIS_MUESTRAS` 8, `MAX_DURACION` 5 s, `COLA_SEG` 0.25,
+      `LEAD_MAX_SEG` 0.3, `SNAP_ATRAS_SEG` 0.5) estaban bien copiadas.
 
-- [ ] **5. `ass`, parte pura.** Colores (`hexToAssColor`, `assColorToHex`),
-      tiempos (`formatAssTime`, `parseAssTime`), escapado
-      (`escapeAssText`/`unescapeAssText`) y `sanitizeNombreDialogo`.
+- [x] **5. `ass`, parte pura.** Colores, tiempos, escapado, `sanitize_nombre_dialogo`,
+      bold/italic y `preset_para_exportar`. Dos cosas que hubo que añadir:
+      - `preset_por_defecto()`, el `DEFAULT_PRESET_ASS` del oráculo, en `ass.rs`:
+        un proyecto nuevo necesita un preset base y las pruebas del oráculo lo
+        usan como fixture. Es la misma decisión que `constants.ts` allá.
+      - **bug real** en `sanitize_nombre_dialogo`: reemplazar la coma por un
+        espacio dejaba doble espacio (`"Smith, John"` → `"Smith  John"`). El
+        oráculo colapsa `,\s*` en **un** espacio. La coma es el separador de
+        campos del `Dialogue:`, así que esto se ve en el reproductor.
 
-- [ ] **6. `ass`, parte estructural.** `segmentarPorSolape`, `overridesDeLinea`,
-      `fusionarLineas`, `buildAss`, `parseAss`, `presetDesdeEstilos`,
-      `presetParaExportar`, `lineasOverlayActivas`. Es el bloque grande (79
-      casos): si hace falta se parte en dos pasos con la checklist al día.
+- [x] **6. `ass`, parte estructural.** Los 8 bloques del oráculo (`buildAss`,
+      `parseAss`, `segmentarPorSolape`, `fusionarLineas`, `round-trip`,
+      `presetDesdeEstilos`, `lineasOverlayActivas`). Solo un bug, y gordo:
+      - **`parse_ass` perdía las líneas 2..n de un `Dialogue` multilínea.** La
+        continuación se pegaba a un **clon** del evento (el que hacía de
+        "último"), no al evento guardado en `events`. El `.ass` de Aegisub, que
+        es el formato normal de entrada, entraba truncado a la primera línea.
+        Ahora `last_event` es un índice dentro de `events`.
+      *Desviación consciente*: `fusionar_lineas` con `\N` entre líneas y los
+      overrides solo por campos que difieren del base; comparar `f64` con `!=`
+      es seguro aquí porque los presets vienen de los mismos valores, no de
+      aritmética acumulada.
 
 - [ ] **7. `busqueda`.** 18 casos. Va antes que `selection` porque la lista los
       usa juntos.
