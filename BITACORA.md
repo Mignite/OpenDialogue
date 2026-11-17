@@ -199,3 +199,27 @@ cara.
   encima de 8/255 y máximo 2/255, con libass 0.17.5 y Arial por DirectWrite.
   De paso se arregló `version()`: la versión viene en BCD (`0x01705000` =
   0.17.5) y el primer intento imprimía `112.80.0`.
+
+## 2026-11-16 — mi primer test de Windows CI que no podía arrancar
+
+- **Intentaba:** que los tests nuevos de `rod-subs` pasaran en el CI de Windows.
+  Corrían bien en local y en Ubuntu; en Windows el job terminó con
+  `STATUS_DLL_NOT_FOUND` (0xc0000135) sobre
+  `target/debug/build/rod-subs/<hash>/out/rod_subs-<hash>.exe`.
+- **Error literal:** `error: test failed, to rerun pass '-p rod-subs --lib'` y,
+  debajo, `process didn't exit successfully ... (exit code: 0xc0000135,
+  STATUS_DLL_NOT_FOUND)`.
+- **Qué estaba mal:** no era el código. Cargo 1.100 mueve los binarios de test de
+  un paquete con build script a `build/<paquete>/<hash>/out`, y ese hash no es el
+  `OUT_DIR` del build script (otro hash), así que las DLLs de libass que el
+  `build.rs` deja junto a `deps/` no están al lado del `.exe`. Como el import de
+  `ass-9.dll` es estático, el proceso muere antes de `main`. En local no se veía
+  porque la máquina tiene su propio camino feliz.
+- **Qué aprendí:** reproducir la versión del CI (`rustup toolchain install
+  1.100.0`, `cargo +1.100.0 test`) convierte "no entiendo el log" en un fallo
+  local en dos minutos. Mi primer remedio (copiar las DLLs al `OUT_DIR`) no
+  servía, y lo delató comparar los dos hashes. El arreglo real es por PATH en el
+  CI; el definitivo es enlazar libass estáticamente en el slice 8.
+- **Dónde quedé:** `.github/workflows/ci.yml` (paso de dependencias de Windows),
+  `crates/subs/build.rs` (comentario con el porqué) y
+  `docs/checklists/slice-2-subs.md` (hallazgo).

@@ -47,6 +47,11 @@ jobs:
             vcpkg install libass:x64-windows
           }
           "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+          # Cargo 1.100 deja los binarios de test de un paquete con build script
+          # en target/debug/build/<paquete>/<hash>/out, donde el build.rs no
+          # puede copiar las DLLs de libass (su OUT_DIR tiene otro hash). La
+          # búsqueda de DLLs de Windows termina en el PATH.
+          "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin" >> $env:GITHUB_PATH
 
       - name: fmt
         run: cargo fmt --all -- --check

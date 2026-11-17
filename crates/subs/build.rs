@@ -54,6 +54,13 @@ fn buscar() -> Option<PathBuf> {
 /// Copia las DLLs junto a los ejecutables. En Windows la búsqueda de DLLs
 /// empieza por el directorio del `.exe`, así que sin esto cada `cargo run` o
 /// `cargo test` exige añadir `vcpkg/installed/x64-windows/bin` al PATH.
+///
+/// Cargo 1.100 cambió dónde deja los binarios de test de un paquete con build
+/// script: pasan a `build/<paquete>/<hash>/out`, un directorio que el build
+/// script no puede conocer (su propio `OUT_DIR` tiene otro hash). Ahí la DLL no
+/// queda al lado y el proceso no arranca (`STATUS_DLL_NOT_FOUND`), así que la
+/// única salida sin tocar el enlazado es el PATH: el CI lo añade, y en local
+/// `$env:PATH += ';%USERPROFILE%\vcpkg\installed\x64-windows\bin'` lo resuelve.
 fn copiar_dlls(origen: &Path) {
     const DLLS: &[&str] = &[
         "ass-9.dll",
@@ -68,7 +75,9 @@ fn copiar_dlls(origen: &Path) {
         "z.dll",
     ];
 
-    // OUT_DIR = <target>/<perfil>/build/<paquete>-<hash>/out
+    // OUT_DIR = <target>/<perfil>/build/<paquete>/<hash>/out (cargo 1.100) o
+    // <target>/<perfil>/build/<paquete>-<hash>/out (anteriores). Subir tres
+    // niveles da el directorio del perfil en los dos formatos.
     let Some(perfil) = std::env::var_os("OUT_DIR")
         .map(PathBuf::from)
         .and_then(|out| out.parent()?.parent()?.parent().map(Path::to_path_buf))

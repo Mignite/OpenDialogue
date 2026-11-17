@@ -94,6 +94,20 @@ por caja envolvente, `\fad` como prueba del alfa del color, y la distinción ent
   exactamente el mismo fondo (0 píxeles >8 en el caso `basico`, cuyo fondo ocupa
   la mayor parte del recorte).
 
+- **Cargo 1.100 mudó los binarios de test y el primer CI en Windows no
+  arrancó.** `STATUS_DLL_NOT_FOUND` en `target/debug/build/rod-subs/<hash>/out/
+  rod_subs-<hash>.exe`. Desde 1.100 los binarios de test de un paquete con build
+  script viven ahí, y ese `<hash>` **no** es el `OUT_DIR` del build script (otro
+  hash), así que las DLLs de libass que `build.rs` copia junto a `deps/`,
+  `examples/` y el perfil no quedan al lado. Y el import de `ass-9.dll` es
+  estático: el proceso no llega a `main`. Se reproduce en local con
+  `rustup toolchain install 1.100.0` y se arregla por PATH
+  (`$env:GITHUB_PATH` con `vcpkg/installed/x64-windows/bin` en el CI), no
+  copiando a `OUT_DIR` como intenté primero: comprobado que no coincide.
+  Anotado en `build.rs`. Es un argumento a favor de enlazar libass **estáticamente**
+  (`x64-windows-static-md`) en el slice 8: se lleva por delante las DLLs, el PATH
+  y el baile de copias.
+
 ## Qué NO hacer en este slice
 
 - No comparar contra el frame de un video real en el test. Eso ya lo hace
