@@ -14,11 +14,37 @@ const WIDTH: usize = 1920;
 const HEIGHT: usize = 1080;
 const ASS_FIXTURE: &str = include_str!("../../subs/tests/fixtures/basico.ass");
 
+/// Velocidades que ofrece la barra de transporte. `pick_list` necesita un tipo
+/// propio porque `f32` no es `Display` y el texto de la lista es la etiqueta.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Velocidad(f32);
+
+impl std::fmt::Display for Velocidad {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let texto = if self.0.fract() == 0.0 {
+            format!("{}x", self.0 as i64)
+        } else {
+            format!("{}x", self.0)
+        };
+        formatter.write_str(&texto)
+    }
+}
+
+const VELOCIDADES: [Velocidad; 6] = [
+    Velocidad(0.5),
+    Velocidad(0.75),
+    Velocidad(1.0),
+    Velocidad(1.25),
+    Velocidad(1.5),
+    Velocidad(2.0),
+];
+
 #[derive(Debug, Clone)]
 enum Message {
     Tick,
     AbrirVideo,
     AudioTrack(AudioTrack),
+    Velocidad(Velocidad),
     PlayPause,
     /// El usuario mueve el slider pero todavía no suelta: solo se mueve el
     /// thumb, no se le pide nada a mpv.
@@ -44,6 +70,7 @@ struct Estado {
     video_path: String,
     audio_tracks: Vec<AudioTrack>,
     selected_audio: Option<AudioTrack>,
+    velocidad: Velocidad,
 }
 
 fn main() -> iced::Result {
@@ -73,6 +100,7 @@ impl Estado {
         let paused = player.paused();
         let audio_tracks = player.audio_tracks();
         let selected_audio = audio_tracks.first().cloned();
+        let velocidad = Velocidad(player.speed() as f32);
         let mut subtitles = rod_subs::Subtitulos::nuevo(WIDTH as u32, HEIGHT as u32, ASS_FIXTURE);
         subtitles.render(0);
 
@@ -89,6 +117,7 @@ impl Estado {
             video_path,
             audio_tracks,
             selected_audio,
+            velocidad,
         }
     }
 }
@@ -143,6 +172,7 @@ fn update(state: &mut Estado, message: Message) -> Task<Message> {
                     state.video_path = path_text.to_owned();
                     state.audio_tracks = player.audio_tracks();
                     state.selected_audio = state.audio_tracks.first().cloned();
+                    state.velocidad = Velocidad(player.speed() as f32);
                     state.player = player;
                     state.layers = Arc::new(Vec::new());
                 }
@@ -176,6 +206,11 @@ fn update(state: &mut Estado, message: Message) -> Task<Message> {
                     .cloned();
             }
             Err(error) => eprintln!("no se pudo cambiar la pista de audio: {error}"),
+        },
+        Message::Velocidad(velocidad) => match state.player.set_speed(velocidad.0 as f64) {
+            // Se relee de mpv, que acota la velocidad a su rango.
+            Ok(()) => state.velocidad = Velocidad(state.player.speed() as f32),
+            Err(error) => eprintln!("no se pudo cambiar la velocidad: {error}"),
         },
         Message::Arrastrar(position) => {
             state.arrastrando = true;
@@ -233,6 +268,7 @@ fn view(state: &Estado) -> Element<'_, Message> {
                     Message::AudioTrack,
                 )
                 .placeholder("Audio"),
+                pick_list(VELOCIDADES, Some(state.velocidad), Message::Velocidad,).width(84),
                 text(format!(
                     "{} / {}",
                     rod_core::format_time(state.position),
@@ -360,5 +396,24 @@ fn panel(_theme: &iced::Theme) -> container::Style {
             radius: 0.0.into(),
         },
         ..container::Style::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{VELOCIDADES, Velocidad};
+
+    #[test]
+    fn la_etiqueta_no_arrastra_decimales_inutiles() {
+        assert_eq!(Velocidad(1.0).to_string(), "1x");
+        assert_eq!(Velocidad(2.0).to_string(), "2x");
+        assert_eq!(Velocidad(0.5).to_string(), "0.5x");
+        assert_eq!(Velocidad(1.25).to_string(), "1.25x");
+    }
+
+    #[test]
+    fn la_lista_esta_ordenada_y_contiene_la_normal() {
+        assert!(VELOCIDADES.windows(2).all(|par| par[0].0 < par[1].0));
+        assert!(VELOCIDADES.contains(&Velocidad(1.0)));
     }
 }

@@ -2,10 +2,15 @@
 //!
 //! Verifica lo que la UI promete y no se puede ver en una captura: que pausar
 //! congela el reloj, que el seek cae en el instante pedido (exacto, no en el
-//! keyframe anterior) y que la pista de audio cambia de verdad en mpv.
+//! keyframe anterior) y que la pista de audio y la velocidad cambian de verdad
+//! en mpv.
 //!
-//! `cargo run -p rod-player --example controles` desde la raíz del repo.
-//! Sale con código 1 si alguna comprobación falla.
+//! Es la versión para Windows de `tests/controles.rs`: el test automático solo
+//! corre donde hay libmpv (el CI de Linux), porque en Windows el import de la
+//! DLL es estático y el runner no la tiene.
+//!
+//! `cargo run -p rod-player --example controles` desde la raíz del repo, con
+//! `third_party/mpv` en el PATH. Sale con código 1 si alguna comprobación falla.
 
 use std::time::{Duration, Instant};
 
@@ -103,6 +108,37 @@ fn main() {
         println!("OK reanuda y avanza");
     } else {
         println!("FALLO: no avanzo tras reanudar");
+        fallos += 1;
+    }
+
+    // --- Velocidad --------------------------------------------------------
+    // Se mide reloj de pared contra reloj del medio, como en el test automático
+    // pero con una ventana más larga.
+    let medir = |velocidad: f64| -> f64 {
+        player.set_speed(velocidad).expect("cambiar velocidad");
+        player.seek(OBJETIVO).expect("seek antes de medir");
+        std::thread::sleep(Duration::from_millis(300));
+        player.set_paused(false).expect("reanudar");
+        // Tramo estable: al reanudar hay una ráfaga de recuperación que no
+        // depende de la velocidad.
+        std::thread::sleep(Duration::from_millis(150));
+        let inicio = player.position();
+        std::thread::sleep(Duration::from_millis(800));
+        let fin = player.position();
+        player.set_paused(true).expect("pausar");
+        fin - inicio
+    };
+    let normal = medir(1.0);
+    let doble = medir(2.0);
+    println!("avance en 800 ms: 1x {normal:.3} s, 2x {doble:.3} s");
+    if normal > 0.3 && doble > normal * 1.4 && doble < normal * 2.8 {
+        println!("OK la velocidad cambia el ritmo");
+    } else {
+        println!("FALLO: 2x no avanzo aproximadamente el doble");
+        fallos += 1;
+    }
+    if player.speed() != 2.0 {
+        println!("FALLO: mpv no reporta la velocidad pedida");
         fallos += 1;
     }
 

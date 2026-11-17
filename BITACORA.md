@@ -223,3 +223,27 @@ cara.
 - **Dónde quedé:** `.github/workflows/ci.yml` (paso de dependencias de Windows),
   `crates/subs/build.rs` (comentario con el porqué) y
   `docs/checklists/slice-2-subs.md` (hallazgo).
+
+## 2026-11-16 — el 2x que medía 1.61x
+
+- **Intentaba:** cerrar el slice 3 con un test que demostrara que `speed = 2`
+  duplica el ritmo de reproducción, midiendo reloj de pared contra `time-pos`.
+- **Error literal:** ninguna aserción falló, y ese fue el problema: daba
+  `1x avanzó 0.660 s, 2x avanzó 1.060 s (1.61x)` en una ventana de 600 ms. Con
+  un 2x de verdad, 1.060/0.660 no cuadra.
+- **Qué estaba mal:** no era la velocidad. La ventana empezaba en el mismo
+  instante en que se quitaba la pausa, y mpv aprovecha ese momento para
+  recuperar el retraso del reloj de audio: ese salto inicial es igual con 1x y
+  con 2x, así que diluía la razón. En el ejemplo manual, con 800 ms, salía
+  `0.651` de 0.800 posibles por lo mismo.
+- **Qué aprendí:** para medir una tasa hay que medir en régimen, no en el
+  transitorio. Dejar 150 ms de asentamiento, tomar la posición ahí y medir la
+  ventana siguiente da `0.600` y `1.200` —2.00x— y el margen del test deja de
+  ser una apuesta. Lo mismo sirve para cualquier medición de rendimiento sobre
+  mpv: el primer tramo después de un cambio de estado no representa la tasa.
+- **Dónde quedé:** `crates/player/tests/controles.rs` (4 tests: pausa, seek,
+  `aid` y velocidad; `#![cfg(unix)]` porque el CI de Windows no puede cargar
+  libmpv), `crates/player/examples/controles.rs` (la versión manual para
+  Windows, ahora con velocidad), `set_speed`/`speed` en `Player`, el selector
+  `0.5x…2x` en la barra de transporte, y el CI de Linux generando el clip de 3 s
+  con `ffmpeg -f lavfi` antes de los tests.

@@ -163,6 +163,20 @@ impl Player {
         self.mpv.set_property("pause", paused)
     }
 
+    /// Velocidad de reproducción, acotada a lo que mpv acepta.
+    pub fn set_speed(&self, speed: f64) -> libmpv2::Result<()> {
+        self.drain_events();
+        self.mpv.set_property("speed", normalizar_velocidad(speed))
+    }
+
+    /// La velocidad que mpv tiene activa de verdad.
+    pub fn speed(&self) -> f64 {
+        self.mpv
+            .get_property::<f64>("speed")
+            .map(normalizar_velocidad)
+            .unwrap_or(1.0)
+    }
+
     pub fn seek(&self, seconds: f64) -> libmpv2::Result<()> {
         self.drain_events();
         let target = seconds.max(0.0).min(self.duration());
@@ -186,6 +200,17 @@ impl Player {
     }
 }
 
+/// Rango que acepta mpv para `speed`. Fuera de él la propiedad se rechaza.
+const VELOCIDAD_MINIMA: f64 = 0.01;
+const VELOCIDAD_MAXIMA: f64 = 100.0;
+
+fn normalizar_velocidad(speed: f64) -> f64 {
+    if speed.is_nan() {
+        return 1.0;
+    }
+    speed.clamp(VELOCIDAD_MINIMA, VELOCIDAD_MAXIMA)
+}
+
 /// Espera a que mpv termine de cargar el archivo actual.
 ///
 /// Acotado a 5 s: si no llega `FileLoaded` se devuelve error en vez de dejar el
@@ -205,5 +230,29 @@ fn esperar_carga(mpv: &Mpv) -> libmpv2::Result<()> {
                 return Err(libmpv2::Error::Raw(libmpv2::mpv_error::LoadingFailed));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{VELOCIDAD_MAXIMA, VELOCIDAD_MINIMA, normalizar_velocidad};
+
+    #[test]
+    fn la_velocidad_normal_se_respeta() {
+        assert_eq!(normalizar_velocidad(0.5), 0.5);
+        assert_eq!(normalizar_velocidad(1.0), 1.0);
+        assert_eq!(normalizar_velocidad(2.0), 2.0);
+    }
+
+    #[test]
+    fn fuera_de_rango_se_acota() {
+        assert_eq!(normalizar_velocidad(0.0), VELOCIDAD_MINIMA);
+        assert_eq!(normalizar_velocidad(-3.0), VELOCIDAD_MINIMA);
+        assert_eq!(normalizar_velocidad(1_000.0), VELOCIDAD_MAXIMA);
+    }
+
+    #[test]
+    fn nan_vuelve_a_la_velocidad_normal() {
+        assert_eq!(normalizar_velocidad(f64::NAN), 1.0);
     }
 }
