@@ -173,3 +173,29 @@ cara.
   capturas (seek 7.370 -> 7.371, pausa 0.050 -> 0.050, aid 1 -> 2, ao wasapi).
 - **Donde quede:** slice 0c cerrado (commit `0535a91`); checklist con las
   desviaciones frente al oraculo y el paso 6c pendiente (selector de velocidad).
+
+## 2026-11-16 — dos búsquedas en mpv no dan el mismo frame
+
+- **Intentaba:** automatizar en `cargo test` la comparación contra mpv que en el
+  slice 0b se hacía a ojo, guardando solo el recorte del subtítulo como golden.
+- **Error literal:** ninguno; la comparación daba `0.000 %` desde el primer
+  intento. Pero el generador imprimía `frame de mpv en time-pos` dos veces con
+  valores distintos — `1.08` y `1.04` — para el mismo `seek` a `1.0`. Con el
+  `\fad(1000,1000)` del fixture de variantes, medio frame de diferencia es un
+  4 % de alfa: el golden y el render propio habrían estado comparando instantes
+  distintos, y el fallo habría apuntado al código de composición.
+- **Qué estaba mal:** pedía el frame dos veces, en dos sesiones (una sin
+  subtítulos y otra con ellos). Cada `seek` aterriza en el frame más cercano y
+  no necesariamente en el mismo. Además `time-pos` no es el instante pedido:
+  pedir `1.0` da `1.08` con una fuente de 25 fps.
+- **Qué aprendí:** para comparar dos renders hay que fijar el instante con el
+  que **dice** mpv, no con el que se pidió: se busca una vez, se captura el
+  frame limpio, se añade el `.ass` y `sub-add` redibuja el mismo instante. Y un
+  golden con desvanecido es un detector de imprecisiones temporales gratis: fue
+  el que delató el problema.
+- **Dónde quedé:** slice 2 cerrado. `rod-subs` ya tiene `Lienzo`/`caja` como
+  biblioteca (12 tests), `examples/golden.rs` para regenerar y
+  `tests/oraculo.rs` con dos golden (`basico`, `variantes`): 0 píxeles por
+  encima de 8/255 y máximo 2/255, con libass 0.17.5 y Arial por DirectWrite.
+  De paso se arregló `version()`: la versión viene en BCD (`0x01705000` =
+  0.17.5) y el primer intento imprimía `112.80.0`.

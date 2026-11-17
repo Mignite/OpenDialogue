@@ -52,6 +52,8 @@ unsafe extern "C" {
 }
 
 unsafe extern "C" {
+    /// Versión empaquetada como `0xMMmmpp`.
+    pub fn ass_library_version() -> c_int;
     pub fn ass_library_init() -> *mut ASS_Library;
     pub fn ass_library_done(privado: *mut ASS_Library);
     pub fn ass_set_fonts_dir(privado: *mut ASS_Library, dir: *const c_char);

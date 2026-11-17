@@ -11,3 +11,6 @@ pkg-config = "0.3"
 [dev-dependencies]
 # Los examples leen y escriben PNG (el fondo limpio y el render propio).
 image = { version = "0.25.10", default-features = false, features = ["png"] }
+# `examples/golden.rs` genera los PNG de referencia con el libass de libmpv.
+rod-player = { path = "../player" }
+libmpv2 = "7"

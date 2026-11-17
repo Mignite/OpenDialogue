@@ -2,13 +2,36 @@
 //! obtener los bitmaps de alfa de un instante. La composición sobre el video y
 //! la comparación con el oráculo se hacen fuera, sobre `Bitmap`.
 
+mod composicion;
 mod ffi;
+
+pub use composicion::{Lienzo, Rect, caja};
 
 use core::ffi::{c_char, c_int, c_void};
 use std::ffi::CString;
 use std::marker::PhantomData;
 use std::path::Path;
 use std::sync::Mutex;
+
+/// Versión de libass con la que se enlazó, como `"0.17.5"`.
+///
+/// Se imprime en los tests de golden: la comparación de píxeles no vale entre
+/// versiones de libass, así que el número tiene que quedar en la evidencia.
+pub fn version() -> String {
+    describir_version(unsafe { ffi::ass_library_version() }.cast_unsigned())
+}
+
+/// libass empaqueta la versión en BCD, no en bytes: `0x01705000` es `0.17.5`.
+/// Los cinco dígitos hexaltos son `M`, `mm`, `pp` en decimal, y los tres bajos
+/// son un extra de parche. Se comprueba con el propio ejemplo del `ass.h`
+/// (`0x01300001` = 0.13.0 + extra 1). Un `major` de dos cifras rompería la
+/// regla, pero eso queda a más de nueve versiones mayores de distancia.
+fn describir_version(empaquetada: u32) -> String {
+    let mayor = (empaquetada >> 28) & 0x0F;
+    let menor = ((empaquetada >> 24) & 0x0F) * 10 + ((empaquetada >> 20) & 0x0F);
+    let parche = ((empaquetada >> 16) & 0x0F) * 10 + ((empaquetada >> 12) & 0x0F);
+    format!("{mayor}.{menor}.{parche}")
+}
 
 /// Deja que libass elija el proveedor de fuentes de la plataforma
 /// (DirectWrite en Windows, fontconfig en Linux).
@@ -155,6 +178,53 @@ impl Bitmap {
     /// `y * stride + x` sin recortar revienta con pánico en vez de leer basura.
     pub fn alpha(&self) -> &[u8] {
         unsafe { std::slice::from_raw_parts(self.alpha, self.alpha_len) }
+    }
+
+    /// Bitmap artificial para los tests de composición, que no necesitan libass
+    /// ni fuentes. La máscara se filtra a propósito: así el test no tiene que
+    /// recordar el recorte de la última fila.
+    #[cfg(test)]
+    pub(crate) fn de_prueba(
+        ancho: u32,
+        alto: u32,
+        x: i32,
+        y: i32,
+        cobertura: u8,
+        color: u32,
+    ) -> Self {
+        let mascara = vec![cobertura; ancho as usize * alto as usize];
+        Self::de_prueba_mascara(ancho, alto, x, y, &mascara, color)
+    }
+
+    /// Igual, con una máscara dada fila a fila (`ancho * alto` bytes, sin
+    /// relleno). Sirve para comprobar que cada columna de la máscara cae en el
+    /// píxel correcto y no solo que se pinta algo.
+    #[cfg(test)]
+    pub(crate) fn de_prueba_mascara(
+        ancho: u32,
+        alto: u32,
+        x: i32,
+        y: i32,
+        mascara: &[u8],
+        color: u32,
+    ) -> Self {
+        let stride = ancho as usize;
+        let alpha_len = stride * (alto.max(1) as usize - 1) + ancho as usize;
+        assert!(
+            mascara.len() >= alpha_len,
+            "la máscara no cubre {ancho}x{alto}"
+        );
+        let alpha = Box::leak(mascara.to_vec().into_boxed_slice()).as_ptr();
+        Self {
+            ancho,
+            alto,
+            stride,
+            color,
+            x,
+            y,
+            alpha,
+            alpha_len,
+        }
     }
 }
 
@@ -345,5 +415,28 @@ unsafe extern "C" fn recibir_mensaje(
     let log = unsafe { &*(data as *const Mutex<Vec<String>>) };
     if let Ok(mut log) = log.lock() {
         log.push(texto);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn la_version_se_lee_en_bcd() {
+        // El valor que trae el port de vcpkg: libass 0.17.5.
+        assert_eq!(describir_version(0x0170_5000), "0.17.5");
+        // El ejemplo que cita el propio `ass.h` al hablar de 0.13.0.
+        assert_eq!(describir_version(0x0130_0001), "0.13.0");
+        assert_eq!(describir_version(0x0160_0000), "0.16.0");
+    }
+
+    #[test]
+    fn la_version_enlazada_se_puede_leer() {
+        let version = version();
+        assert!(
+            version.starts_with("0."),
+            "libass reportó una versión inesperada: {version}"
+        );
     }
 }

@@ -1,8 +1,10 @@
-//! Paso 4 y 5 del slice 0b: componer los bitmaps de libass sobre el frame
-//! limpio y comparar el resultado con lo que compuso mpv.
+//! Pasos 4 y 5 del slice 0b, ahora sobre la composición de la biblioteca:
+//! componer los bitmaps de libass sobre el frame limpio y comparar el resultado
+//! con lo que compuso mpv.
 //!
 //! El invariante del proyecto empieza aquí: si nuestro render y el de mpv
-//! divergen, es un bug, no un ajuste de estilos.
+//! divergen, es un bug, no un ajuste de estilos. El mismo camino de composición
+//! es el que usan `tests/oraculo.rs` y, más adelante, cualquier ruta sin GPU.
 
 const W: u32 = 1920;
 const H: u32 = 1080;
@@ -13,12 +15,15 @@ const INSTANTE_MS: i64 = 1000;
 const TOLERANCIA: u8 = 8;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut lienzo = image::open("testdata/frame-sin-subs.png")?.to_rgb8();
+    let fondo = image::open("testdata/frame-sin-subs.png")?.to_rgb8();
     assert_eq!(
-        (lienzo.width(), lienzo.height()),
+        (fondo.width(), fondo.height()),
         (W, H),
         "el frame de fondo no es 1920x1080"
     );
+
+    let mut lienzo = rod_subs::Lienzo::desde_rgb(W, H, fondo.into_raw())
+        .expect("el frame de fondo no mide W*H*3");
 
     let library = rod_subs::Library::new();
     let mut renderer = rod_subs::Renderer::new(&library, W, H);
@@ -27,36 +32,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let bitmaps = renderer.render(&track, INSTANTE_MS);
     println!("{} bitmap(s) a {INSTANTE_MS} ms", bitmaps.len());
+    lienzo.componer(bitmaps);
 
-    for bitmap in bitmaps {
-        let mascara = bitmap.alpha();
-        // El alfa de ASS está invertido: 0 = opaco.
-        let opacidad = 255 - (bitmap.color & 0xFF);
-        // 0xRRGGBBAA: los canales van en los bytes altos.
-        let color = [
-            bitmap.color >> 24,
-            (bitmap.color >> 16) & 0xFF,
-            (bitmap.color >> 8) & 0xFF,
-        ];
-
-        for fila in 0..bitmap.alto {
-            for columna in 0..bitmap.ancho {
-                let cobertura = mascara[fila as usize * bitmap.stride + columna as usize] as u32;
-                let fuerza = cobertura * opacidad / 255;
-                if fuerza == 0 {
-                    continue;
-                }
-
-                let pixel = lienzo.get_pixel_mut(bitmap.x as u32 + columna, bitmap.y as u32 + fila);
-                for (canal, capa) in color.iter().enumerate() {
-                    let fondo = pixel.0[canal] as u32;
-                    pixel.0[canal] = ((capa * fuerza + fondo * (255 - fuerza)) / 255) as u8;
-                }
-            }
-        }
-    }
-
-    lienzo.save("testdata/render-propio.png")?;
+    image::RgbImage::from_raw(W, H, lienzo.pixeles().to_vec())
+        .expect("el lienzo no mide W*H*3")
+        .save("testdata/render-propio.png")?;
     println!("guardado testdata/render-propio.png");
 
     comparar()
@@ -92,6 +72,7 @@ fn comparar() -> Result<(), Box<dyn std::error::Error>> {
     let porcentaje = distintos as f64 * 100.0 / total as f64;
     let porcentaje_exacto = exactos as f64 * 100.0 / total as f64;
 
+    println!("libass {}", rod_subs::version());
     println!("distintos (>{TOLERANCIA}): {distintos}/{total} = {porcentaje:.3} % del frame");
     println!("con cualquier diferencia: {exactos}/{total} = {porcentaje_exacto:.3} %");
     println!("diferencia máxima por canal: {maximo}/255");

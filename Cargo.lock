@@ -2840,7 +2840,9 @@ name = "rod-subs"
 version = "0.1.0"
 dependencies = [
  "image",
+ "libmpv2",
  "pkg-config",
+ "rod-player",
 ]
 
 [[package]]
