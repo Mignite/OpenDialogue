@@ -247,3 +247,24 @@ cara.
   Windows, ahora con velocidad), `set_speed`/`speed` en `Player`, el selector
   `0.5x…2x` en la barra de transporte, y el CI de Linux generando el clip de 3 s
   con `ffmpeg -f lavfi` antes de los tests.
+
+## 2026-11-17 — capturar la ventana de fuera miente (y molesta)
+
+- **Intentaba:** adjuntar al slice 4 una captura del compositor en una ventana
+  más alta que 16:9, para ver las barras negras y los subtítulos alineados.
+- **Error literal:** ninguna excepción. La primera captura salió desalineada
+  (el video ocupaba 720 px de una imagen de 1000) y la segunda salió con el
+  escritorio de Minecraft y un vídeo de YouTube de fondo.
+- **Qué estaba mal:** dos cosas distintas. Sin
+  `SetProcessDpiAwarenessContext`, `SetWindowPos`/`GetWindowRect`/
+  `CopyFromScreen` hablan en unidades virtualizadas: pedí 1000×800 lógicos y
+  capturé 1000×800 físicos de una ventana de 1250×1000. Y `SetForegroundWindow`
+  no puede traer al frente un proceso que el usuario no pidió, así que
+  `CopyFromScreen` copió lo que estaba encima.
+- **Qué aprendí:** una captura es evidencia solo si el script controla DPI y
+  primer plano; si el escritorio está en uso, no hay captura honesta. Mejor un
+  test de la aritmética (que sí se puede repetir) y la captura del slice 0c para
+  lo visual, que insistir y grabar la pantalla de otra persona.
+- **Dónde quedé:** `crates/app/src/video/geometria.rs` con `escala_letterbox` y
+  `rect_de_capa` (9 tests nuevos, 14 en `rod-app`), `video/mod.rs` usando la
+  biblioteca, y la desviación del canvas fijo 1920×1080 anotada en la spec.

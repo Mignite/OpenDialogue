@@ -293,6 +293,13 @@ el seguimiento del timeline se mueven con el reloj real del player.
 - Un `shader::Primitive` compone **video + subtítulos** en un solo pipeline: un
   quad para el frame, N quads para los bitmaps de libass. `prepare` recibe
   `device` y `queue`, así que ahí se suben la textura del video y las de cobertura.
+- **El canvas de composición es 1920×1080 fijos, no la resolución del video.**
+  El `.ass` exportado lleva `PlayResX/Y: 1920 1080` (el oráculo arranca así), y
+  el invariante del proyecto es que el preview sea el render de ese `.ass`. Si
+  el buffer siguiera la resolución del video, un clip 4:3 o 4K sacaría los
+  subtítulos de sitio respecto al archivo exportado. El letterbox hasta el
+  tamaño de la ventana lo hace el quad del shader
+  (`crates/app/src/video/geometria.rs`), no el buffer.
 - El timeline es un `Canvas` (vectorial): waveform, carriles, clips, playhead,
   marquee. Si el profiling muestra que la waveform cuesta, se mueve a un
   `shader` con una tira de quads; el resto del timeline se queda en `Canvas`.
@@ -373,7 +380,8 @@ warnings` y `cargo test` en verde, en Windows y en Linux.
   slice 0c paso 6 con el mismo player, para que el conjunto esté probado antes de
   la UI real.
 - **Slice 4 — compositor.** Video + subtítulos con escala y letterbox correctos,
-  a resolución de video.
+  sobre un canvas de 1920×1080 (el `PlayRes` del `.ass` exportado, §4.4), no el
+  tamaño del video.
 - **Slice 5 — edición.** Lista de subtítulos, panel de hablantes, editor de texto,
   undo, atajos.
 - **Slice 6 — timeline.** Carriles por hablante, clips, drag de bordes y en

@@ -14,6 +14,8 @@ use iced::Rectangle;
 use iced::wgpu;
 use iced::widget::shader;
 
+pub mod geometria;
+
 /// Bytes por instancia de capa: 3 atributos `float32x4`.
 const CAPA_BYTES: u64 = 3 * 16;
 
@@ -104,23 +106,13 @@ impl shader::Primitive for Frame {
         // Solo importa la proporción: iced ya deja el origen del clip space en el
         // rect del widget (pone un viewport por primitivo), así que el quad
         // centrado en NDC queda centrado en el widget.
-        let (escala_x, escala_y) = if bounds.width > 0.0 && bounds.height > 0.0 {
-            let aspecto_widget = bounds.width / bounds.height;
-            let aspecto_video = self.width as f32 / self.height as f32;
+        let escala =
+            geometria::escala_letterbox((self.width, self.height), (bounds.width, bounds.height));
 
-            if aspecto_video > aspecto_widget {
-                (1.0, aspecto_widget / aspecto_video)
-            } else {
-                (aspecto_video / aspecto_widget, 1.0)
-            }
-        } else {
-            (1.0, 1.0)
-        };
-
-        let mut escala = [0u8; 16];
-        escala[0..4].copy_from_slice(&escala_x.to_le_bytes());
-        escala[4..8].copy_from_slice(&escala_y.to_le_bytes());
-        queue.write_buffer(&gpu.uniforms, 0, &escala);
+        let mut uniforms = [0u8; 16];
+        uniforms[0..4].copy_from_slice(&escala.0.to_le_bytes());
+        uniforms[4..8].copy_from_slice(&escala.1.to_le_bytes());
+        queue.write_buffer(&gpu.uniforms, 0, &uniforms);
 
         let Some(texture) = gpu.texture.as_ref() else {
             return;
@@ -146,14 +138,7 @@ impl shader::Primitive for Frame {
             },
         );
 
-        gpu.subir_capas(
-            device,
-            queue,
-            &self.capas,
-            self.width,
-            self.height,
-            (escala_x, escala_y),
-        );
+        gpu.subir_capas(device, queue, &self.capas, self.width, self.height, escala);
     }
 
     fn draw(&self, gpu: &Gpu, render_pass: &mut wgpu::RenderPass<'_>) -> bool {
@@ -553,11 +538,15 @@ impl Gpu {
             }
 
             // El pixel del video va de 0..video a 0..frame, y de ahí a clip
-            // space. La y se invierte porque en NDC +1 es arriba.
-            let x0 = (2.0 * capa.x as f32 / video_w as f32 - 1.0) * escala_x;
-            let x1 = (2.0 * (capa.x + capa.ancho as i32) as f32 / video_w as f32 - 1.0) * escala_x;
-            let y0 = (1.0 - 2.0 * capa.y as f32 / video_h as f32) * escala_y;
-            let y1 = (1.0 - 2.0 * (capa.y + capa.alto as i32) as f32 / video_h as f32) * escala_y;
+            // space (con la y invertida y el letterbox ya aplicado).
+            let [x0, y0, x1, y1] = geometria::rect_de_capa(
+                capa.x,
+                capa.y,
+                capa.ancho,
+                capa.alto,
+                (video_w, video_h),
+                (escala_x, escala_y),
+            );
 
             let u0 = 0.0;
             let u1 = capa.ancho as f32 / ancho as f32;
