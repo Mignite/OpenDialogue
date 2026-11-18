@@ -8,6 +8,7 @@ use iced::{Background, Color, Element, Length, Subscription, Task};
 use rod_app::editor::{EstadoEditor, MAX_HABLANTES, normalizar_tecla};
 use rod_app::preview::{CANVAS, ass_del_proyecto};
 use rod_app::project_io::cargar;
+use rod_app::timeline::{self, Vista};
 use rod_app::video::{Capa, Video};
 use rod_player::AudioTrack;
 
@@ -72,6 +73,9 @@ enum Message {
     BorrarHablante(String),
     /// `None` deja los captions seleccionados sin hablante.
     AsignarHablante(Option<String>),
+    Timeline(timeline::Mensaje),
+    /// Zoom del timeline: `factor > 1` acerca. El ancla es el playhead.
+    Zoom(f64),
 }
 
 struct Estado {
@@ -96,6 +100,8 @@ struct Estado {
     /// cosa: es el equivalente al `onFocus={onCommit}` del oráculo (una sesión
     /// de tecleo = un paso de historial).
     editando_hablante: Option<(String, CampoHablante)>,
+    /// Ventana visible del timeline (inicio y escala).
+    vista: Vista,
 }
 
 fn main() -> iced::Result {
@@ -173,6 +179,8 @@ impl Estado {
             velocidad,
             borrador: String::new(),
             editando_hablante: None,
+            // 15 s caben en ~750 px: el clip de prueba entra completo.
+            vista: Vista::default(),
         };
         refrescar_preview(&mut estado);
         estado
@@ -398,6 +406,25 @@ fn update(state: &mut Estado, message: Message) -> Task<Message> {
                 refrescar_preview(state);
             }
         }
+        Message::Timeline(mensaje) => match mensaje {
+            timeline::Mensaje::Buscar(tiempo) => {
+                state.position = tiempo.clamp(0.0, state.duration);
+                if let Err(error) = state.player.seek(state.position) {
+                    eprintln!("no se pudo hacer seek desde el timeline: {error}");
+                }
+            }
+            timeline::Mensaje::Seleccionar(id) => {
+                state.editando_hablante = None;
+                state.editor.seleccionar_uno(&id);
+                sincronizar_borrador(state);
+            }
+        },
+        Message::Zoom(factor) => {
+            // El punto bajo el playhead se queda donde está: es lo que el ojo
+            // está mirando cuando cambia el zoom.
+            let ancla = state.vista.x_de(state.position).max(0.0);
+            state.vista = state.vista.con_escala(state.vista.escala / factor, ancla);
+        }
     }
     Task::none()
 }
@@ -464,16 +491,30 @@ fn view(state: &Estado) -> Element<'_, Message> {
         .width(Length::FillPortion(2))
         .height(Length::Fill);
     let timeline = container(
-        column![
-            text("Timeline").size(18),
-            text("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"),
-            text("duración total: ".to_owned() + &rod_core::format_time(state.duration)),
+        row![
+            Element::from(
+                timeline::widget(timeline::Linea {
+                    proyecto: state.editor.proyecto(),
+                    vista: state.vista,
+                    duracion: state.duration,
+                    position: state.position,
+                    seleccion: &state.editor.seleccion,
+                })
+                .width(Length::Fill)
+                .height(Length::Fill)
+            )
+            .map(Message::Timeline),
+            column![
+                button("+").on_press(Message::Zoom(1.5)).width(34),
+                button("−").on_press(Message::Zoom(1.0 / 1.5)).width(34),
+            ]
+            .spacing(4)
+            .padding(4),
         ]
-        .spacing(8)
-        .padding(12),
+        .spacing(4),
     )
     .width(Length::Fill)
-    .height(150)
+    .height(200)
     .style(panel);
 
     column![

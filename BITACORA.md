@@ -268,3 +268,24 @@ cara.
 - **Dónde quedé:** `crates/app/src/video/geometria.rs` con `escala_letterbox` y
   `rect_de_capa` (9 tests nuevos, 14 en `rod-app`), `video/mod.rs` usando la
   biblioteca, y la desviación del canvas fijo 1920×1080 anotada en la spec.
+
+## 2026-11-17 — `PrintWindow` sí captura una ventana en segundo plano
+
+- **Intentaba:** recuperar la evidencia visual para el slice 6, después de que
+  el slice 4 diera la captura por imposible.
+- **Error literal:** ninguno; el primer intento funcionó. `PrintWindow(hwnd, hdc,
+  PW_RENDERFULLCONTENT)` con `SetProcessDpiAwarenessContext(-4)` devolvió la
+  ventana de iced/wgpu completa —157 509 píxeles con contenido en una muestra de
+  1/9— con la app detrás de otras ventanas.
+- **Qué estaba mal antes:** no era la captura, era el método. `CopyFromScreen`
+  copia píxeles de la pantalla, y para eso hay que estar encima; `PrintWindow`
+  le pide a la ventana que se dibuje a sí misma en un DC, sin importar qué haya
+  arriba. La conclusión del slice 4 («no hay captura honesta con el escritorio
+  en uso») valía para `CopyFromScreen`, no para esto.
+- **Qué aprendí:** separar «no se puede» de «no lo intenté de la otra forma». La
+  captura es barata y repetible; lo que sigue sin poder automatizarse es el
+  clic: `PostMessage(WM_LBUTTONDOWN)` no llega a winit, así que la interacción
+  se prueba por el `update` del `Program` de canvas con un `Cursor::Available`.
+- **Dónde quedé:** `docs/checklists/slice-6-timeline.png` como evidencia del
+  slice 6a. El script de captura vive fuera del repo
+  (`%TEMP%\opencode\capturar.ps1`) porque es herramienta, no código del proyecto.

@@ -308,6 +308,10 @@ el seguimiento del timeline se mueven con el reloj real del player.
 - El timeline es un `Canvas` (vectorial): waveform, carriles, clips, playhead,
   marquee. Si el profiling muestra que la waveform cuesta, se mueve a un
   `shader` con una tira de quads; el resto del timeline se queda en `Canvas`.
+  Sin `Cache` mientras sean unos cientos de formas: un cache de canvas se
+  invalida a mano en cada edición y en cada tick del playhead, y ese riesgo no
+  paga el ahorro. La decisión se revisa en el slice 6b, con la waveform dentro y
+  una medición en la mano.
 - Mientras se reproduce, una `Subscription` a los frames de la ventana fuerza el
   redibujado; en pausa, el render es reactivo (0.14) y solo se redibuja al
   cambiar estado.
