@@ -40,6 +40,27 @@ impl EstadoEditor {
         }
     }
 
+    /// Deja la selección exactamente en `ids`, descartando los que no existen
+    /// (un arrastre o una marquesina pueden citar captions ya borrados).
+    pub fn reemplazar_seleccion(&mut self, ids: Vec<String>) {
+        self.seleccion = ids
+            .into_iter()
+            .filter(|id| {
+                self.documento
+                    .proyecto
+                    .captions
+                    .iter()
+                    .any(|caption| &caption.id == id)
+            })
+            .collect();
+    }
+
+    /// El proyecto mutable, para los arrastres del timeline: mueven muchos
+    /// captions por frame y la app ya decidió cuándo hay paso de historial.
+    pub fn proyecto_mut(&mut self) -> &mut Proyecto {
+        &mut self.documento.proyecto
+    }
+
     pub fn alternar_seleccion(&mut self, id: &str) {
         if let Some(position) = self.seleccion.iter().position(|selected| selected == id) {
             self.seleccion.remove(position);
@@ -282,6 +303,13 @@ impl EstadoEditor {
     pub fn registrar_historial(&mut self) {
         self.historial
             .registrar(Instantanea::de_proyecto(self.proyecto()));
+    }
+
+    /// Registra un estado capturado **antes** de la edición. Lo usa el
+    /// arrastre del timeline: la instantánea se toma al pulsar, pero el paso
+    /// solo entra cuando el primer frame cambia algo de verdad.
+    pub fn registrar_instantanea(&mut self, instantanea: Instantanea) {
+        self.historial.registrar(instantanea);
     }
 
     pub fn puede_deshacer(&self) -> bool {

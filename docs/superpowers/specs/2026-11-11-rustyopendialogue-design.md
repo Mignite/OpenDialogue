@@ -312,6 +312,12 @@ el seguimiento del timeline se mueven con el reloj real del player.
   invalida a mano en cada edición y en cada tick del playhead, y ese riesgo no
   paga el ahorro. La decisión se revisa en el slice 6b, con la waveform dentro y
   una medición en la mano.
+- Los arrastres del timeline **recalculan desde la posición original** guardada al
+  pulsar, en vez de acumular el delta de cada frame: acumular se desvía por los
+  `f64`, por los clamps y por el snap, y soltar donde se pulsó dejaría de ser un
+  no-op exacto. Las marcas se cuantizan a milisegundos, que es lo que leen SRT y
+  ASS. Un arrastre es un solo paso de historial: la instantánea se toma al
+  pulsar y se registra en el primer frame que cambia algo.
 - Mientras se reproduce, una `Subscription` a los frames de la ventana fuerza el
   redibujado; en pausa, el render es reactivo (0.14) y solo se redibuja al
   cambiar estado.

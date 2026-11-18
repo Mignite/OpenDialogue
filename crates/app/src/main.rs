@@ -100,6 +100,9 @@ struct Estado {
     /// cosa: es el equivalente al `onFocus={onCommit}` del oráculo (una sesión
     /// de tecleo = un paso de historial).
     editando_hablante: Option<(String, CampoHablante)>,
+    /// Arrastre en curso en el timeline. Vive en la app y no en el canvas
+    /// porque el historial y el proyecto también viven aquí.
+    arrastre: Option<timeline::Arrastre>,
     /// Ventana visible del timeline (inicio y escala).
     vista: Vista,
 }
@@ -179,11 +182,21 @@ impl Estado {
             velocidad,
             borrador: String::new(),
             editando_hablante: None,
+            arrastre: None,
             // 15 s caben en ~750 px: el clip de prueba entra completo.
             vista: Vista::default(),
         };
         refrescar_preview(&mut estado);
         estado
+    }
+}
+
+/// Mueve el reproductor al segundo pedido. Un clic en la regla o en un hueco
+/// del carril no es una edición: no toca el proyecto ni el historial.
+fn buscar(state: &mut Estado, tiempo: f64) {
+    state.position = tiempo.clamp(0.0, state.duration);
+    if let Err(error) = state.player.seek(state.position) {
+        eprintln!("no se pudo hacer seek desde el timeline: {error}");
     }
 }
 
@@ -407,16 +420,79 @@ fn update(state: &mut Estado, message: Message) -> Task<Message> {
             }
         }
         Message::Timeline(mensaje) => match mensaje {
-            timeline::Mensaje::Buscar(tiempo) => {
-                state.position = tiempo.clamp(0.0, state.duration);
-                if let Err(error) = state.player.seek(state.position) {
-                    eprintln!("no se pudo hacer seek desde el timeline: {error}");
+            timeline::Mensaje::Pulsar(punto) => {
+                let respuesta = timeline::pulsar(
+                    state.editor.proyecto(),
+                    state.vista,
+                    punto,
+                    &state.editor.seleccion,
+                );
+                match respuesta {
+                    timeline::Respuesta::Buscar(tiempo) => buscar(state, tiempo),
+                    timeline::Respuesta::Empezar {
+                        arrastre,
+                        seleccion,
+                    } => {
+                        state.editando_hablante = None;
+                        state.editor.reemplazar_seleccion(seleccion);
+                        sincronizar_borrador(state);
+                        state.arrastre = Some(arrastre);
+                    }
                 }
             }
-            timeline::Mensaje::Seleccionar(id) => {
-                state.editando_hablante = None;
-                state.editor.seleccionar_uno(&id);
-                sincronizar_borrador(state);
+            timeline::Mensaje::Arrastrar(punto) => {
+                let respaldo = match state.arrastre.as_mut() {
+                    Some(arrastre) if !arrastre.es_marquesina() => {
+                        let marco = timeline::Marco::nuevo(
+                            state.vista,
+                            punto,
+                            state.duration,
+                            state.position,
+                        );
+                        let cambio = arrastre.aplicar(state.editor.proyecto_mut(), marco);
+                        // Un arrastre es **uno** en el historial, no uno por
+                        // frame: el respaldo es el proyecto de antes de pulsar.
+                        if cambio && !arrastre.con_historial {
+                            arrastre.con_historial = true;
+                            arrastre.respaldo.clone()
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                };
+                let cambiado = respaldo.is_some();
+                if let Some(respaldo) = respaldo {
+                    state.editor.registrar_instantanea(respaldo);
+                }
+                if cambiado {
+                    refrescar_preview(state);
+                }
+            }
+            timeline::Mensaje::Soltar(punto) => {
+                let Some(arrastre) = state.arrastre.take() else {
+                    return Task::none();
+                };
+                if arrastre.es_marquesina() {
+                    let origen = arrastre.origen().unwrap_or(punto);
+                    if (punto.x - origen.x).abs() < timeline::UMBRAL_CLIC
+                        && (punto.y - origen.y).abs() < timeline::UMBRAL_CLIC
+                    {
+                        // Fue un clic: en un hueco del carril se busca, como en
+                        // el oráculo.
+                        buscar(state, state.vista.tiempo_de(punto.x));
+                    } else {
+                        let marco = timeline::Marco::nuevo(
+                            state.vista,
+                            punto,
+                            state.duration,
+                            state.position,
+                        );
+                        let ids = arrastre.ids_de_marquesina(state.editor.proyecto(), marco);
+                        state.editor.reemplazar_seleccion(ids);
+                        sincronizar_borrador(state);
+                    }
+                }
             }
         },
         Message::Zoom(factor) => {
@@ -499,6 +575,7 @@ fn view(state: &Estado) -> Element<'_, Message> {
                     duracion: state.duration,
                     position: state.position,
                     seleccion: &state.editor.seleccion,
+                    arrastre: state.arrastre.as_ref(),
                 })
                 .width(Length::Fill)
                 .height(Length::Fill)

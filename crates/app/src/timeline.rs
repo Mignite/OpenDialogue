@@ -1,14 +1,19 @@
-//! Timeline vectorial (slice 6a): regla de tiempo, un carril por hablante más
-//! el carril `—`, clips, playhead y clic para buscar o seleccionar.
+//! Timeline vectorial: regla de tiempo, un carril por hablante más el carril
+//! `—`, clips, playhead, marquesina y arrastres (slice 6a y 6b).
 //!
 //! La aritmética tiempo↔x y el zoom anclado viven en [`Vista`], con tests, como
 //! la geometría del compositor: es la parte que se equivoca en silencio. El
-//! `Program` de canvas solo la usa.
+//! `Program` de canvas solo dibuja y traduce el ratón a puntos; quién se agarra
+//! y qué pasa con el proyecto lo decide [`arrastre`], que también tiene tests.
 //!
-//! Sin waveform todavía (llega con `useWaveform`): primero el esqueleto y su
-//! medición. El dibujo no usa `Cache`: son unos cientos de formas y un cache
-//! que hay que invalidar a mano en cada edición es una fuente de bugs peor que
-//! el ahorro. Si el profiling del slice 6 lo pide, se añade.
+//! Sin waveform todavía (llega con `useWaveform`). El dibujo no usa `Cache`: son
+//! unos cientos de formas y un cache que hay que invalidar a mano en cada
+//! edición es una fuente de bugs peor que el ahorro. Si el profiling con la
+//! waveform lo pide, se añade.
+
+mod arrastre;
+
+pub use arrastre::{Arrastre, Asa, Marco, Modo, Original, Respuesta, UMBRAL_CLIC, pulsar};
 
 use iced::widget::canvas::{self, Canvas, Frame, Geometry, Path, Program, Text};
 use iced::{Color, Point, Rectangle, Renderer, Size, Theme, mouse};
@@ -89,13 +94,14 @@ impl Vista {
     }
 }
 
-/// Lo que el timeline le pide a la app.
+/// Lo que el timeline le pide a la app. Son puntos locales del widget y nada
+/// más: el significado (buscar, agarrar un borde, mover un bloque) lo decide
+/// [`arrastre::pulsar`] con el proyecto delante.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Mensaje {
-    /// Clic en la regla o en un hueco: mover el playhead.
-    Buscar(f64),
-    /// Clic sobre un clip: seleccionarlo.
-    Seleccionar(String),
+    Pulsar(Point),
+    Arrastrar(Point),
+    Soltar(Point),
 }
 
 pub struct Linea<'a> {
@@ -104,6 +110,9 @@ pub struct Linea<'a> {
     pub duracion: f64,
     pub position: f64,
     pub seleccion: &'a [String],
+    /// El arrastre en curso, solo para pintar la marquesina: el resto del
+    /// arrastre ya está aplicado al proyecto.
+    pub arrastre: Option<&'a Arrastre>,
 }
 
 /// Un carril listo para pintar: su etiqueta y sus clips.
@@ -111,6 +120,34 @@ struct Carril {
     etiqueta: String,
     color: Color,
     captions: Vec<Caption>,
+}
+
+/// Y de la primera fila del carril (el borde superior).
+pub fn y_de_carril(carril: usize) -> f32 {
+    ALTO_REGLA + carril as f32 * ALTO_CARRIL
+}
+
+/// Carril bajo una `y` local, si la hay: la regla no es un carril.
+pub fn carril_en(y: f32) -> Option<usize> {
+    if y < ALTO_REGLA {
+        return None;
+    }
+    Some(((y - ALTO_REGLA) / ALTO_CARRIL) as usize)
+}
+
+/// Fila (0 = sin hablante) bajo una `y`, acotada a los carriles que existen.
+pub fn fila_de_carril(y: f32, hablantes: usize) -> i32 {
+    carril_en(y).unwrap_or(0).min(hablantes) as i32
+}
+
+/// Clip bajo `x` en el carril dado. El de arriba (el más reciente en el vector)
+/// gana si dos se solapan: es el que se ve.
+pub fn clip_en(captions: &[Caption], vista: Vista, x: f32) -> Option<&Caption> {
+    captions.iter().rev().find(|caption| {
+        let inicio = vista.x_de(caption.inicio);
+        let fin = vista.x_de(caption.fin);
+        x >= inicio && x <= fin.max(inicio + 2.0)
+    })
 }
 
 impl Linea<'_> {
@@ -142,27 +179,6 @@ impl Linea<'_> {
         }
         carriles
     }
-
-    fn y_de_carril(carril: usize) -> f32 {
-        ALTO_REGLA + carril as f32 * ALTO_CARRIL
-    }
-
-    fn carril_en(&self, y: f32) -> Option<usize> {
-        if y < ALTO_REGLA {
-            return None;
-        }
-        Some(((y - ALTO_REGLA) / ALTO_CARRIL) as usize)
-    }
-
-    /// Clip bajo `x` en el carril dado. El de arriba (el más reciente en el
-    /// vector) gana si dos se solapan: es el que se ve.
-    fn clip_en<'c>(&self, captions: &'c [Caption], x: f32) -> Option<&'c Caption> {
-        captions.iter().rev().find(|caption| {
-            let inicio = self.vista.x_de(caption.inicio);
-            let fin = self.vista.x_de(caption.fin);
-            x >= inicio && x <= fin.max(inicio + 2.0)
-        })
-    }
 }
 
 impl Program<Mensaje> for Linea<'_> {
@@ -175,25 +191,28 @@ impl Program<Mensaje> for Linea<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Mensaje>> {
-        let canvas::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event else {
+        let canvas::Event::Mouse(evento) = event else {
             return None;
         };
-        let punto = cursor.position_in(bounds)?;
-        let carriles = self.carriles();
 
-        if let Some(carril) = self.carril_en(punto.y)
-            && let Some(captions) = carriles
-                .get(carril)
-                .map(|carril| carril.captions.as_slice())
-            && let Some(caption) = self.clip_en(captions, punto.x)
-        {
-            return Some(canvas::Action::publish(Mensaje::Seleccionar(
-                caption.id.clone(),
-            )));
+        match evento {
+            mouse::Event::ButtonPressed(mouse::Button::Left) => {
+                let punto = cursor.position_in(bounds)?;
+                Some(canvas::Action::publish(Mensaje::Pulsar(punto)).and_capture())
+            }
+            mouse::Event::ButtonReleased(mouse::Button::Left) => {
+                let punto = cursor.position_in(bounds)?;
+                Some(canvas::Action::publish(Mensaje::Soltar(punto)).and_capture())
+            }
+            // Sin arrastre en curso, mover el ratón no le importa a nadie; con
+            // uno, cada movimiento es un frame del arrastre.
+            mouse::Event::CursorMoved { .. } => {
+                self.arrastre?;
+                let punto = cursor.position_in(bounds)?;
+                Some(canvas::Action::publish(Mensaje::Arrastrar(punto)))
+            }
+            _ => None,
         }
-
-        let tiempo = self.vista.tiempo_de(punto.x).max(0.0);
-        Some(canvas::Action::publish(Mensaje::Buscar(tiempo)))
     }
 
     fn draw(
@@ -202,7 +221,7 @@ impl Program<Mensaje> for Linea<'_> {
         renderer: &Renderer,
         _theme: &Theme,
         bounds: Rectangle,
-        _cursor: mouse::Cursor,
+        cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
         let mut frame = Frame::new(renderer, bounds.size());
         frame.fill_rectangle(Point::ORIGIN, bounds.size(), FONDO);
@@ -211,6 +230,7 @@ impl Program<Mensaje> for Linea<'_> {
         self.pintar_carriles(&mut frame, bounds.size());
         self.pintar_fin(&mut frame, bounds.size());
         self.pintar_playhead(&mut frame, bounds.size());
+        self.pintar_marquesina(&mut frame, bounds, cursor);
 
         vec![frame.into_geometry()]
     }
@@ -225,10 +245,9 @@ impl Program<Mensaje> for Linea<'_> {
             return mouse::Interaction::default();
         };
         let carriles = self.carriles();
-        let sobre_clip = self
-            .carril_en(punto.y)
+        let sobre_clip = carril_en(punto.y)
             .and_then(|carril| carriles.get(carril))
-            .is_some_and(|carril| self.clip_en(&carril.captions, punto.x).is_some());
+            .is_some_and(|carril| clip_en(&carril.captions, self.vista, punto.x).is_some());
         if sobre_clip {
             mouse::Interaction::Pointer
         } else {
@@ -268,7 +287,7 @@ impl Linea<'_> {
 
     fn pintar_carriles(&self, frame: &mut Frame, tamano: Size) {
         for (indice, carril) in self.carriles().iter().enumerate() {
-            let y = Self::y_de_carril(indice);
+            let y = y_de_carril(indice);
             if y > tamano.height {
                 break;
             }
@@ -337,6 +356,40 @@ impl Linea<'_> {
         );
     }
 
+    /// El rectángulo de la marquesina en curso. Se dibuja del origen al cursor
+    /// de ahora mismo: el `Arrastre` solo guarda el origen, y el cursor lo trae
+    /// `draw`.
+    fn pintar_marquesina(&self, frame: &mut Frame, bounds: Rectangle, cursor: mouse::Cursor) {
+        let Some(Modo::Marquesina { origen }) = self.arrastre.map(|arrastre| &arrastre.modo) else {
+            return;
+        };
+        let Some(actual) = cursor.position_in(bounds) else {
+            return;
+        };
+        let rect = Rectangle::new(
+            Point::new(origen.x.min(actual.x), origen.y.min(actual.y)),
+            Size::new(
+                (actual.x - origen.x).abs().max(1.0),
+                (actual.y - origen.y).abs().max(1.0),
+            ),
+        );
+        frame.fill_rectangle(
+            rect.position(),
+            rect.size(),
+            Color {
+                a: 0.12,
+                ..PLAYHEAD
+            },
+        );
+        frame.stroke_rectangle(
+            rect.position(),
+            rect.size(),
+            canvas::Stroke::default()
+                .with_color(PLAYHEAD)
+                .with_width(1.0),
+        );
+    }
+
     fn pintar_playhead(&self, frame: &mut Frame, tamano: Size) {
         let x = self.vista.x_de(self.position);
         if !(0.0..=tamano.width).contains(&x) {
@@ -374,7 +427,10 @@ pub fn widget<'a>(linea: Linea<'a>) -> Canvas<Linea<'a>, Mensaje> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ALTO_CARRIL, ALTO_REGLA, Linea, Mensaje, Vista, paso_regla};
+    use super::{
+        ALTO_CARRIL, ALTO_REGLA, Arrastre, Linea, Mensaje, Modo, Vista, carril_en, clip_en,
+        fila_de_carril, paso_regla,
+    };
     use iced::widget::canvas;
     use iced::{Point, Rectangle, Size, mouse};
     use rod_core::{Caption, Hablante, Proyecto};
@@ -414,6 +470,7 @@ mod tests {
             duracion: 15.0,
             position: 0.0,
             seleccion: &[],
+            arrastre: None,
         }
     }
 
@@ -490,11 +547,12 @@ mod tests {
 
     #[test]
     fn el_carril_sale_de_la_y_y_la_regla_no_es_un_carril() {
-        let proyecto = proyecto();
-        let linea = linea(&proyecto, Vista::nueva(0.02));
-        assert_eq!(linea.carril_en(ALTO_REGLA - 1.0), None);
-        assert_eq!(linea.carril_en(ALTO_REGLA + 1.0), Some(0));
-        assert_eq!(linea.carril_en(ALTO_REGLA + ALTO_CARRIL + 1.0), Some(1));
+        assert_eq!(carril_en(ALTO_REGLA - 1.0), None);
+        assert_eq!(carril_en(ALTO_REGLA + 1.0), Some(0));
+        assert_eq!(carril_en(ALTO_REGLA + ALTO_CARRIL + 1.0), Some(1));
+        // La fila se acota a los carriles que existen: no hay fila 9 con un
+        // solo hablante.
+        assert_eq!(fila_de_carril(ALTO_REGLA + 40.0 * ALTO_CARRIL, 1), 1);
     }
 
     #[test]
@@ -518,9 +576,9 @@ mod tests {
         let carriles = linea.carriles();
 
         // cap-1 va de 1 s a 3 s: en x, de 50 a 150 px.
-        let encontrado = linea.clip_en(&carriles[1].captions, 100.0);
+        let encontrado = clip_en(&carriles[1].captions, vista, 100.0);
         assert_eq!(encontrado.map(|caption| caption.id.as_str()), Some("cap-1"));
-        assert!(linea.clip_en(&carriles[1].captions, 10.0).is_none());
+        assert!(clip_en(&carriles[1].captions, vista, 10.0).is_none());
     }
 
     #[test]
@@ -535,74 +593,98 @@ mod tests {
         });
         // 0.1 s/px: un clip de 0.5 s mide 5 px, pero el caso que importa es el
         // de 2 px: el mínimo dibujado tiene que seguir siendo clicable.
-        let linea = linea(&proyecto, Vista::nueva(0.1));
+        let vista = Vista::nueva(0.1);
+        let linea = linea(&proyecto, vista);
         let carriles = linea.carriles();
         let diminuto = carriles[0]
             .captions
             .iter()
             .find(|caption| caption.id == "cap-3")
             .expect("cap-3 está en el carril —");
-        let x0 = linea.vista.x_de(diminuto.inicio);
+        let x0 = vista.x_de(diminuto.inicio);
         assert_eq!(
-            linea
-                .clip_en(&carriles[0].captions, x0)
-                .map(|c| c.id.as_str()),
+            clip_en(&carriles[0].captions, vista, x0).map(|c| c.id.as_str()),
             Some("cap-3")
         );
     }
 
-    /// Un clic del canvas, empaquetado como lo hace iced. Así se prueba el
-    /// camino clic→mensaje sin GPU y sin robar el escritorio.
-    fn clic(linea: &Linea<'_>, x: f32, y: f32) -> Option<Mensaje> {
+    /// Un evento del canvas, empaquetado como lo hace iced. Así se prueba el
+    /// camino evento→mensaje sin GPU y sin robar el escritorio.
+    fn evento(linea: &Linea<'_>, evento: mouse::Event, x: f32, y: f32) -> Option<Mensaje> {
         use super::Program;
 
         let mut estado = ();
-        let evento = canvas::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
         let bounds = Rectangle::new(Point::ORIGIN, Size::new(800.0, 300.0));
         let cursor = mouse::Cursor::Available(Point::new(x, y));
         linea
-            .update(&mut estado, &evento, bounds, cursor)
-            .expect("el clic cae dentro del widget")
-            .into_inner()
-            .0
-    }
-
-    fn busca(tiempo: f64, esperado: f64) {
-        assert!(
-            (tiempo - esperado).abs() < 1e-6,
-            "buscó a {tiempo}, se esperaba {esperado}"
-        );
+            .update(&mut estado, &canvas::Event::Mouse(evento), bounds, cursor)
+            .and_then(|accion| accion.into_inner().0)
     }
 
     #[test]
-    fn el_clic_en_la_regla_pide_buscar() {
+    fn la_pulsacion_llega_a_la_app_como_un_punto_local() {
         let proyecto = proyecto();
         let linea = linea(&proyecto, Vista::nueva(0.02));
-        match clic(&linea, 100.0, 5.0) {
-            Some(Mensaje::Buscar(tiempo)) => busca(tiempo, 2.0),
-            otro => panic!("se esperaba Buscar, llegó {otro:?}"),
-        }
-    }
-
-    #[test]
-    fn el_clic_en_un_clip_lo_selecciona() {
-        let proyecto = proyecto();
-        let linea = linea(&proyecto, Vista::nueva(0.02));
-        let carril_de_ana = ALTO_REGLA + ALTO_CARRIL + 5.0;
         assert_eq!(
-            clic(&linea, 100.0, carril_de_ana),
-            Some(Mensaje::Seleccionar("cap-1".into()))
+            evento(
+                &linea,
+                mouse::Event::ButtonPressed(mouse::Button::Left),
+                100.0,
+                5.0
+            ),
+            Some(Mensaje::Pulsar(Point::new(100.0, 5.0)))
+        );
+        assert_eq!(
+            evento(
+                &linea,
+                mouse::Event::ButtonReleased(mouse::Button::Left),
+                120.0,
+                5.0
+            ),
+            Some(Mensaje::Soltar(Point::new(120.0, 5.0)))
         );
     }
 
     #[test]
-    fn el_clic_en_un_hueco_del_carril_pide_buscar() {
+    fn sin_arrastre_mover_el_raton_no_molesta_a_la_app() {
         let proyecto = proyecto();
         let linea = linea(&proyecto, Vista::nueva(0.02));
-        let carril_de_ana = ALTO_REGLA + ALTO_CARRIL + 5.0;
-        match clic(&linea, 700.0, carril_de_ana) {
-            Some(Mensaje::Buscar(tiempo)) => busca(tiempo, 14.0),
-            otro => panic!("se esperaba Buscar, llegó {otro:?}"),
-        }
+        assert_eq!(
+            evento(
+                &linea,
+                mouse::Event::CursorMoved {
+                    position: Point::ORIGIN
+                },
+                50.0,
+                50.0
+            ),
+            None,
+            "sin arrastre en curso no hay nada que contar"
+        );
+    }
+
+    #[test]
+    fn con_arrastre_cada_movimiento_se_publica() {
+        let proyecto = proyecto();
+        let mut linea = linea(&proyecto, Vista::nueva(0.02));
+        let arrastre = Arrastre {
+            modo: Modo::Marquesina {
+                origen: Point::new(40.0, 60.0),
+            },
+            respaldo: None,
+            con_historial: false,
+        };
+        linea.arrastre = Some(&arrastre);
+        assert_eq!(
+            evento(
+                &linea,
+                mouse::Event::CursorMoved {
+                    position: Point::ORIGIN
+                },
+                90.0,
+                70.0
+            ),
+            Some(Mensaje::Arrastrar(Point::new(90.0, 70.0)))
+        );
     }
 }
