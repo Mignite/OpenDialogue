@@ -316,6 +316,28 @@ impl Subtitulos {
         unsafe { fuentes(self.renderer, proveedor) };
     }
 
+    /// Cambia el `.ass` sin rehacer biblioteca ni rasterizador. Es la ruta de
+    /// la edición: el texto del proyecto se reconstruye y se recarga, y el
+    /// siguiente `render` ya rasteriza lo nuevo.
+    pub fn cargar(&mut self, texto: &str) {
+        let mut buf = texto.as_bytes().to_vec();
+        let track = unsafe {
+            ffi::ass_read_memory(
+                self.library.ptr,
+                buf.as_mut_ptr().cast(),
+                buf.len(),
+                c"UTF-8".as_ptr(),
+            )
+        };
+        assert!(!track.is_null(), "ass_read_memory devolvió nulo");
+
+        unsafe { ffi::ass_free_track(self.track) };
+        self.track = track;
+        // Los bitmaps apuntan al track viejo; con `&mut self` nadie los tiene
+        // prestados, pero el vector quedaría con punteros muertos.
+        self.bitmaps.clear();
+    }
+
     pub fn render(&mut self, ms: i64) -> &[Bitmap] {
         self.bitmaps = unsafe { recolectar(rasterizar(self.renderer, self.track, ms)) };
         &self.bitmaps
@@ -437,6 +459,28 @@ mod tests {
         assert!(
             version.starts_with("0."),
             "libass reportó una versión inesperada: {version}"
+        );
+    }
+
+    #[test]
+    fn cargar_cambia_el_track_renderizado() {
+        // Sin eventos: no hay nada que rasterizar.
+        let vacio = "[Script Info]\nScriptType: v4.00+\n\n[V4+ Styles]\n\
+                     Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n\
+                     Style: Default,Arial,48,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1\n\n\
+                     [Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n";
+        let con_texto = format!("{vacio}Dialogue: 0,0:00:00.00,0:00:05.00,Default,,0,0,0,,Hola");
+
+        let mut subtitulos = Subtitulos::nuevo(1920, 1080, vacio);
+        assert!(
+            subtitulos.render(1000).is_empty(),
+            "un .ass sin eventos no puede producir bitmaps"
+        );
+
+        subtitulos.cargar(&con_texto);
+        assert!(
+            !subtitulos.render(1000).is_empty(),
+            "tras cargar un evento debe aparecer texto"
         );
     }
 }

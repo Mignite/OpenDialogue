@@ -4,6 +4,7 @@ pub mod autosubs;
 pub mod busqueda;
 pub mod color_hablante;
 pub mod editing;
+pub mod historial;
 pub mod islands;
 pub mod model;
 pub mod portapapeles;
@@ -33,6 +34,7 @@ pub use editing::{
     DURACION_MINIMA, OverlapEntry, SNAP_THRESHOLD, build_overlap_report, clamp_caption_tiempos,
     clamp_delta_bloque, find_snap_block_delta, find_snap_time, format_overlap_report,
 };
+pub use historial::{Historial, Instantanea, LIMITE_HISTORIAL};
 pub use islands::{TramoAudio, buscar_tramo_audio, pico_en_rango};
 pub use model::{Preset, Proyecto};
 pub use portapapeles::{caption_a_portapapeles, texto_del_portapapeles};

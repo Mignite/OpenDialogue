@@ -2813,6 +2813,7 @@ name = "rod-app"
 version = "0.1.0"
 dependencies = [
  "iced",
+ "image",
  "rfd",
  "rod-core",
  "rod-player",

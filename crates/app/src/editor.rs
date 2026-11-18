@@ -1,4 +1,4 @@
-use rod_core::{Caption, Hablante, Proyecto, clamp_caption_tiempos};
+use rod_core::{Caption, Hablante, Historial, Instantanea, Proyecto, clamp_caption_tiempos};
 
 use crate::project_io::Documento;
 
@@ -6,6 +6,9 @@ use crate::project_io::Documento;
 pub struct EstadoEditor {
     pub documento: Documento,
     pub seleccion: Vec<String>,
+    /// El historial viaja con el editor: deshacer después de borrar tiene que
+    /// recordar lo borrado, así que no puede vivir en la app.
+    historial: Historial,
 }
 
 impl EstadoEditor {
@@ -13,6 +16,7 @@ impl EstadoEditor {
         Self {
             documento,
             seleccion: Vec::new(),
+            historial: Historial::default(),
         }
     }
 
@@ -45,6 +49,14 @@ impl EstadoEditor {
         }
     }
 
+    pub fn texto_de(&self, id: &str) -> Option<&str> {
+        self.proyecto()
+            .captions
+            .iter()
+            .find(|caption| caption.id == id)
+            .map(|caption| caption.texto.as_str())
+    }
+
     pub fn editar_texto(&mut self, id: &str, texto: impl Into<String>) -> bool {
         let Some(caption) = self
             .documento
@@ -57,6 +69,21 @@ impl EstadoEditor {
         };
         caption.texto = texto.into();
         true
+    }
+
+    /// Aplica el texto del editor como **un** paso de historial. `false` si el
+    /// caption no existe o el texto no cambió: un Ctrl+Z sobre un texto idéntico
+    /// gastaría un paso del historial sin cambiar la pantalla.
+    pub fn aplicar_texto(&mut self, id: &str, texto: impl Into<String>) -> bool {
+        let texto = texto.into();
+        let Some(actual) = self.texto_de(id) else {
+            return false;
+        };
+        if actual == texto {
+            return false;
+        }
+        self.registrar_historial();
+        self.editar_texto(id, texto)
     }
 
     pub fn editar_tiempos(&mut self, id: &str, inicio: f64, fin: f64, duracion_video: f64) -> bool {
@@ -108,6 +135,52 @@ impl EstadoEditor {
             .retain(|caption| !selected.contains(&caption.id));
         self.seleccion.clear();
         before - self.documento.proyecto.captions.len()
+    }
+
+    /// Guarda el estado actual antes de una edición. Se llama **antes** de
+    /// tocar el documento; la app decide la granularidad (por ejemplo, una vez
+    /// por texto confirmado, no por tecla).
+    pub fn registrar_historial(&mut self) {
+        self.historial
+            .registrar(Instantanea::de_proyecto(self.proyecto()));
+    }
+
+    pub fn puede_deshacer(&self) -> bool {
+        self.historial.puede_deshacer()
+    }
+
+    pub fn puede_rehacer(&self) -> bool {
+        self.historial.puede_rehacer()
+    }
+
+    /// Restaura el estado anterior. `false` si no había nada que deshacer.
+    pub fn deshacer(&mut self) -> bool {
+        let actual = Instantanea::de_proyecto(self.proyecto());
+        let Some(anterior) = self.historial.deshacer(actual) else {
+            return false;
+        };
+        self.restaurar(anterior);
+        true
+    }
+
+    pub fn rehacer(&mut self) -> bool {
+        let actual = Instantanea::de_proyecto(self.proyecto());
+        let Some(siguiente) = self.historial.rehacer(actual) else {
+            return false;
+        };
+        self.restaurar(siguiente);
+        true
+    }
+
+    fn restaurar(&mut self, instantanea: Instantanea) {
+        self.documento.proyecto.captions = instantanea.captions;
+        self.documento.proyecto.hablantes = instantanea.hablantes;
+        // Deshacer puede devolver al mundo captions que ya no existían o
+        // llevarse los que la selección apuntaba. La selección no es parte de
+        // la instantánea (como en el oráculo), pero no puede quedar colgando de
+        // ids inexistentes.
+        self.seleccion
+            .retain(|id| self.documento.proyecto.captions.iter().any(|c| &c.id == id));
     }
 
     fn ordenar(&mut self) {
@@ -171,5 +244,100 @@ mod tests {
             editor.proyecto().captions[2].hablante_id.as_deref(),
             Some("speaker")
         );
+    }
+
+    fn texto_de(editor: &EstadoEditor, id: &str) -> String {
+        editor
+            .proyecto()
+            .captions
+            .iter()
+            .find(|caption| caption.id == id)
+            .map(|caption| caption.texto.clone())
+            .expect("el caption existe")
+    }
+
+    #[test]
+    fn deshacer_devuelve_el_texto_anterior() {
+        let mut editor = editor();
+        let original = texto_de(&editor, "cap-1");
+
+        editor.registrar_historial();
+        assert!(editor.editar_texto("cap-1", "cambiado"));
+        assert_eq!(texto_de(&editor, "cap-1"), "cambiado");
+
+        assert!(editor.deshacer());
+        assert_eq!(texto_de(&editor, "cap-1"), original);
+        assert!(editor.rehacer());
+        assert_eq!(texto_de(&editor, "cap-1"), "cambiado");
+    }
+
+    #[test]
+    fn deshacer_un_borrado_devuelve_los_captions_y_suelta_la_seleccion() {
+        let mut editor = editor();
+        editor.seleccionar_uno("cap-1");
+        editor.alternar_seleccion("cap-2");
+
+        editor.registrar_historial();
+        assert_eq!(editor.borrar_seleccion(), 2);
+        assert!(editor.proyecto().captions.is_empty());
+
+        assert!(editor.deshacer());
+        assert_eq!(editor.proyecto().captions.len(), 2);
+        assert!(
+            editor.seleccion.is_empty(),
+            "la selección no se restaura: solo se poda"
+        );
+    }
+
+    #[test]
+    fn registrar_tras_deshacer_invalida_el_rehacer() {
+        let mut editor = editor();
+        editor.registrar_historial();
+        editor.editar_texto("cap-1", "uno");
+        assert!(editor.deshacer());
+        assert!(editor.puede_rehacer());
+
+        editor.registrar_historial();
+        editor.editar_texto("cap-1", "otro");
+        assert!(!editor.puede_rehacer());
+        assert!(!editor.rehacer());
+    }
+
+    #[test]
+    fn deshacer_sin_pasado_no_toca_nada() {
+        let mut editor = editor();
+        let antes = editor.proyecto().clone();
+        assert!(!editor.deshacer());
+        assert!(!editor.rehacer());
+        assert_eq!(editor.proyecto(), &antes);
+    }
+
+    #[test]
+    fn texto_de_encuentra_el_caption_o_no_devuelve_nada() {
+        let editor = editor();
+        assert_eq!(editor.texto_de("cap-1"), Some("Dos"));
+        assert_eq!(editor.texto_de("cap-9"), None);
+    }
+
+    #[test]
+    fn aplicar_el_mismo_texto_no_gasta_un_paso_de_historial() {
+        let mut editor = editor();
+        assert!(!editor.aplicar_texto("cap-1", "Dos"));
+        assert!(!editor.puede_deshacer());
+        assert!(!editor.aplicar_texto("cap-9", "fantasma"));
+        assert!(!editor.puede_deshacer());
+    }
+
+    #[test]
+    fn aplicar_texto_es_un_solo_paso_de_historial() {
+        let mut editor = editor();
+        assert!(editor.aplicar_texto("cap-1", "nuevo"));
+        assert_eq!(editor.texto_de("cap-1"), Some("nuevo"));
+        assert!(editor.puede_deshacer());
+
+        assert!(editor.deshacer());
+        assert_eq!(editor.texto_de("cap-1"), Some("Dos"));
+        // Un solo paso: tras deshacer no queda nada más que deshacer.
+        assert!(!editor.puede_deshacer());
     }
 }

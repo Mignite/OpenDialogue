@@ -131,6 +131,11 @@ libass con `ass_read_memory` y se rasteriza al tiempo actual. No hay un segundo
 motor que reconciliar, no hay aproximación CSS y desaparece `ASS_EM_PREVIEW`
 (0.85), que existía solo para calibrar HTML contra una captura de mpv.
 
+El `.ass` del preview se reconstruye **del proyecto** en cada edición
+(`crates/app/src/preview.rs`) y se recarga en el `Subtitulos` ya existente
+(`Subtitulos::cargar`). Editar texto no toca libass hasta confirmar la edición:
+un historial con una entrada por tecla no es lo que el oráculo guarda.
+
 Por qué no dejar que mpv pinte los subtítulos:
 
 - Se pierde el control del overlay: resaltar el clip activo, aislar un hablante,

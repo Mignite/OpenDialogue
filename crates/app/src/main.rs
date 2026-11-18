@@ -1,18 +1,18 @@
 use std::sync::Arc;
 
 use iced::widget::{
-    button, column, container, pick_list, row, scrollable, shader, slider, space, text,
+    button, column, container, pick_list, row, scrollable, shader, slider, space, text, text_input,
 };
 use iced::{Background, Color, Element, Length, Subscription, Task};
 
 use rod_app::editor::EstadoEditor;
+use rod_app::preview::{CANVAS, ass_del_proyecto};
 use rod_app::project_io::cargar;
 use rod_app::video::{Capa, Video};
 use rod_player::AudioTrack;
 
-const WIDTH: usize = 1920;
-const HEIGHT: usize = 1080;
-const ASS_FIXTURE: &str = include_str!("../../subs/tests/fixtures/basico.ass");
+const WIDTH: usize = CANVAS.0 as usize;
+const HEIGHT: usize = CANVAS.1 as usize;
 
 /// Velocidades que ofrece la barra de transporte. `pick_list` necesita un tipo
 /// propio porque `f32` no es `Display` y el texto de la lista es la etiqueta.
@@ -54,6 +54,12 @@ enum Message {
     Step(f64),
     Seleccionar(String),
     BorrarSeleccion,
+    Deshacer,
+    Rehacer,
+    /// Texto que el usuario escribe. No toca el proyecto hasta `AplicarTexto`:
+    /// así un Ctrl+Z deshace el texto confirmado, no cada tecla.
+    Borrador(String),
+    AplicarTexto,
 }
 
 struct Estado {
@@ -71,6 +77,8 @@ struct Estado {
     audio_tracks: Vec<AudioTrack>,
     selected_audio: Option<AudioTrack>,
     velocidad: Velocidad,
+    /// Lo que hay en el `text_input` del caption seleccionado.
+    borrador: String,
 }
 
 fn main() -> iced::Result {
@@ -82,7 +90,34 @@ fn main() -> iced::Result {
 }
 
 fn subscription(_state: &Estado) -> Subscription<Message> {
-    iced::window::frames().map(|_| Message::Tick)
+    Subscription::batch([
+        iced::window::frames().map(|_| Message::Tick),
+        // Ctrl+Z / Ctrl+Shift+Z (y Ctrl+Y, que es el redo de Windows). El
+        // atajo se decide aquí y no en el `update` porque la app no recibe el
+        // teclado de otra forma: los `text_input` se comen los caracteres.
+        iced::keyboard::listen().filter_map(|evento| {
+            let iced::keyboard::Event::KeyPressed { key, modifiers, .. } = evento else {
+                return None;
+            };
+            if !modifiers.command() {
+                return None;
+            }
+            let iced::keyboard::Key::Character(texto) = key.as_ref() else {
+                return None;
+            };
+            if texto.eq_ignore_ascii_case("z") {
+                return Some(if modifiers.shift() {
+                    Message::Rehacer
+                } else {
+                    Message::Deshacer
+                });
+            }
+            if texto.eq_ignore_ascii_case("y") && !modifiers.shift() {
+                return Some(Message::Rehacer);
+            }
+            None
+        }),
+    ])
 }
 
 impl Estado {
@@ -93,6 +128,7 @@ impl Estado {
             "testdata/clip-15s-2audio.mp4",
         )
         .expect("el fixture inicial debe ser SRT valido");
+        let editor = EstadoEditor::nuevo(documento);
         let video_path = "testdata/clip-15s-2audio.mp4".to_owned();
         let player = rod_player::Player::open(&video_path)
             .expect("no se pudo abrir testdata/clip-15s-2audio.mp4");
@@ -101,11 +137,11 @@ impl Estado {
         let audio_tracks = player.audio_tracks();
         let selected_audio = audio_tracks.first().cloned();
         let velocidad = Velocidad(player.speed() as f32);
-        let mut subtitles = rod_subs::Subtitulos::nuevo(WIDTH as u32, HEIGHT as u32, ASS_FIXTURE);
-        subtitles.render(0);
+        let ass = ass_del_proyecto(&editor);
+        let subtitles = rod_subs::Subtitulos::nuevo(WIDTH as u32, HEIGHT as u32, &ass);
 
-        Self {
-            editor: EstadoEditor::nuevo(documento),
+        let mut estado = Self {
+            editor,
             player,
             subtitles,
             pixels: vec![0; WIDTH * HEIGHT * 4],
@@ -118,8 +154,40 @@ impl Estado {
             audio_tracks,
             selected_audio,
             velocidad,
-        }
+            borrador: String::new(),
+        };
+        refrescar_preview(&mut estado);
+        estado
     }
+}
+
+/// Reconstruye el `.ass` del proyecto y rasteriza las capas de la posición
+/// actual. Se llama tras cada edición: el video no cambia, pero los subtítulos
+/// sí, y en pausa mpv no entrega un frame nuevo para disparar el repintado.
+fn refrescar_preview(state: &mut Estado) {
+    let ass = ass_del_proyecto(&state.editor);
+    state.subtitles.cargar(&ass);
+    let position = state.position;
+    state.layers = Arc::new(
+        state
+            .subtitles
+            .render((position * 1000.0) as i64)
+            .iter()
+            .map(Capa::desde)
+            .collect(),
+    );
+}
+
+/// El `text_input` muestra el texto del caption seleccionado. Sin selección
+/// (o con varios) queda vacío: no hay un texto único que editar.
+fn sincronizar_borrador(state: &mut Estado) {
+    let id = match state.editor.seleccion.as_slice() {
+        [id] => Some(id.clone()),
+        _ => None,
+    };
+    state.borrador = id
+        .and_then(|id| state.editor.texto_de(&id).map(str::to_owned))
+        .unwrap_or_default();
 }
 
 fn update(state: &mut Estado, message: Message) -> Task<Message> {
@@ -228,9 +296,43 @@ fn update(state: &mut Estado, message: Message) -> Task<Message> {
                 eprintln!("no se pudo hacer seek: {error}");
             }
         }
-        Message::Seleccionar(id) => state.editor.seleccionar_uno(&id),
+        Message::Seleccionar(id) => {
+            state.editor.seleccionar_uno(&id);
+            sincronizar_borrador(state);
+        }
+        Message::Borrador(texto) => state.borrador = texto,
+        Message::AplicarTexto => {
+            // El botón está apagado sin selección, pero Enter en el `text_input`
+            // puede llegar igual: aquí se vuelve a comprobar.
+            let Some(id) = state.editor.seleccion.first().cloned() else {
+                return Task::none();
+            };
+            let texto = state.borrador.clone();
+            if state.editor.aplicar_texto(&id, texto) {
+                refrescar_preview(state);
+            }
+        }
         Message::BorrarSeleccion => {
-            state.editor.borrar_seleccion();
+            // Sin selección no hay paso de historial: un Ctrl+Z vacío es peor
+            // que un botón apagado.
+            if !state.editor.seleccion.is_empty() {
+                state.editor.registrar_historial();
+                state.editor.borrar_seleccion();
+                sincronizar_borrador(state);
+                refrescar_preview(state);
+            }
+        }
+        Message::Deshacer => {
+            if state.editor.deshacer() {
+                sincronizar_borrador(state);
+                refrescar_preview(state);
+            }
+        }
+        Message::Rehacer => {
+            if state.editor.rehacer() {
+                sincronizar_borrador(state);
+                refrescar_preview(state);
+            }
         }
     }
     Task::none()
@@ -345,9 +447,26 @@ fn subtitle_panel(state: &Estado) -> Element<'_, Message> {
                 text("Speakers"),
                 text("Styles"),
                 space::horizontal(),
-                button("Borrar").on_press(Message::BorrarSeleccion),
+                button("↶")
+                    .on_press_maybe(state.editor.puede_deshacer().then_some(Message::Deshacer))
+                    .width(44),
+                button("↷")
+                    .on_press_maybe(state.editor.puede_rehacer().then_some(Message::Rehacer))
+                    .width(44),
+                button("Borrar").on_press_maybe(
+                    (!state.editor.seleccion.is_empty()).then_some(Message::BorrarSeleccion)
+                ),
             ]
             .spacing(12),
+            row![
+                text_input("Texto del subtítulo", &state.borrador)
+                    .on_input(Message::Borrador)
+                    .on_submit(Message::AplicarTexto),
+                button("Aplicar").on_press_maybe(
+                    (state.editor.seleccion.len() == 1).then_some(Message::AplicarTexto)
+                ),
+            ]
+            .spacing(8),
             text("CAPTIONS").size(14),
             scrollable(column(rows).spacing(8)),
         ]

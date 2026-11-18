@@ -68,7 +68,7 @@ pub fn exportar_srt(documento: &Documento) -> String {
     build_srt(&documento.proyecto.captions)
 }
 
-pub fn exportar_ass<F>(
+pub fn exportar_ass(
     documento: &Documento,
     presets: &HashMap<String, PresetAss>,
     sin_hablante: &PresetAss,
