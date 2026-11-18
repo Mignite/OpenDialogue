@@ -44,6 +44,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         antes.as_raw() == deshecho.as_raw()
     );
 
+    // Hablantes: el `.ass` gana un estilo `H1` y el `Name:` del diálogo. Sin
+    // presets (slice 7) se ve igual que `Default`, y eso es lo que hay que ver.
+    let hablante = editor
+        .agregar_hablante()
+        .expect("hay espacio para un hablante");
+    assert!(editor.editar_nombre_hablante(&hablante, "Ana"));
+    editor.seleccionar_uno("cap-1");
+    assert_eq!(editor.asignar_a_seleccion(Some(hablante.clone())), 1);
+
+    let ass_con_hablante = ass_del_proyecto(&editor);
+    for linea in ass_con_hablante
+        .lines()
+        .filter(|linea| linea.starts_with("Style:") || linea.starts_with("Dialogue:"))
+    {
+        println!("{linea}");
+    }
+    let con_hablante = render(&editor)?;
+    println!(
+        "los píxeles no cambian sin presets: {}",
+        con_hablante.as_raw() == antes.as_raw()
+    );
+
     Ok(())
 }
 

@@ -2,6 +2,10 @@ use rod_core::{Caption, Hablante, Historial, Instantanea, Proyecto, clamp_captio
 
 use crate::project_io::Documento;
 
+/// El oráculo tope a 9 hablantes porque `9` es la última tecla de acceso
+/// directo (`useHablantes.ts`).
+pub const MAX_HABLANTES: usize = 9;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct EstadoEditor {
     pub documento: Documento,
@@ -123,6 +127,141 @@ impl EstadoEditor {
         self.ordenar();
     }
 
+    pub fn hablante(&self, id: &str) -> Option<&Hablante> {
+        self.proyecto()
+            .hablantes
+            .iter()
+            .find(|hablante| hablante.id == id)
+    }
+
+    /// Añade un hablante con la primera tecla libre. `None` si ya hay 9: el
+    /// oráculo ignora el clic en ese caso, aquí además se apaga el botón.
+    ///
+    /// El id es `sp-N` secuencial en vez del `sp-<Date.now()>` del oráculo: con
+    /// proyectos guardados en JSON (slice 7) un id reproducible hace que el
+    /// archivo no cambie de una sesión a otra sin que el usuario toque nada.
+    pub fn agregar_hablante(&mut self) -> Option<String> {
+        if self.proyecto().hablantes.len() >= MAX_HABLANTES {
+            return None;
+        }
+        let tecla = self.tecla_libre()?;
+        let id = self.id_hablante_libre();
+        self.registrar_historial();
+        self.documento.proyecto.hablantes.push(Hablante {
+            id: id.clone(),
+            nombre: String::new(),
+            tecla,
+            color: "#FFFFFF".into(),
+            preset_id: None,
+        });
+        Some(id)
+    }
+
+    /// Renombrar no registra historial: la app decide la granularidad (una
+    /// sesión de tecleo = un paso), como con el texto de un caption.
+    /// `false` si el hablante no existe o el nombre no cambió.
+    pub fn editar_nombre_hablante(&mut self, id: &str, nombre: impl Into<String>) -> bool {
+        let nombre = nombre.into();
+        let Some(hablante) = self
+            .documento
+            .proyecto
+            .hablantes
+            .iter_mut()
+            .find(|hablante| hablante.id == id)
+        else {
+            return false;
+        };
+        if hablante.nombre == nombre {
+            return false;
+        }
+        hablante.nombre = nombre;
+        true
+    }
+
+    /// Misma regla que [`EstadoEditor::editar_nombre_hablante`]. La tecla es un
+    /// solo carácter en el oráculo (`maxLength={1}`); aquí se recorta con
+    /// [`normalizar_tecla`].
+    pub fn editar_tecla_hablante(&mut self, id: &str, tecla: &str) -> bool {
+        let tecla = normalizar_tecla(tecla);
+        let Some(hablante) = self
+            .documento
+            .proyecto
+            .hablantes
+            .iter_mut()
+            .find(|hablante| hablante.id == id)
+        else {
+            return false;
+        };
+        if hablante.tecla == tecla {
+            return false;
+        }
+        hablante.tecla = tecla;
+        true
+    }
+
+    /// Borra el hablante y suelta sus captions (`hablante_id = None`), como el
+    /// oráculo. Un solo paso de historial: sin eso, deshacer devolvería el
+    /// hablante pero los captions quedarían huérfanos.
+    pub fn borrar_hablante(&mut self, id: &str) -> bool {
+        if self.hablante(id).is_none() {
+            return false;
+        }
+        self.registrar_historial();
+        self.documento.proyecto.hablantes.retain(|h| h.id != id);
+        for caption in &mut self.documento.proyecto.captions {
+            if caption.hablante_id.as_deref() == Some(id) {
+                caption.hablante_id = None;
+            }
+        }
+        true
+    }
+
+    /// Asigna (o quita, con `None`) el hablante a todos los captions
+    /// seleccionados. Devuelve cuántos cambiaron; sin cambios no hay paso de
+    /// historial.
+    pub fn asignar_a_seleccion(&mut self, hablante_id: Option<String>) -> usize {
+        let cambian = self
+            .seleccion
+            .iter()
+            .filter(|id| {
+                self.proyecto()
+                    .captions
+                    .iter()
+                    .find(|caption| &caption.id == *id)
+                    .is_some_and(|caption| caption.hablante_id != hablante_id)
+            })
+            .count();
+        if cambian == 0 {
+            return 0;
+        }
+        self.registrar_historial();
+        for id in self.seleccion.clone() {
+            self.asignar_hablante(&id, hablante_id.clone());
+        }
+        cambian
+    }
+
+    fn tecla_libre(&self) -> Option<String> {
+        (1..=MAX_HABLANTES).map(|n| n.to_string()).find(|tecla| {
+            !self
+                .proyecto()
+                .hablantes
+                .iter()
+                .any(|hablante| &hablante.tecla == tecla)
+        })
+    }
+
+    fn id_hablante_libre(&self) -> String {
+        let mut n = 1;
+        loop {
+            let id = format!("sp-{n}");
+            if self.hablante(&id).is_none() {
+                return id;
+            }
+            n += 1;
+        }
+    }
+
     pub fn borrar_seleccion(&mut self) -> usize {
         let selected = self
             .seleccion
@@ -195,9 +334,14 @@ pub fn hablante_por_id<'a>(hablantes: &'a [Hablante], id: Option<&str>) -> Optio
     id.and_then(|id| hablantes.iter().find(|speaker| speaker.id == id))
 }
 
+/// La tecla de un hablante es un solo carácter (`maxLength={1}` en el oráculo).
+pub fn normalizar_tecla(texto: &str) -> String {
+    texto.chars().next().map(String::from).unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::EstadoEditor;
+    use super::{EstadoEditor, MAX_HABLANTES};
     use crate::project_io::cargar;
     use rod_core::Caption;
 
@@ -339,5 +483,129 @@ mod tests {
         assert_eq!(editor.texto_de("cap-1"), Some("Dos"));
         // Un solo paso: tras deshacer no queda nada más que deshacer.
         assert!(!editor.puede_deshacer());
+    }
+
+    #[test]
+    fn agregar_hablante_toma_la_primera_tecla_libre() {
+        let mut editor = editor();
+        let primero = editor.agregar_hablante().expect("hay espacio");
+        let segundo = editor.agregar_hablante().expect("hay espacio");
+        assert_ne!(primero, segundo);
+        assert_eq!(editor.proyecto().hablantes[0].tecla, "1");
+        assert_eq!(editor.proyecto().hablantes[1].tecla, "2");
+        assert!(editor.puede_deshacer(), "agregar sí es un paso");
+    }
+
+    #[test]
+    fn con_nueve_hablantes_no_se_puede_agregar() {
+        let mut editor = editor();
+        for _ in 0..MAX_HABLANTES {
+            assert!(editor.agregar_hablante().is_some());
+        }
+        assert!(editor.agregar_hablante().is_none());
+        assert_eq!(editor.proyecto().hablantes.len(), MAX_HABLANTES);
+    }
+
+    #[test]
+    fn renombrar_y_cambiar_tecla_no_registran_por_si_solos() {
+        let mut editor = editor();
+        let id = editor.agregar_hablante().expect("hay espacio");
+        editor.registrar_historial(); // lo que hace la app al empezar a teclear
+
+        assert!(editor.editar_nombre_hablante(&id, "A"));
+        assert!(editor.editar_nombre_hablante(&id, "Ana"));
+        assert_eq!(editor.hablante(&id).map(|h| h.nombre.as_str()), Some("Ana"));
+
+        assert!(editor.deshacer());
+        assert_eq!(
+            editor.hablante(&id).map(|h| h.nombre.as_str()),
+            Some(""),
+            "una sesión de tecleo es un solo paso, no uno por letra"
+        );
+    }
+
+    #[test]
+    fn la_tecla_se_recorta_a_un_caracter() {
+        let mut editor = editor();
+        let id = editor.agregar_hablante().expect("hay espacio");
+        assert!(editor.editar_tecla_hablante(&id, "42"));
+        assert_eq!(editor.hablante(&id).map(|h| h.tecla.as_str()), Some("4"));
+        assert!(!editor.editar_tecla_hablante(&id, "4"), "sin cambio");
+    }
+
+    #[test]
+    fn borrar_hablante_suelta_sus_captions_y_deshacer_lo_deshace() {
+        let mut editor = editor();
+        let id = editor.agregar_hablante().expect("hay espacio");
+        assert!(editor.asignar_hablante("cap-1", Some(id.clone())));
+
+        assert!(editor.borrar_hablante(&id));
+        assert!(editor.proyecto().hablantes.is_empty());
+        assert!(
+            editor
+                .proyecto()
+                .captions
+                .iter()
+                .all(|caption| caption.hablante_id.is_none())
+        );
+
+        assert!(editor.deshacer());
+        assert_eq!(editor.proyecto().hablantes.len(), 1);
+        assert_eq!(
+            editor
+                .proyecto()
+                .captions
+                .iter()
+                .filter(|caption| caption.hablante_id.as_deref() == Some(id.as_str()))
+                .count(),
+            1,
+            "el hablante vuelve con el caption que tenía"
+        );
+    }
+
+    #[test]
+    fn asignar_a_la_seleccion_es_un_solo_paso() {
+        let mut editor = editor();
+        let id = editor.agregar_hablante().expect("hay espacio");
+        editor.seleccionar_uno("cap-1");
+        editor.alternar_seleccion("cap-2");
+
+        assert_eq!(editor.asignar_a_seleccion(Some(id.clone())), 2);
+        assert_eq!(
+            editor.asignar_a_seleccion(Some(id.clone())),
+            0,
+            "sin cambios no hay paso de historial"
+        );
+        assert!(editor.deshacer());
+        assert!(
+            editor
+                .proyecto()
+                .captions
+                .iter()
+                .all(|caption| caption.hablante_id.is_none())
+        );
+    }
+
+    #[test]
+    fn quitar_el_hablante_de_la_seleccion_tambien_es_una_edicion() {
+        let mut editor = editor();
+        let id = editor.agregar_hablante().expect("hay espacio");
+        editor.seleccionar_uno("cap-1");
+        assert_eq!(editor.asignar_a_seleccion(Some(id.clone())), 1);
+
+        assert_eq!(editor.asignar_a_seleccion(None), 1);
+        assert!(
+            editor.proyecto().captions[0].hablante_id.is_none()
+                || editor.proyecto().captions[1].hablante_id.is_none()
+        );
+
+        assert!(editor.deshacer());
+        assert!(
+            editor
+                .proyecto()
+                .captions
+                .iter()
+                .any(|caption| caption.hablante_id.is_some())
+        );
     }
 }

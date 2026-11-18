@@ -5,7 +5,7 @@ use iced::widget::{
 };
 use iced::{Background, Color, Element, Length, Subscription, Task};
 
-use rod_app::editor::EstadoEditor;
+use rod_app::editor::{EstadoEditor, MAX_HABLANTES, normalizar_tecla};
 use rod_app::preview::{CANVAS, ass_del_proyecto};
 use rod_app::project_io::cargar;
 use rod_app::video::{Capa, Video};
@@ -39,6 +39,12 @@ const VELOCIDADES: [Velocidad; 6] = [
     Velocidad(2.0),
 ];
 
+#[derive(Debug, Clone, PartialEq)]
+enum CampoHablante {
+    Nombre,
+    Tecla,
+}
+
 #[derive(Debug, Clone)]
 enum Message {
     Tick,
@@ -60,6 +66,12 @@ enum Message {
     /// así un Ctrl+Z deshace el texto confirmado, no cada tecla.
     Borrador(String),
     AplicarTexto,
+    AgregarHablante,
+    /// Edición en vivo de un hablante: el campo decide qué se toca.
+    EditarHablante(String, CampoHablante, String),
+    BorrarHablante(String),
+    /// `None` deja los captions seleccionados sin hablante.
+    AsignarHablante(Option<String>),
 }
 
 struct Estado {
@@ -79,6 +91,11 @@ struct Estado {
     velocidad: Velocidad,
     /// Lo que hay en el `text_input` del caption seleccionado.
     borrador: String,
+    /// Campo de hablante que está recibiendo teclas. iced no da un evento de
+    /// foco por widget, así que la sesión se cierra al tocar cualquier otra
+    /// cosa: es el equivalente al `onFocus={onCommit}` del oráculo (una sesión
+    /// de tecleo = un paso de historial).
+    editando_hablante: Option<(String, CampoHablante)>,
 }
 
 fn main() -> iced::Result {
@@ -155,6 +172,7 @@ impl Estado {
             selected_audio,
             velocidad,
             borrador: String::new(),
+            editando_hablante: None,
         };
         refrescar_preview(&mut estado);
         estado
@@ -323,14 +341,60 @@ fn update(state: &mut Estado, message: Message) -> Task<Message> {
             }
         }
         Message::Deshacer => {
+            state.editando_hablante = None;
             if state.editor.deshacer() {
                 sincronizar_borrador(state);
                 refrescar_preview(state);
             }
         }
         Message::Rehacer => {
+            state.editando_hablante = None;
             if state.editor.rehacer() {
                 sincronizar_borrador(state);
+                refrescar_preview(state);
+            }
+        }
+        Message::AgregarHablante => {
+            state.editando_hablante = None;
+            state.editor.agregar_hablante();
+        }
+        Message::EditarHablante(id, campo, valor) => {
+            // Si el texto no cambia no hay nada que registrar: borrar y volver a
+            // escribir la misma letra no debe dejar un Ctrl+Z que no hace nada.
+            let cambia = match (&campo, state.editor.hablante(&id)) {
+                (CampoHablante::Nombre, Some(hablante)) => hablante.nombre != valor,
+                (CampoHablante::Tecla, Some(hablante)) => {
+                    hablante.tecla != normalizar_tecla(&valor)
+                }
+                (_, None) => false,
+            };
+            if !cambia {
+                return Task::none();
+            }
+            let clave = (id.clone(), campo.clone());
+            if state.editando_hablante.as_ref() != Some(&clave) {
+                state.editor.registrar_historial();
+                state.editando_hablante = Some(clave);
+            }
+            match campo {
+                CampoHablante::Nombre => {
+                    state.editor.editar_nombre_hablante(&id, valor);
+                }
+                CampoHablante::Tecla => {
+                    state.editor.editar_tecla_hablante(&id, &valor);
+                }
+            }
+            refrescar_preview(state);
+        }
+        Message::BorrarHablante(id) => {
+            state.editando_hablante = None;
+            if state.editor.borrar_hablante(&id) {
+                refrescar_preview(state);
+            }
+        }
+        Message::AsignarHablante(hablante_id) => {
+            state.editando_hablante = None;
+            if state.editor.asignar_a_seleccion(hablante_id) > 0 {
                 refrescar_preview(state);
             }
         }
@@ -396,7 +460,9 @@ fn view(state: &Estado) -> Element<'_, Message> {
     let left = column![video, transport]
         .width(Length::FillPortion(3))
         .height(Length::Fill);
-    let right = subtitle_panel(state);
+    let right = column![subtitle_panel(state), speakers_panel(state),]
+        .width(Length::FillPortion(2))
+        .height(Length::Fill);
     let timeline = container(
         column![
             text("Timeline").size(18),
@@ -444,8 +510,6 @@ fn subtitle_panel(state: &Estado) -> Element<'_, Message> {
         column![
             row![
                 text("Subtitles").size(20),
-                text("Speakers"),
-                text("Styles"),
                 space::horizontal(),
                 button("↶")
                     .on_press_maybe(state.editor.puede_deshacer().then_some(Message::Deshacer))
@@ -475,6 +539,66 @@ fn subtitle_panel(state: &Estado) -> Element<'_, Message> {
     )
     .width(Length::FillPortion(2))
     .height(Length::Fill)
+    .style(panel)
+    .into()
+}
+
+fn speakers_panel(state: &Estado) -> Element<'_, Message> {
+    let hablantes = state.editor.proyecto().hablantes.as_slice();
+    let rows = hablantes
+        .iter()
+        .map(|hablante| {
+            let id_nombre = hablante.id.clone();
+            let id_tecla = hablante.id.clone();
+            let id_asignar = hablante.id.clone();
+            let hay_seleccion = !state.editor.seleccion.is_empty();
+            row![
+                text_input("Nombre", &hablante.nombre).on_input(move |texto| {
+                    Message::EditarHablante(id_nombre.clone(), CampoHablante::Nombre, texto)
+                }),
+                text_input("1", &hablante.tecla)
+                    .on_input(move |texto| Message::EditarHablante(
+                        id_tecla.clone(),
+                        CampoHablante::Tecla,
+                        texto
+                    ))
+                    .width(44),
+                button("Asignar").on_press_maybe(
+                    hay_seleccion.then(|| Message::AsignarHablante(Some(id_asignar.clone())))
+                ),
+                button("×")
+                    .on_press(Message::BorrarHablante(hablante.id.clone()))
+                    .width(36),
+            ]
+            .spacing(6)
+            .into()
+        })
+        .collect::<Vec<Element<'_, Message>>>();
+
+    container(
+        column![
+            row![
+                text("Speakers").size(20),
+                space::horizontal(),
+                button("Sin hablante").on_press_maybe(
+                    (!state.editor.seleccion.is_empty()).then_some(Message::AsignarHablante(None))
+                ),
+                button("＋").on_press_maybe(
+                    (hablantes.len() < MAX_HABLANTES).then_some(Message::AgregarHablante)
+                ),
+            ]
+            .spacing(12),
+            // El oráculo pinta aquí el dot con el color del preset `.ass`; sin
+            // panel de estilos no hay preset que mostrar y `Hablante.color`
+            // sería un color que el `.ass` exportado no usa.
+            text("SPEAKERS").size(14),
+            scrollable(column(rows).spacing(6)),
+        ]
+        .spacing(10)
+        .padding(14),
+    )
+    .width(Length::Fill)
+    .height(240)
     .style(panel)
     .into()
 }

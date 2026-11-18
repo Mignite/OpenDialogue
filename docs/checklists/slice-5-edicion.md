@@ -44,8 +44,21 @@ existía. La lista de subtítulos y la selección por id ya venían del slice 2.
   `modifiers.command()`; no se puede hacer desde `update` porque el
   `text_input` se queda con los caracteres).
 
-- [x] **6. Verificar.** `cargo fmt --all -- --check`, `cargo clippy --all-targets
-  -- -D warnings` y `cargo test --workspace` en 1.99 y 1.100: 24 (app lib) +
+- [x] **7. Panel de hablantes.** `EstadoEditor` gana `agregar_hablante`
+  (máx. 9, primera tecla libre, id `sp-N`), `editar_nombre_hablante`,
+  `editar_tecla_hablante` (un carácter), `borrar_hablante` (suelta sus captions
+  en el mismo paso) y `asignar_a_seleccion` (uno para todos los seleccionados).
+  La UI es una fila por hablante con nombre, tecla, **Asignar** y **×**, más
+  **Sin hablante** y **＋** en la cabecera. 7 tests.
+
+  *Granularidad:* el oráculo registra historial en `onFocus` de cada campo
+  (`SpeakersPanel.tsx`); iced no expone foco por widget, así que la app abre una
+  sesión al primer cambio de un campo y la cierra al tocar cualquier otra cosa.
+  El efecto es el que importa: una sesión de tecleo = un paso de Ctrl+Z, no una
+  por letra.
+
+- [x] **8. Verificar.** `cargo fmt --all -- --check`, `cargo clippy --all-targets
+  -- -D warnings` y `cargo test --workspace` en 1.99 y 1.100: 31 (app lib) +
   2 (app bin) + 235 (core) + 3 (player lib) + 15 (subs lib) + 3 (oráculo).
   La app arranca y sigue viva a los 6 s con stderr vacío.
 
@@ -63,10 +76,17 @@ píxeles con texto después: 4718
 la imagen cambió: true
 texto tras deshacer: Some("Hola mundo")
 deshacer devuelve la imagen exacta: true
+Style: H1,Arial,48,&H00FFFFFF,...
+Style: Default,Arial,48,&H00FFFFFF,...
+Dialogue: 0,0:00:00.00,0:00:04.00,H1,Ana,0,0,40,,Hola mundo
+Dialogue: 0,0:00:04.00,0:00:08.00,Default,,0,0,40,,Segundo caption
+los píxeles no cambian sin presets: true
 ```
 
 Los PNG quedan en `docs/checklists/slice-5-preview-antes.png` y
-`slice-5-preview-despues.png`.
+`slice-5-preview-despues.png`. La última línea es el estado honesto: el
+hablante ya viaja al `.ass` (`Style: H1`, `Name: Ana`), pero **sin presets todos
+los estilos se ven igual**; que se vea distinto es trabajo de Estilos (slice 7).
 
 ## Hallazgos
 
@@ -85,5 +105,13 @@ Los PNG quedan en `docs/checklists/slice-5-preview-antes.png` y
   pulsación gasta CPU para mostrar un texto que el usuario todavía no confirmó.
 - No unir `playhead` a la instantánea: mover el slider no es una edición y
   Ctrl+Z no debe devolver el video a otro segundo.
-- **Pendiente del slice 5:** el panel de hablantes (crear, renombrar, color y
-  preset por hablante). La lista, la selección y el editor ya están.
+- No pintar el dot de color del hablante con `Hablante.color`: el oráculo lo
+  saca del preset `.ass` (`color_hablante`) porque el archivo exportado no tiene
+  color de hablante. Ese dot llega con el panel de estilos (slice 7).
+- El selector de preset por hablante tampoco tiene sentido sin presets: la fila
+  muestra nombre, tecla, Asignar y borrar.
+
+## Pendiente para el slice 6/7
+
+- Timeline con carriles por hablante (slice 6) y presets/estilos + exportación
+  con presets (slice 7). Los hablantes ya están en el modelo y en el `.ass`.
