@@ -203,6 +203,13 @@ Sin dependencias de UI ni de sistema. Portado desde `src/utils/*.ts`:
 - `islands`: `buscar_tramo_audio` (percentil 25 del fondo, onset hacia atrás,
   cola de 0.25 s, sin piso de duración), `pico_en_rango`.
 - `model`: `Proyecto`, `Caption`, `Hablante`, `Preset` con `presetId`.
+- `proyecto_json`: el `.cdp` como JSON con las claves exactas del oráculo
+  (`{ ruta_video, hablantes, captions, playhead }`, `presetId`, `hablante_id`),
+  bonito y con `playhead` opcional al leer. `serde` con `derive` es la única
+  dependencia de `rod-core` además de `serde_json`: escribir a mano el
+  (de)serializador de cuatro structs es más código y más frágil que la
+  biblioteca que ya está en el árbol, y el formato es el contrato con la app
+  Tauri. El disco no lo toca este crate; `rod-app` escribe y lee.
 
 Los 306 tests de vitest son la especificación. Se portan uno a uno; cuando un
 comportamiento esté documentado como limitación (por ejemplo, que importar un
@@ -330,6 +337,12 @@ el seguimiento del timeline se mueven con el reloj real del player.
 - Los paneles (lista de subtítulos, hablantes, estilos, editor) son widgets
   normales. La virtualización de la lista no es necesaria al principio: con
   `iced` el costo es menor que en React y se mide antes de optimizar.
+- **Guardar y abrir son `.cdp`**, no un formato propio: JSON con las claves del
+  oráculo (`rod_core::proyecto_json`), escrito con `tmp` + `rename` para que un
+  corte a media escritura no trunque el proyecto. El `playhead` vive fuera del
+  editor y del historial, así que se escribe al guardar y se restaura al abrir.
+  Un proyecto cuyo video no abre no se carga: media app en un estado que nadie
+  entiende es peor que un error claro (el oráculo sí ofrece seguir sin video).
 - **La barra de transporte se hace de una sola vez**: play/pause, seek y
   selector de pista de audio en un mismo `Row`, encima o debajo del video. Los
   tres leen y escriben el mismo estado del player (`pause`, `time-pos`, `aid`),

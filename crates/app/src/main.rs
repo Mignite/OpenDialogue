@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use iced::widget::{
@@ -7,9 +8,10 @@ use iced::{Background, Color, Element, Length, Subscription, Task};
 
 use rod_app::editor::{EstadoEditor, MAX_HABLANTES, normalizar_tecla};
 use rod_app::preview::{CANVAS, ass_del_proyecto};
-use rod_app::project_io::cargar;
+use rod_app::project_io::{Documento, FormatoSubtitulo, abrir_proyecto, cargar, guardar_proyecto};
 use rod_app::timeline::{self, Vista};
 use rod_app::video::{Capa, Video};
+use rod_core::Proyecto;
 use rod_player::AudioTrack;
 
 const WIDTH: usize = CANVAS.0 as usize;
@@ -80,6 +82,12 @@ enum Message {
     Seguir,
     /// Modificadores del teclado, para que la rueda sepa si hay Shift.
     Modificadores(iced::keyboard::Modifiers),
+    /// Abre un `.cdp`: proyecto, video y playhead.
+    AbrirProyecto,
+    /// Guarda en la ruta actual o, si no hay, pregunta una.
+    GuardarProyecto,
+    /// Pregunta ruta siempre.
+    GuardarProyectoComo,
 }
 
 struct Estado {
@@ -120,6 +128,9 @@ struct Estado {
     /// Modificadores del teclado. La rueda no los lleva en su evento, así que
     /// el «Shift para acercar» se decide con este espejo.
     modificadores: iced::keyboard::Modifiers,
+    /// Dónde se guardó el proyecto. `None` = nunca se guardó: «Guardar» pide
+    /// ruta y «Guardar como» la vuelve a pedir.
+    ruta_proyecto: Option<PathBuf>,
 }
 
 fn main() -> iced::Result {
@@ -158,6 +169,16 @@ fn subscription(_state: &Estado) -> Subscription<Message> {
                 }
                 if texto.eq_ignore_ascii_case("y") && !modifiers.shift() {
                     return Some(Message::Rehacer);
+                }
+                if texto.eq_ignore_ascii_case("s") {
+                    return Some(if modifiers.shift() {
+                        Message::GuardarProyectoComo
+                    } else {
+                        Message::GuardarProyecto
+                    });
+                }
+                if texto.eq_ignore_ascii_case("o") && !modifiers.shift() {
+                    return Some(Message::AbrirProyecto);
                 }
                 None
             }
@@ -212,10 +233,69 @@ impl Estado {
             seguir: true,
             objetivo_vista: None,
             modificadores: iced::keyboard::Modifiers::default(),
+            ruta_proyecto: None,
         };
         refrescar_preview(&mut estado);
         estado
     }
+}
+
+/// Cambia el video de la app sin tocar el proyecto. `position` es dónde queda
+/// el playhead: 0 al abrir un video suelto, el guardado al abrir un proyecto.
+fn reemplazar_player(
+    state: &mut Estado,
+    ruta_video: &str,
+    player: rod_player::Player,
+    position: f64,
+) {
+    state.duration = player.duration();
+    state.position = position.clamp(0.0, state.duration.max(0.0));
+    state.paused = player.paused();
+    state.video_path = ruta_video.to_owned();
+    state.audio_tracks = player.audio_tracks();
+    state.selected_audio = state.audio_tracks.first().cloned();
+    state.velocidad = Velocidad(player.speed() as f32);
+    state.player = player;
+    state.layers = Arc::new(Vec::new());
+    // Otro video, otra escala: se encaja entero en la ventana.
+    state.vista = state.vista.encajar(state.duration, state.ancho_timeline);
+    state.objetivo_vista = None;
+    if state.position > 0.0
+        && let Err(error) = state.player.seek(state.position)
+    {
+        eprintln!("no se pudo buscar el playhead guardado: {error}");
+    }
+}
+
+/// Reemplaza el proyecto abierto entero: editor (con su historial), video y
+/// playhead. Si el video del proyecto no abre, no se toca nada: esta app no
+/// sabe trabajar un proyecto sin video (el oráculo ofrece seguir sin él; aquí
+/// eso sería un estado que ninguna de las otras piezas entiende).
+fn cargar_proyecto(state: &mut Estado, proyecto: Proyecto, ruta: PathBuf) -> Result<(), String> {
+    let player = rod_player::Player::open(&proyecto.ruta_video).map_err(|error| {
+        format!(
+            "no se pudo abrir el video '{}': {error}",
+            proyecto.ruta_video
+        )
+    })?;
+    let playhead = proyecto.playhead;
+    let ruta_video = proyecto.ruta_video.clone();
+    state.editor = EstadoEditor::nuevo(Documento {
+        proyecto,
+        // El `.cdp` no recuerda de qué formato venían los subtítulos; el
+        // proyecto ya tiene los captions, así que da igual mientras no se
+        // exporte.
+        formato: FormatoSubtitulo::Srt,
+        estilos_ass: Vec::new(),
+    });
+    state.editando_hablante = None;
+    state.arrastre = None;
+    state.borrador = String::new();
+    reemplazar_player(state, &ruta_video, player, playhead);
+    state.ruta_proyecto = Some(ruta);
+    refrescar_preview(state);
+    sincronizar_borrador(state);
+    Ok(())
 }
 
 /// Mueve el reproductor al segundo pedido. Un clic en la regla o en un hueco
@@ -337,23 +417,52 @@ fn update(state: &mut Estado, message: Message) -> Task<Message> {
             };
 
             match rod_player::Player::open(path_text) {
-                Ok(player) => {
-                    state.duration = player.duration();
-                    state.position = 0.0;
-                    state.paused = player.paused();
-                    state.video_path = path_text.to_owned();
-                    state.audio_tracks = player.audio_tracks();
-                    state.selected_audio = state.audio_tracks.first().cloned();
-                    state.velocidad = Velocidad(player.speed() as f32);
-                    state.player = player;
-                    state.layers = Arc::new(Vec::new());
-                    // Otro video, otra escala: se encaja entero en la ventana.
-                    state.vista = state.vista.encajar(state.duration, state.ancho_timeline);
-                    state.objetivo_vista = None;
-                }
+                Ok(player) => reemplazar_player(state, path_text, player, 0.0),
                 Err(error) => {
                     eprintln!("no se pudo abrir el video seleccionado: {error}");
                 }
+            }
+        }
+        Message::AbrirProyecto => {
+            let Some(ruta) = rfd::FileDialog::new()
+                .add_filter("Proyecto", &["cdp"])
+                .pick_file()
+            else {
+                return Task::none();
+            };
+            match abrir_proyecto(&ruta) {
+                Ok(proyecto) => {
+                    if let Err(error) = cargar_proyecto(state, proyecto, ruta) {
+                        eprintln!("no se pudo abrir el proyecto: {error}");
+                    }
+                }
+                Err(error) => eprintln!("no se pudo leer el proyecto: {error}"),
+            }
+        }
+        Message::GuardarProyecto | Message::GuardarProyectoComo => {
+            let pedir_ruta =
+                matches!(message, Message::GuardarProyectoComo) || state.ruta_proyecto.is_none();
+            let ruta = match state.ruta_proyecto.clone() {
+                Some(ruta) if !pedir_ruta => ruta,
+                _ => {
+                    let Some(ruta) = rfd::FileDialog::new()
+                        .add_filter("Proyecto", &["cdp"])
+                        .set_file_name("proyecto.cdp")
+                        .save_file()
+                    else {
+                        return Task::none();
+                    };
+                    ruta
+                }
+            };
+            // El playhead no es parte de la edición (vive fuera del editor y
+            // del historial), pero sí del proyecto: se escribe al guardar y se
+            // restaura al abrir.
+            let mut proyecto = state.editor.proyecto().clone();
+            proyecto.playhead = state.position;
+            match guardar_proyecto(&ruta, &proyecto) {
+                Ok(()) => state.ruta_proyecto = Some(ruta),
+                Err(error) => eprintln!("no se pudo guardar el proyecto: {error}"),
             }
         }
         Message::PlayPause => {
@@ -631,6 +740,8 @@ fn view(state: &Estado) -> Element<'_, Message> {
         column![
             row![
                 button("Abrir video").on_press(Message::AbrirVideo),
+                button("Abrir .cdp").on_press(Message::AbrirProyecto),
+                button("Guardar").on_press(Message::GuardarProyecto),
                 // Ancho fijo: si no, el botón cambia de tamaño al alternar y la
                 // fila entera se corre bajo el cursor.
                 button(if state.paused { "▶" } else { "❚❚" })
@@ -833,10 +944,15 @@ fn speakers_panel(state: &Estado) -> Element<'_, Message> {
 }
 
 fn status_bar(state: &Estado) -> Element<'_, Message> {
+    let proyecto = match &state.ruta_proyecto {
+        Some(ruta) => ruta.display().to_string(),
+        None => "sin guardar".to_owned(),
+    };
     container(
         row![
             text("● RUSTYOPENDIALOGUE"),
             text(state.video_path.clone()),
+            text(proyecto),
             space::horizontal(),
             text(format!(
                 "ventana {:.1} s · {} captions · {} capas libass",

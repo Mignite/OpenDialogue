@@ -1,10 +1,15 @@
 use crate::{Caption, Hablante, PresetAss};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq)]
+/// El proyecto tal como lo guarda el oráculo (`Proyecto` de `src-tauri`): las
+/// claves son las mismas para que un `.cdp` guardado por la app Tauri abra aquí
+/// y al revés. `playhead` es lo único que puede faltar en un archivo viejo.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Proyecto {
     pub ruta_video: String,
     pub hablantes: Vec<Hablante>,
     pub captions: Vec<Caption>,
+    #[serde(default)]
     pub playhead: f64,
 }
 

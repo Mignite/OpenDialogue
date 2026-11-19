@@ -1,12 +1,16 @@
 use crate::Caption;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Hablante {
     pub id: String,
     pub nombre: String,
     pub tecla: String,
     pub color: String,
+    /// Proyectos viejos no traen la clave: `None` es «sin estilo asignado» y
+    /// al exportar se usa el preset por defecto, como en el oráculo.
+    #[serde(default, rename = "presetId")]
     pub preset_id: Option<String>,
 }
 

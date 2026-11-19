@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::Path;
 
 use rod_core::{
     AssParseResult, Caption, EstiloAss, Hablante, PresetAss, Proyecto, build_ass, build_srt,
@@ -105,9 +106,137 @@ pub fn hablantes(documento: &Documento) -> &[Hablante] {
     &documento.proyecto.hablantes
 }
 
+/// Fallo al leer o escribir un proyecto. Se distinguen los dos casos porque el
+/// mensaje que ve el usuario no es el mismo: un disco lleno o un JSON de otra
+/// versión son problemas distintos.
+#[derive(Debug)]
+pub enum ErrorProyecto {
+    Io(std::io::Error),
+    Formato(serde_json::Error),
+}
+
+impl std::fmt::Display for ErrorProyecto {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(error) => write!(formatter, "no se pudo leer o escribir el archivo: {error}"),
+            Self::Formato(error) => write!(formatter, "el proyecto no es un JSON válido: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for ErrorProyecto {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(error) => Some(error),
+            Self::Formato(error) => Some(error),
+        }
+    }
+}
+
+impl From<serde_json::Error> for ErrorProyecto {
+    fn from(error: serde_json::Error) -> Self {
+        Self::Formato(error)
+    }
+}
+
+/// Guarda el `.cdp` como lo hace el oráculo: escribe un temporal y lo renombra
+/// encima. Si el proceso muere a media escritura, el archivo viejo sigue
+/// entero; un `.cdp` truncado es peor que uno ausente.
+pub fn guardar_proyecto(ruta: &Path, proyecto: &Proyecto) -> Result<(), ErrorProyecto> {
+    let texto = rod_core::a_json(proyecto)?;
+    let temporal = ruta.with_extension("tmp");
+    std::fs::write(&temporal, texto).map_err(ErrorProyecto::Io)?;
+    std::fs::rename(&temporal, ruta).map_err(|error| {
+        // El temporal no debe quedar tirado si el rename falla.
+        let _ = std::fs::remove_file(&temporal);
+        ErrorProyecto::Io(error)
+    })
+}
+
+pub fn abrir_proyecto(ruta: &Path) -> Result<Proyecto, ErrorProyecto> {
+    let texto = std::fs::read_to_string(ruta).map_err(ErrorProyecto::Io)?;
+    Ok(rod_core::desde_json(&texto)?)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{FormatoSubtitulo, cargar, exportar_srt};
+    use super::{FormatoSubtitulo, abrir_proyecto, cargar, exportar_srt, guardar_proyecto};
+    use rod_core::{Caption, Hablante, Proyecto};
+    use std::path::PathBuf;
+
+    /// El `.cdp` de prueba, con todo lo que el formato tiene que conservar.
+    fn proyecto() -> Proyecto {
+        Proyecto {
+            ruta_video: "C:/videos/clip.mp4".into(),
+            hablantes: vec![Hablante {
+                id: "sp-1".into(),
+                nombre: "Ana".into(),
+                tecla: "1".into(),
+                color: "#3B82F6".into(),
+                preset_id: Some("p-1".into()),
+            }],
+            captions: vec![Caption {
+                id: "cap-1".into(),
+                inicio: 1.0,
+                fin: 2.5,
+                texto: "Hola".into(),
+                hablante_id: Some("sp-1".into()),
+            }],
+            playhead: 7.25,
+        }
+    }
+
+    /// Un nombre de archivo propio por test: los tests corren en paralelo y
+    /// `temp_dir` es compartido.
+    fn ruta_temporal(nombre: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "rod-proyecto-{}-{}.cdp",
+            std::process::id(),
+            nombre
+        ))
+    }
+
+    #[test]
+    fn guardar_y_abrir_devuelve_el_mismo_proyecto() {
+        let ruta = ruta_temporal("ida-vuelta");
+        let original = proyecto();
+        guardar_proyecto(&ruta, &original).expect("guarda");
+        let vuelta = abrir_proyecto(&ruta).expect("abre");
+        assert_eq!(vuelta, original);
+        // El temporal no queda tirado al lado del proyecto.
+        assert!(!ruta.with_extension("tmp").exists());
+        std::fs::remove_file(&ruta).expect("limpia");
+    }
+
+    #[test]
+    fn guardar_dos_veces_reemplaza_el_archivo() {
+        let ruta = ruta_temporal("reemplazo");
+        let mut original = proyecto();
+        guardar_proyecto(&ruta, &original).expect("primera escritura");
+        original.captions[0].texto = "Adiós".into();
+        guardar_proyecto(&ruta, &original).expect("segunda escritura");
+        assert_eq!(
+            abrir_proyecto(&ruta).expect("abre").captions[0].texto,
+            "Adiós"
+        );
+        std::fs::remove_file(&ruta).expect("limpia");
+    }
+
+    #[test]
+    fn un_archivo_que_no_es_un_proyecto_es_un_error_de_formato() {
+        let ruta = ruta_temporal("roto");
+        std::fs::write(&ruta, "esto no es json").expect("escribe basura");
+        let error = abrir_proyecto(&ruta).expect_err("no debería abrir");
+        assert!(matches!(error, super::ErrorProyecto::Formato(_)));
+        std::fs::remove_file(&ruta).expect("limpia");
+    }
+
+    #[test]
+    fn un_archivo_que_no_existe_es_un_error_de_io() {
+        let ruta = ruta_temporal("inexistente");
+        let error = abrir_proyecto(&ruta).expect_err("no debería abrir");
+        assert!(matches!(error, super::ErrorProyecto::Io(_)));
+    }
 
     #[test]
     fn loads_and_exports_srt_without_changing_caption_content() {

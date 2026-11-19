@@ -8,6 +8,7 @@ pub mod historial;
 pub mod islands;
 pub mod model;
 pub mod portapapeles;
+pub mod proyecto_json;
 pub mod selection;
 pub mod srt;
 pub mod time;
@@ -38,6 +39,7 @@ pub use historial::{Historial, Instantanea, LIMITE_HISTORIAL};
 pub use islands::{TramoAudio, buscar_tramo_audio, pico_en_rango};
 pub use model::{Preset, Proyecto};
 pub use portapapeles::{caption_a_portapapeles, texto_del_portapapeles};
+pub use proyecto_json::{a_json, desde_json};
 pub use selection::{
     AgrupacionCarriles, RectMarquee, agrupar_captions_por_carril, caption_row_index,
     filas_destino_relativas, filtrar_por_marquee,
