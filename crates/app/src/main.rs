@@ -76,6 +76,10 @@ enum Message {
     Timeline(timeline::Mensaje),
     /// Zoom del timeline: `factor > 1` acerca. El ancla es el playhead.
     Zoom(f64),
+    /// El usuario enciende o apaga el seguimiento del playhead.
+    Seguir,
+    /// Modificadores del teclado, para que la rueda sepa si hay Shift.
+    Modificadores(iced::keyboard::Modifiers),
 }
 
 struct Estado {
@@ -105,6 +109,17 @@ struct Estado {
     arrastre: Option<timeline::Arrastre>,
     /// Ventana visible del timeline (inicio y escala).
     vista: Vista,
+    /// Ancho del canvas del timeline, que lo publica el propio canvas. Sin él
+    /// no se puede saber cuántos segundos caben (pan, seguimiento, zoom).
+    ancho_timeline: f32,
+    /// La vista persigue al playhead mientras se reproduce. Se apaga al usar
+    /// la rueda o la barra, y se enciende con el botón.
+    seguir: bool,
+    /// Inicio hacia el que se desliza la vista, si hay un seguimiento en curso.
+    objetivo_vista: Option<f64>,
+    /// Modificadores del teclado. La rueda no los lleva en su evento, así que
+    /// el «Shift para acercar» se decide con este espejo.
+    modificadores: iced::keyboard::Modifiers,
 }
 
 fn main() -> iced::Result {
@@ -121,27 +136,32 @@ fn subscription(_state: &Estado) -> Subscription<Message> {
         // Ctrl+Z / Ctrl+Shift+Z (y Ctrl+Y, que es el redo de Windows). El
         // atajo se decide aquí y no en el `update` porque la app no recibe el
         // teclado de otra forma: los `text_input` se comen los caracteres.
-        iced::keyboard::listen().filter_map(|evento| {
-            let iced::keyboard::Event::KeyPressed { key, modifiers, .. } = evento else {
-                return None;
-            };
-            if !modifiers.command() {
-                return None;
+        // Los modificadores se copian aparte: `WheelScrolled` no los trae y el
+        // «Shift + rueda = zoom» necesita saberlos.
+        iced::keyboard::listen().filter_map(|evento| match evento {
+            iced::keyboard::Event::ModifiersChanged(modifiers) => {
+                Some(Message::Modificadores(modifiers))
             }
-            let iced::keyboard::Key::Character(texto) = key.as_ref() else {
-                return None;
-            };
-            if texto.eq_ignore_ascii_case("z") {
-                return Some(if modifiers.shift() {
-                    Message::Rehacer
-                } else {
-                    Message::Deshacer
-                });
+            iced::keyboard::Event::KeyPressed { key, modifiers, .. } => {
+                if !modifiers.command() {
+                    return None;
+                }
+                let iced::keyboard::Key::Character(texto) = key.as_ref() else {
+                    return None;
+                };
+                if texto.eq_ignore_ascii_case("z") {
+                    return Some(if modifiers.shift() {
+                        Message::Rehacer
+                    } else {
+                        Message::Deshacer
+                    });
+                }
+                if texto.eq_ignore_ascii_case("y") && !modifiers.shift() {
+                    return Some(Message::Rehacer);
+                }
+                None
             }
-            if texto.eq_ignore_ascii_case("y") && !modifiers.shift() {
-                return Some(Message::Rehacer);
-            }
-            None
+            _ => None,
         }),
     ])
 }
@@ -185,6 +205,13 @@ impl Estado {
             arrastre: None,
             // 15 s caben en ~750 px: el clip de prueba entra completo.
             vista: Vista::default(),
+            // Ancho 0 = el canvas todavía no se midió. Con 0 el pan no tiene
+            // sentido y el seguimiento espera; el primer `Ancho` lo arregla y,
+            // de paso, ajusta la ventana al video.
+            ancho_timeline: 0.0,
+            seguir: true,
+            objetivo_vista: None,
+            modificadores: iced::keyboard::Modifiers::default(),
         };
         refrescar_preview(&mut estado);
         estado
@@ -197,6 +224,43 @@ fn buscar(state: &mut Estado, tiempo: f64) {
     state.position = tiempo.clamp(0.0, state.duration);
     if let Err(error) = state.player.seek(state.position) {
         eprintln!("no se pudo hacer seek desde el timeline: {error}");
+    }
+}
+
+/// Cambia el zoom dejando quieto `ancla` (px) y deja la ventana dentro del
+/// video: al alejarse, un inicio que cabía puede quedar más allá del final.
+fn aplicar_escala(state: &mut Estado, escala: f64, ancla: f32) {
+    let vista = state.vista.con_escala(escala, ancla);
+    state.vista = vista.acotar(state.duration, state.ancho_timeline);
+}
+
+/// La ventana del timeline persigue al playhead mientras el usuario no la haya
+/// tomado a mano (rueda o botón «manual»).
+///
+/// Se hace en el `Tick` y no al cambiar `position` porque el desplazamiento es
+/// animado: cada frame avanza un 12 % del camino que falta, así un seek grande
+/// no da un salto seco. Durante un arrastre no se toca la vista: el usuario
+/// tiene el ratón en un punto concreto y moverle el mundo bajo el dedo es un
+/// bug de sensación.
+fn seguir_playhead(state: &mut Estado) {
+    if !state.seguir || state.ancho_timeline <= 0.0 || state.arrastre.is_some() || state.arrastrando
+    {
+        return;
+    }
+    if let Some(objetivo) = timeline::objetivo_de_seguimiento(
+        state.vista,
+        state.position,
+        state.duration,
+        state.ancho_timeline,
+    ) {
+        state.objetivo_vista = Some(objetivo);
+    }
+    let Some(objetivo) = state.objetivo_vista else {
+        return;
+    };
+    let (duracion, ancho) = (state.duration, state.ancho_timeline);
+    if !timeline::acercar(&mut state.vista, objetivo, duracion, ancho) {
+        state.objetivo_vista = None;
     }
 }
 
@@ -241,6 +305,7 @@ fn update(state: &mut Estado, message: Message) -> Task<Message> {
                 state.position = state.player.position();
             }
             state.paused = state.player.paused();
+            seguir_playhead(state);
             if frame_changed
                 && state
                     .player
@@ -282,6 +347,9 @@ fn update(state: &mut Estado, message: Message) -> Task<Message> {
                     state.velocidad = Velocidad(player.speed() as f32);
                     state.player = player;
                     state.layers = Arc::new(Vec::new());
+                    // Otro video, otra escala: se encaja entero en la ventana.
+                    state.vista = state.vista.encajar(state.duration, state.ancho_timeline);
+                    state.objetivo_vista = None;
                 }
                 Err(error) => {
                     eprintln!("no se pudo abrir el video seleccionado: {error}");
@@ -420,6 +488,38 @@ fn update(state: &mut Estado, message: Message) -> Task<Message> {
             }
         }
         Message::Timeline(mensaje) => match mensaje {
+            timeline::Mensaje::Ancho(ancho) => {
+                let primera_medida = state.ancho_timeline <= 0.0;
+                state.ancho_timeline = ancho;
+                if primera_medida {
+                    // Antes de medir no se puede saber cuánto abarca la
+                    // ventana. La primera medida ajusta la vista al video: con
+                    // la escala por defecto un clip de 15 s ocupaba media
+                    // pantalla y el resto era vacío.
+                    state.vista = state.vista.encajar(state.duration, ancho);
+                }
+            }
+            timeline::Mensaje::Rueda { lineas, punto } => {
+                // Girar la rueda es tomar el eje: si la vista siguiera al
+                // playhead, el siguiente frame desharía el gesto.
+                state.seguir = false;
+                state.objetivo_vista = None;
+                if state.modificadores.shift() {
+                    // Zoom anclado al cursor: el tiempo bajo el ratón no se
+                    // mueve. 1.15 por muesca, el mismo paso que el oráculo.
+                    let factor = 1.15_f64.powf(f64::from(lineas));
+                    aplicar_escala(state, state.vista.escala * factor, punto.x);
+                } else {
+                    // Pan proporcional: una muesca mueve un 10 % de lo que se
+                    // ve. Con segundos fijos, el gesto sería un salto al zoom
+                    // de cerca y un suspiro al de lejos.
+                    let visible = state.vista.ancho_visible(state.ancho_timeline);
+                    let paso = visible * 0.1 * f64::from(lineas);
+                    state.vista = state
+                        .vista
+                        .desplazar(paso, state.duration, state.ancho_timeline);
+                }
+            }
             timeline::Mensaje::Pulsar(punto) => {
                 let respuesta = timeline::pulsar(
                     state.editor.proyecto(),
@@ -499,7 +599,14 @@ fn update(state: &mut Estado, message: Message) -> Task<Message> {
             // El punto bajo el playhead se queda donde está: es lo que el ojo
             // está mirando cuando cambia el zoom.
             let ancla = state.vista.x_de(state.position).max(0.0);
-            state.vista = state.vista.con_escala(state.vista.escala / factor, ancla);
+            aplicar_escala(state, state.vista.escala / factor, ancla);
+        }
+        Message::Seguir => {
+            state.seguir = !state.seguir;
+            state.objetivo_vista = None;
+        }
+        Message::Modificadores(modificadores) => {
+            state.modificadores = modificadores;
         }
     }
     Task::none()
@@ -582,8 +689,12 @@ fn view(state: &Estado) -> Element<'_, Message> {
             )
             .map(Message::Timeline),
             column![
-                button("+").on_press(Message::Zoom(1.5)).width(34),
-                button("−").on_press(Message::Zoom(1.0 / 1.5)).width(34),
+                button(if state.seguir { "sigue" } else { "manual" })
+                    .on_press(Message::Seguir)
+                    .width(62)
+                    .style(if state.seguir { boton_activo } else { boton }),
+                button("+").on_press(Message::Zoom(1.5)).width(62),
+                button("−").on_press(Message::Zoom(1.0 / 1.5)).width(62),
             ]
             .spacing(4)
             .padding(4),
@@ -728,7 +839,8 @@ fn status_bar(state: &Estado) -> Element<'_, Message> {
             text(state.video_path.clone()),
             space::horizontal(),
             text(format!(
-                "{} captions · {} capas libass",
+                "ventana {:.1} s · {} captions · {} capas libass",
+                state.vista.ancho_visible(state.ancho_timeline),
                 state.editor.proyecto().captions.len(),
                 state.layers.len()
             )),
@@ -757,6 +869,35 @@ fn panel(_theme: &iced::Theme) -> container::Style {
             radius: 0.0.into(),
         },
         ..container::Style::default()
+    }
+}
+
+/// Botón encendido: el estilo por defecto no distingue un toggle de un botón
+/// cualquiera, y «sigue»/«manual» es un estado, no una acción.
+fn boton_activo(_theme: &iced::Theme, _status: button::Status) -> button::Style {
+    button::Style {
+        background: Some(Background::Color(Color::from_rgb(0.16, 0.30, 0.52))),
+        text_color: Color::WHITE,
+        border: iced::Border {
+            color: Color::from_rgb(0.31, 0.49, 0.91),
+            width: 1.0,
+            radius: 2.0.into(),
+        },
+        ..button::Style::default()
+    }
+}
+
+/// Botón apagado, con la forma del encendido para que el toggle no baile.
+fn boton(_theme: &iced::Theme, _status: button::Status) -> button::Style {
+    button::Style {
+        background: Some(Background::Color(Color::from_rgb(0.07, 0.08, 0.11))),
+        text_color: Color::from_rgb(0.62, 0.66, 0.74),
+        border: iced::Border {
+            color: Color::from_rgb(0.16, 0.18, 0.22),
+            width: 1.0,
+            radius: 2.0.into(),
+        },
+        ..button::Style::default()
     }
 }
 

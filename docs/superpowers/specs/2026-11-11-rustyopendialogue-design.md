@@ -310,8 +310,14 @@ el seguimiento del timeline se mueven con el reloj real del player.
   `shader` con una tira de quads; el resto del timeline se queda en `Canvas`.
   Sin `Cache` mientras sean unos cientos de formas: un cache de canvas se
   invalida a mano en cada edición y en cada tick del playhead, y ese riesgo no
-  paga el ahorro. La decisión se revisa en el slice 6b, con la waveform dentro y
-  una medición en la mano.
+  paga el ahorro. La decisión se revisa cuando entre la waveform, con una
+  medición en la mano.
+- La navegación del eje vive en `Vista` y tiene una sola puerta: `con_inicio`
+  acota a `[0, duracion - ancho_visible]`. El canvas no interpreta la rueda,
+  solo publica líneas y el punto local (su evento no trae modificadores, así que
+  el «Shift = zoom» lo decide la app, que espeja `ModifiersChanged`). El
+  seguimiento del playhead interpola el 12 % del camino por frame y se apaga en
+  cuanto el usuario mueve el eje a mano.
 - Los arrastres del timeline **recalculan desde la posición original** guardada al
   pulsar, en vez de acumular el delta de cada frame: acumular se desvía por los
   `f64`, por los clamps y por el snap, y soltar donde se pulsó dejaría de ser un
