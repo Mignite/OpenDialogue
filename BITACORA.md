@@ -289,3 +289,24 @@ cara.
 - **Dónde quedé:** `docs/checklists/slice-6-timeline.png` como evidencia del
   slice 6a. El script de captura vive fuera del repo
   (`%TEMP%\opencode\capturar.ps1`) porque es herramienta, no código del proyecto.
+
+## 2026-11-19 — `mouse_event` inyecta el clic en la ventana en primer plano
+
+- **Intentaba:** verificar el botón «Recuperar» del aviso de recovery con un
+  clic real, ya que `PostMessage` no llega a winit.
+- **Error literal:** ninguno. `SetForegroundWindow(hwnd)` no dio error, pero
+  `GetForegroundWindow()` siguió devolviendo otra ventana y los dos clics
+  cayeron ahí, no en la app.
+- **Qué estaba mal:** `mouse_event`/`SendInput` inyecta en el escritorio, en
+  coordenadas de pantalla, y el sistema entrega el botón a quien tenga el foco.
+  Windows niega `SetForegroundWindow` a un proceso que no está en primer plano
+  (regla anti-robo-de-foco), así que sin `AttachThreadInput` o simular Alt no se
+  puede activar nuestra ventana; y activarla le quita el foco a lo que el
+  usuario esté haciendo.
+- **Qué aprendí:** la evidencia de un clic en una GUI se consigue probando la
+  lógica (`update`, `Program::update`) o con un estado sembrado que la app pinte
+  al arrancar. Inyectar clics en el escritorio de alguien que está usando la
+  máquina no es una opción, ni siquiera «un segundo».
+- **Dónde quedé:** `docs/checklists/slice-7b-recovery.md`; el aviso se verifica
+  con `slice-7b-recovery-aviso.png` y el camino «Recuperar» con los tests de
+  `recovery_pendiente` más `cargar_proyecto`.

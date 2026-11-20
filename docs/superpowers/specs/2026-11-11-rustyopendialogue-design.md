@@ -210,6 +210,10 @@ Sin dependencias de UI ni de sistema. Portado desde `src/utils/*.ts`:
   (de)serializador de cuatro structs es más código y más frágil que la
   biblioteca que ya está en el árbol, y el formato es el contrato con la app
   Tauri. El disco no lo toca este crate; `rod-app` escribe y lee.
+- `recovery`: `Recovery { version: 1, rutaProyecto, escrito, proyecto }`,
+  `debe_guardar` (15 s entre escrituras, nada si no hay cambios ni captions),
+  `leer` (valida campo por campo y caduca a los 7 días) y `formatear`. Puro: la
+  ruta, el reloj y la E/S viven en `rod-app`.
 
 Los 306 tests de vitest son la especificación. Se portan uno a uno; cuando un
 comportamiento esté documentado como limitación (por ejemplo, que importar un
@@ -325,6 +329,17 @@ el seguimiento del timeline se mueven con el reloj real del player.
   el «Shift = zoom» lo decide la app, que espeja `ModifiersChanged`). El
   seguimiento del playhead interpola el 12 % del camino por frame y se apaga en
   cuanto el usuario mueve el eje a mano.
+- **La copia automática es un seguro, no un backup.** `rod_core::recovery` tiene
+  las decisiones puras (cada 15 s, solo con cambios y con algo que recuperar,
+  válida 7 días) y `rod-app::recovery_io` el archivo
+  (`%APPDATA%\RustyOpenDialogue\recovery.json`, escritura atómica). El aviso se
+  ofrece al arrancar como una barra con «Recuperar»/«Descartar», no como un
+  diálogo modal: iced no tiene uno y bloquear la ventana antes de dibujar el
+  primer frame es peor que dejar la decisión a la vista. «Sucio» se calcula
+  comparando captions y hablantes contra la línea base del último guardado, no
+  contra el `playhead`: el reloj del player cambia 60 veces por segundo y
+  marcaría el proyecto sucio sin que nadie editara nada. Guardar con Ctrl+S
+  borra la copia (el oráculo la deja hasta que caduca).
 - Los arrastres del timeline **recalculan desde la posición original** guardada al
   pulsar, en vez de acumular el delta de cada frame: acumular se desvía por los
   `f64`, por los clamps y por el snap, y soltar donde se pulsó dejaría de ser un
@@ -420,8 +435,9 @@ warnings` y `cargo test` en verde, en Windows y en Linux.
   undo, atajos.
 - **Slice 6 — timeline.** Carriles por hablante, clips, drag de bordes y en
   bloque, marquee, snap, zoom y pan.
-- **Slice 7 — proyecto.** Guardar/cargar JSON, importar SRT y ASS, exportar SRT y
-  `.ass` con presets.
+- **Slice 7 - proyecto.** Guardar/cargar JSON, importar SRT y ASS, exportar SRT y
+  `.ass` con presets. Copia automática (`recovery.json`) mientras hay cambios
+  sin guardar, ofrecida al arrancar; guardar con Ctrl+S la borra.
 - **Slice 8 — empaquetado.** NSIS en Windows, `.deb`/AppImage en Linux, con las
   DLLs de libmpv y libass.
 

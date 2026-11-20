@@ -9,6 +9,7 @@ use iced::{Background, Color, Element, Length, Subscription, Task};
 use rod_app::editor::{EstadoEditor, MAX_HABLANTES, normalizar_tecla};
 use rod_app::preview::{CANVAS, ass_del_proyecto};
 use rod_app::project_io::{Documento, FormatoSubtitulo, abrir_proyecto, cargar, guardar_proyecto};
+use rod_app::recovery_io;
 use rod_app::timeline::{self, Vista};
 use rod_app::video::{Capa, Video};
 use rod_core::Proyecto;
@@ -88,6 +89,10 @@ enum Message {
     GuardarProyecto,
     /// Pregunta ruta siempre.
     GuardarProyectoComo,
+    /// Acepta la copia automática que se ofreció al arrancar.
+    Recuperar,
+    /// Rechaza la copia automática y la borra.
+    DescartarRecovery,
 }
 
 struct Estado {
@@ -131,6 +136,26 @@ struct Estado {
     /// Dónde se guardó el proyecto. `None` = nunca se guardó: «Guardar» pide
     /// ruta y «Guardar como» la vuelve a pedir.
     ruta_proyecto: Option<PathBuf>,
+    /// El proyecto tal como está en disco (o como arrancó la app). Es la línea
+    /// base del «hay cambios sin guardar»: el playhead no cuenta, porque se
+    /// mueve solo al reproducir y marcaría el proyecto sucio 60 veces por
+    /// segundo.
+    limpio: Proyecto,
+    /// Copia automática pendiente de aceptar. Se lee una sola vez, al
+    /// arrancar; el texto se formatea ahí mismo para no leer el reloj en cada
+    /// frame.
+    recovery: Option<AvisoRecovery>,
+    /// Epoch ms de la última escritura del recovery (`None` = ninguna todavía)
+    /// y del último chequeo del autosave. El chequeo va a 1 Hz: comparar el
+    /// proyecto entero en cada frame para nada es tirar CPU.
+    ultima_escritura: Option<f64>,
+    ultimo_chequeo: f64,
+}
+
+/// Lo que el aviso de recuperación necesita: la copia y el texto ya formateado.
+struct AvisoRecovery {
+    recovery: rod_core::Recovery,
+    texto: String,
 }
 
 fn main() -> iced::Result {
@@ -206,6 +231,7 @@ impl Estado {
         let velocidad = Velocidad(player.speed() as f32);
         let ass = ass_del_proyecto(&editor);
         let subtitles = rod_subs::Subtitulos::nuevo(WIDTH as u32, HEIGHT as u32, &ass);
+        let limpio = editor.proyecto().clone();
 
         let mut estado = Self {
             editor,
@@ -234,6 +260,12 @@ impl Estado {
             objetivo_vista: None,
             modificadores: iced::keyboard::Modifiers::default(),
             ruta_proyecto: None,
+            limpio,
+            recovery: recovery_pendiente(&recovery_io::ruta(), recovery_io::ms_ahora()),
+            ultima_escritura: None,
+            // 0 = todavía no se ha chequeado; el primer `Tick` ya decide con
+            // el proyecto limpio y no escribe nada.
+            ultimo_chequeo: 0.0,
         };
         refrescar_preview(&mut estado);
         estado
@@ -267,11 +299,123 @@ fn reemplazar_player(
     }
 }
 
+/// Copia automática que quedó de la sesión anterior, si la hay y sirve. Se lee
+/// una sola vez, al construir el estado: el archivo se descarta en cuanto el
+/// usuario decide, así que no hay nada que volver a mirar.
+///
+/// La ruta y el reloj entran como parámetros para poder probar esto sin tocar
+/// el `%APPDATA%` real ni depender de la hora.
+fn recovery_pendiente(ruta: &std::path::Path, ahora: f64) -> Option<AvisoRecovery> {
+    let recovery = recovery_io::leer(ruta, 0.0, ahora)?;
+    // El nombre es el del archivo (`mi-video.cdp`), como en el oráculo: con la
+    // ruta entera el aviso no cabe en una barra.
+    let nombre = std::path::Path::new(&recovery.ruta_proyecto)
+        .file_name()
+        .and_then(|nombre| nombre.to_str())
+        .unwrap_or_default()
+        .to_owned();
+    let texto = rod_core::formatear_recovery(&recovery, &nombre, ahora);
+    Some(AvisoRecovery { recovery, texto })
+}
+
+/// ¿El proyecto en memoria difiere del que está en disco? Solo cuentan los
+/// captions y los hablantes: el playhead se mueve al reproducir y no es una
+/// edición.
+fn sucio(state: &Estado) -> bool {
+    let proyecto = state.editor.proyecto();
+    proyecto.captions != state.limpio.captions || proyecto.hablantes != state.limpio.hablantes
+}
+
+/// Seguro ante crash: cada 15 s, si hay cambios sin guardar, escribe una copia
+/// del proyecto en `recovery.json`. Falla en silencio a propósito: si el disco
+/// está lleno o no hay permisos, el aviso al usuario sigue siendo el guardado
+/// manual, no esto.
+fn autosave(state: &mut Estado) {
+    let ahora = recovery_io::ms_ahora();
+    // La decisión (¿toca escribir?) se toma una vez por segundo, no por frame:
+    // comparar el proyecto entero 60 veces por segundo para nada es tirar CPU.
+    if ahora - state.ultimo_chequeo < 1000.0 {
+        return;
+    }
+    state.ultimo_chequeo = ahora;
+    let n_captions = state.editor.proyecto().captions.len();
+    if !rod_core::debe_guardar_recovery(sucio(state), n_captions, state.ultima_escritura, ahora) {
+        return;
+    }
+    let mut proyecto = state.editor.proyecto().clone();
+    proyecto.playhead = state.position;
+    let ruta_proyecto = state
+        .ruta_proyecto
+        .as_ref()
+        .map(|ruta| ruta.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let copia = rod_core::construir_recovery(proyecto, ruta_proyecto, ahora);
+    let texto = match rod_core::recovery::a_json(&copia) {
+        Ok(texto) => texto,
+        Err(error) => {
+            eprintln!("no se pudo serializar la copia automática: {error}");
+            return;
+        }
+    };
+    match recovery_io::escribir(&recovery_io::ruta(), Some(&texto)) {
+        Ok(()) => state.ultima_escritura = Some(ahora),
+        Err(error) => eprintln!("no se pudo escribir la copia automática: {error}"),
+    }
+}
+
+/// Carga la copia automática ofrecida al arrancar. Es un proyecto completo con
+/// su ruta de origen; si el video no abre no se toca nada y el aviso sigue en
+/// pantalla, porque no hay otra forma de arreglarlo desde aquí.
+fn recuperar(state: &mut Estado) {
+    let Some(aviso) = state.recovery.take() else {
+        return;
+    };
+    let ruta = if aviso.recovery.ruta_proyecto.is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(&aviso.recovery.ruta_proyecto))
+    };
+    if let Err(error) = cargar_proyecto(state, aviso.recovery.proyecto.clone(), ruta) {
+        eprintln!("no se pudo recuperar el proyecto: {error}");
+        state.recovery = Some(aviso);
+        return;
+    }
+    // Recuperar no limpia el proyecto (`limpio` sigue siendo el de arranque):
+    // el `.cdp` en disco es más viejo que lo recuperado, así que sigue
+    // habiendo cambios sin guardar. Es lo que hace el oráculo, y además
+    // protege el caso de un video que sí abrió pero cuyo proyecto estaba sin
+    // guardar: lo recuperado solo existe en memoria.
+    borrar_recovery(state);
+}
+
+/// Rechaza la copia automática: se borra para no volver a preguntar en cada
+/// arranque.
+fn descartar_recovery(state: &mut Estado) {
+    state.recovery = None;
+    borrar_recovery(state);
+}
+
+fn borrar_recovery(state: &mut Estado) {
+    if let Err(error) = recovery_io::escribir(&recovery_io::ruta(), None) {
+        eprintln!("no se pudo borrar la copia automática: {error}");
+    }
+    // Sin archivo no hay nada escrito: la próxima edición guarda al instante
+    // en vez de esperar los 15 s del intervalo.
+    state.ultima_escritura = None;
+}
+
 /// Reemplaza el proyecto abierto entero: editor (con su historial), video y
 /// playhead. Si el video del proyecto no abre, no se toca nada: esta app no
 /// sabe trabajar un proyecto sin video (el oráculo ofrece seguir sin él; aquí
 /// eso sería un estado que ninguna de las otras piezas entiende).
-fn cargar_proyecto(state: &mut Estado, proyecto: Proyecto, ruta: PathBuf) -> Result<(), String> {
+///
+/// `ruta` es `None` cuando el proyecto nunca se guardó (un recovery de un
+/// proyecto nuevo): se puede editar, pero «Guardar» volverá a preguntar dónde.
+fn cargar_proyecto(
+    state: &mut Estado,
+    proyecto: Proyecto,
+    ruta: Option<PathBuf>,
+) -> Result<(), String> {
     let player = rod_player::Player::open(&proyecto.ruta_video).map_err(|error| {
         format!(
             "no se pudo abrir el video '{}': {error}",
@@ -292,7 +436,7 @@ fn cargar_proyecto(state: &mut Estado, proyecto: Proyecto, ruta: PathBuf) -> Res
     state.arrastre = None;
     state.borrador = String::new();
     reemplazar_player(state, &ruta_video, player, playhead);
-    state.ruta_proyecto = Some(ruta);
+    state.ruta_proyecto = ruta;
     refrescar_preview(state);
     sincronizar_borrador(state);
     Ok(())
@@ -386,6 +530,7 @@ fn update(state: &mut Estado, message: Message) -> Task<Message> {
             }
             state.paused = state.player.paused();
             seguir_playhead(state);
+            autosave(state);
             if frame_changed
                 && state
                     .player
@@ -431,11 +576,14 @@ fn update(state: &mut Estado, message: Message) -> Task<Message> {
                 return Task::none();
             };
             match abrir_proyecto(&ruta) {
-                Ok(proyecto) => {
-                    if let Err(error) = cargar_proyecto(state, proyecto, ruta) {
-                        eprintln!("no se pudo abrir el proyecto: {error}");
+                Ok(proyecto) => match cargar_proyecto(state, proyecto, Some(ruta)) {
+                    Ok(()) => {
+                        // Abrir es empezar de cero con un archivo que ya está
+                        // en disco: no hay cambios sin guardar.
+                        state.limpio = state.editor.proyecto().clone();
                     }
-                }
+                    Err(error) => eprintln!("no se pudo abrir el proyecto: {error}"),
+                },
                 Err(error) => eprintln!("no se pudo leer el proyecto: {error}"),
             }
         }
@@ -461,10 +609,22 @@ fn update(state: &mut Estado, message: Message) -> Task<Message> {
             let mut proyecto = state.editor.proyecto().clone();
             proyecto.playhead = state.position;
             match guardar_proyecto(&ruta, &proyecto) {
-                Ok(()) => state.ruta_proyecto = Some(ruta),
+                Ok(()) => {
+                    state.ruta_proyecto = Some(ruta);
+                    // Lo que hay en disco es lo que hay en memoria: la línea
+                    // base del «sucio» se mueve aquí.
+                    state.limpio = proyecto;
+                    // Y el seguro ya no hace falta: al arrancar no hay nada
+                    // que ofrecer (el oráculo deja el archivo hasta que
+                    // caduca; borrarlo es más honesto).
+                    state.recovery = None;
+                    borrar_recovery(state);
+                }
                 Err(error) => eprintln!("no se pudo guardar el proyecto: {error}"),
             }
         }
+        Message::Recuperar => recuperar(state),
+        Message::DescartarRecovery => descartar_recovery(state),
         Message::PlayPause => {
             let destino = !state.player.paused();
             if destino && state.player.position() >= state.duration - 0.05 {
@@ -817,11 +977,36 @@ fn view(state: &Estado) -> Element<'_, Message> {
     .style(panel);
 
     column![
+        banner_recovery(state),
         row![left, right].height(Length::Fill),
         timeline,
         status_bar(state),
     ]
     .into()
+}
+
+/// Aviso de copia automática al arrancar. `None` (sin recovery pendiente) se
+/// convierte en un elemento vacío de altura 0, así que la columna no cambia de
+/// forma: es el equivalente a la pregunta que el oráculo lanza al montar, pero
+/// sin bloquear la ventana mientras el usuario decide.
+fn banner_recovery(state: &Estado) -> Option<Element<'_, Message>> {
+    let aviso = state.recovery.as_ref()?;
+    Some(
+        container(
+            row![
+                text("● COPIA AUTOMÁTICA").size(13),
+                text(aviso.texto.clone()),
+                space::horizontal(),
+                button("Recuperar").on_press(Message::Recuperar),
+                button("Descartar").on_press(Message::DescartarRecovery),
+            ]
+            .spacing(12)
+            .padding([6, 12]),
+        )
+        .width(Length::Fill)
+        .style(banner)
+        .into(),
+    )
 }
 
 fn subtitle_panel(state: &Estado) -> Element<'_, Message> {
@@ -988,6 +1173,21 @@ fn panel(_theme: &iced::Theme) -> container::Style {
     }
 }
 
+/// Aviso de recuperación: ámbar sobre el fondo oscuro. No es un error (no se
+/// perdió nada todavía), pero sí algo que reclama una decisión.
+fn banner(_theme: &iced::Theme) -> container::Style {
+    container::Style {
+        background: Some(Background::Color(Color::from_rgb(0.22, 0.16, 0.05))),
+        text_color: Some(Color::from_rgb(0.95, 0.80, 0.55)),
+        border: iced::Border {
+            color: Color::from_rgb(0.55, 0.40, 0.12),
+            width: 1.0,
+            radius: 0.0.into(),
+        },
+        ..container::Style::default()
+    }
+}
+
 /// Botón encendido: el estilo por defecto no distingue un toggle de un botón
 /// cualquiera, y «sigue»/«manual» es un estado, no una acción.
 fn boton_activo(_theme: &iced::Theme, _status: button::Status) -> button::Style {
@@ -1019,7 +1219,8 @@ fn boton(_theme: &iced::Theme, _status: button::Status) -> button::Style {
 
 #[cfg(test)]
 mod tests {
-    use super::{VELOCIDADES, Velocidad};
+    use super::{VELOCIDADES, Velocidad, recovery_pendiente};
+    use rod_core::{Caption, Proyecto};
 
     #[test]
     fn la_etiqueta_no_arrastra_decimales_inutiles() {
@@ -1033,5 +1234,52 @@ mod tests {
     fn la_lista_esta_ordenada_y_contiene_la_normal() {
         assert!(VELOCIDADES.windows(2).all(|par| par[0].0 < par[1].0));
         assert!(VELOCIDADES.contains(&Velocidad(1.0)));
+    }
+
+    /// Un recovery propio por test: los tests corren en paralelo.
+    fn ruta_temporal(nombre: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("rod-aviso-{}-{nombre}.json", std::process::id()))
+    }
+
+    #[test]
+    fn sin_archivo_no_hay_aviso() {
+        let ruta = ruta_temporal("inexistente");
+        assert!(recovery_pendiente(&ruta, 1000.0).is_none());
+    }
+
+    #[test]
+    fn un_recovery_valido_se_ofrece_con_el_nombre_del_archivo() {
+        let ruta = ruta_temporal("valido");
+        let proyecto = Proyecto {
+            ruta_video: "testdata/clip-15s-2audio.mp4".into(),
+            hablantes: Vec::new(),
+            captions: vec![Caption {
+                id: "cap-1".into(),
+                inicio: 1.0,
+                fin: 2.0,
+                texto: "Hola".into(),
+                hablante_id: None,
+            }],
+            playhead: 1.5,
+        };
+        let copia = rod_core::construir_recovery(proyecto, "C:/proyectos/mi-video.cdp", 1000.0);
+        let texto = rod_core::recovery::a_json(&copia).expect("serializa");
+        std::fs::write(&ruta, texto).expect("escribe");
+
+        let aviso = recovery_pendiente(&ruta, 1000.0).expect("hay aviso");
+        // El aviso usa el nombre del archivo, no la ruta entera, y cuenta los
+        // subtítulos: es lo que el usuario necesita para decidir.
+        assert!(aviso.texto.contains("mi-video.cdp"), "{}", aviso.texto);
+        assert!(aviso.texto.contains("1 subtítulo"), "{}", aviso.texto);
+        assert!(!aviso.texto.contains("C:/proyectos"), "{}", aviso.texto);
+        std::fs::remove_file(&ruta).expect("limpia");
+    }
+
+    #[test]
+    fn un_archivo_corrupto_no_ofrece_nada() {
+        let ruta = ruta_temporal("corrupto");
+        std::fs::write(&ruta, "{roto").expect("escribe");
+        assert!(recovery_pendiente(&ruta, 1000.0).is_none());
+        std::fs::remove_file(&ruta).expect("limpia");
     }
 }
