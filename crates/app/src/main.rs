@@ -122,9 +122,25 @@ fn despachar_salida(pantalla: &mut Pantalla, salida: Salida) -> Task<Mensaje> {
 fn actualizar(pantalla: &mut Pantalla, mensaje: Mensaje) -> Task<Mensaje> {
     match mensaje {
         Mensaje::Comando(comando) => match pantalla {
-            Pantalla::Editor(editor) => {
-                editor_app::update(editor, MensajeEditor::Comando(comando)).map(Mensaje::Editor)
-            }
+            Pantalla::Editor(editor) => match comando {
+                Comando::NuevoProyecto | Comando::AbrirVideo => {
+                    editor_app::update(editor, MensajeEditor::AbrirVideo).map(Mensaje::Editor)
+                }
+                Comando::AbrirProyecto => {
+                    editor_app::update(editor, MensajeEditor::AbrirProyecto).map(Mensaje::Editor)
+                }
+                Comando::Guardar | Comando::GuardarComo => {
+                    let mensaje = if comando == Comando::GuardarComo {
+                        MensajeEditor::GuardarProyectoComo
+                    } else {
+                        MensajeEditor::GuardarProyecto
+                    };
+                    editor_app::update(editor, mensaje).map(Mensaje::Editor)
+                }
+                _ => {
+                    editor_app::update(editor, MensajeEditor::Comando(comando)).map(Mensaje::Editor)
+                }
+            },
             Pantalla::Inicio(estado) => {
                 if comando == Comando::Ayuda {
                     estado.mensaje = Some(

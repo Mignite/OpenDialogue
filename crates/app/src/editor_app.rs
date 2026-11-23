@@ -1435,15 +1435,6 @@ pub fn view(state: &EditorApp) -> Element<'_, MensajeEditor> {
     let transport = container(
         column![
             row![
-                button("Abrir video")
-                    .style(tema::boton_secundario)
-                    .on_press(MensajeEditor::AbrirVideo),
-                button("Abrir .cdp")
-                    .style(tema::boton_secundario)
-                    .on_press(MensajeEditor::AbrirProyecto),
-                button("Guardar")
-                    .style(tema::boton_primario)
-                    .on_press(MensajeEditor::GuardarProyecto),
                 // Ancho fijo: si no, el botón cambia de tamaño al alternar y la
                 // fila entera se corre bajo el cursor.
                 button(if state.paused { "▶" } else { "❚❚" })
@@ -1469,20 +1460,6 @@ pub fn view(state: &EditorApp) -> Element<'_, MensajeEditor> {
                 )),
             ]
             .spacing(8),
-            row![
-                text("Exportar").size(12),
-                button("SRT por hablante")
-                    .style(tema::boton_secundario)
-                    .on_press(MensajeEditor::ExportarSrtHablantes),
-                button("JSON combinado")
-                    .style(tema::boton_secundario)
-                    .on_press(MensajeEditor::ExportarJson),
-                button(".ass")
-                    .style(tema::boton_secundario)
-                    .on_press(MensajeEditor::ExportarAss),
-            ]
-            .spacing(8)
-            .align_y(iced::Center),
             slider(
                 0.0..=state.duration.max(0.01) as f32,
                 state.position.clamp(0.0, state.duration.max(0.01)) as f32,
