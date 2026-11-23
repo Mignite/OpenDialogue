@@ -112,10 +112,11 @@ Descartados:
   es reimplementar lo general. Va contra la razón de existir del ecosistema de
   crates.
 
-Licencia: libass es ISC. mpv: el build oficial para Windows es GPL, así que
-distribuir la app con ese binario la arrastra a GPL. Compilando libmpv se queda
-en LGPL y el enlace dinámico es suficiente. Decisión pendiente al momento de
-empaquetar; no bloquea el desarrollo.
+Licencia: libass es ISC. mpv: el build de shinchiro que se usa para desarrollar
+es GPL y arrastraría la app a GPL si se distribuyera; el release oficial publica
+también un build LGPL y con enlace dinámico basta. Decidido en el slice 8: se
+distribuye el LGPL con hash fijado, el GPL queda en `third_party/mpv` solo para
+desarrollo.
 
 ### 3.3 Subtítulos: libass directo, no mpv
 
@@ -467,7 +468,9 @@ warnings` y `cargo test` en verde, en Windows y en Linux.
   Copia automática (`recovery.json`) mientras hay cambios sin guardar,
   ofrecida al arrancar; guardar con Ctrl+S la borra.
 - **Slice 8 — empaquetado.** NSIS en Windows, `.deb`/AppImage en Linux, con las
-  DLLs de libmpv y libass.
+  DLLs de libmpv y libass. Windows cerrado: el instalador lleva el `libmpv-2.dll`
+  LGPL del release oficial de mpv (SHA256 fijado en `packaging/windows/`), el
+  GPL queda solo para desarrollo. Falta Linux.
 
 Orden propuesto: 0 y 1 en paralelo (el 0 cubre el riesgo grande mientras el 1 da
 progreso diario sin dependencias), después 2 → 3 → 4, que dan el primer vertical
@@ -475,8 +478,10 @@ usable.
 
 ## 9. Preguntas abiertas
 
-- Licencia del binario de libmpv en las releases (GPL del build oficial vs LGPL
-  compilado). No bloquea; se decide en el slice 8.
+- Licencia del binario de libmpv en las releases: **resuelto en el slice 8**.
+  Se distribuye el build LGPL oficial (mpv v0.42.0, x86_64-w64-mingw32); el
+  build GPL de `third_party/mpv` es solo de desarrollo. La licencia del código
+  de RustyOpenDialogue queda separada: el repo aún no tiene archivo `LICENSE`.
 - Si el timeline en `Canvas` aguanta 2 h de video con waveform densa, o si la
   waveform se muda a un `shader`. Se responde con medición en el slice 6.
 - Tope de resolución para el SW render en videos 4K. Renderizar a resolución
