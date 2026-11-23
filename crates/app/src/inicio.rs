@@ -4,11 +4,12 @@
 
 use std::path::{Path, PathBuf};
 
-use iced::widget::{button, column, container, row, scrollable, text};
+use iced::widget::{button, column, container, image, row, scrollable, text};
 use iced::{Element, Length, Task};
 
 use crate::recientes::Reciente;
 use crate::recovery_io::AvisoRecovery;
+use crate::thumbnail;
 
 /// Lo que la vista necesita para dibujarse. Los recientes ya vienen resueltos
 /// (metadata leída del `.cdp` al arrancar); aquí no se toca ningún archivo.
@@ -124,6 +125,13 @@ pub fn update(
     }
 }
 
+/// La vista solo comprueba si el PNG existe en la ruta que ya calculó
+/// `thumbnail`: no abre players ni genera nada al arrancar.
+pub fn miniatura_en(base: &Path, reciente: &Reciente) -> Option<PathBuf> {
+    let ruta = thumbnail::ruta_cache_en(base, &reciente.ruta);
+    ruta.is_file().then_some(ruta)
+}
+
 fn vista_recientes(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
     let cantidad = if estado.expandido {
         estado.recientes.len()
@@ -135,19 +143,33 @@ fn vista_recientes(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
         .iter()
         .take(cantidad)
         .map(|reciente| {
-            button(column![
-                text(
-                    reciente
-                        .ruta
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                ),
-                text(format!(
-                    "{} líneas · {} hablantes · {}",
-                    reciente.lineas, reciente.hablantes, reciente.fecha
-                )),
-            ])
+            let miniatura: Element<'_, MensajeInicio> =
+                match miniatura_en(&thumbnail::carpeta_cache(), reciente) {
+                    Some(ruta) => image(iced::widget::image::Handle::from_path(ruta))
+                        .width(80)
+                        .into(),
+                    None => text("[ > ]").into(),
+                };
+            button(
+                row![
+                    miniatura,
+                    column![
+                        text(
+                            reciente
+                                .ruta
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                        ),
+                        text(format!(
+                            "{} líneas · {} hablantes · {}",
+                            reciente.lineas, reciente.hablantes, reciente.fecha
+                        )),
+                    ]
+                    .spacing(4),
+                ]
+                .spacing(8),
+            )
             .on_press(MensajeInicio::AbrirReciente(reciente.ruta.clone()))
             .into()
         })
@@ -216,6 +238,22 @@ pub fn view(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+
+    #[test]
+    fn miniatura_ausente_muestra_placeholder_y_presente_devuelve_ruta() {
+        let dir = std::env::temp_dir().join(format!("rod-inicio-miniatura-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let reciente = crate::recientes::Reciente {
+            ruta: PathBuf::from("/p/mi.cdp"),
+            lineas: 1,
+            hablantes: 1,
+            fecha: "hoy".into(),
+        };
+        assert!(super::miniatura_en(&dir, &reciente).is_none());
+        let png = crate::thumbnail::ruta_cache_en(&dir, &reciente.ruta);
+        std::fs::write(&png, b"png").unwrap();
+        assert_eq!(super::miniatura_en(&dir, &reciente), Some(png));
+    }
 
     fn aviso() -> crate::recovery_io::AvisoRecovery {
         let proyecto = rod_core::Proyecto::nuevo("clip.mp4");

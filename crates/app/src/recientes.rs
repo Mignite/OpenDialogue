@@ -114,7 +114,9 @@ pub fn registrar_guardado(
     ancho: u32,
     alto: u32,
 ) -> std::io::Result<()> {
-    crate::thumbnail::guardar_en(ruta_thumbs, proyecto, frame, ancho, alto)?;
+    // La caché es un adorno: si el disco falla, el proyecto sigue siendo el
+    // reciente verdadero. Callar el error es decisión del spec §6.
+    let _ = crate::thumbnail::guardar_en(ruta_thumbs, proyecto, frame, ancho, alto);
     registrar(ruta_indice, proyecto)
 }
 
@@ -212,6 +214,17 @@ mod tests {
         super::registrar_guardado(&cdp, &indice, &dir.join("thumbs"), &frame, 1920, 1080).unwrap();
         assert_eq!(crate::recientes::leer_indice(&indice), vec![cdp.clone()]);
         assert_eq!(dir.join("thumbs").read_dir().unwrap().count(), 1);
+    }
+
+    #[test]
+    fn fallo_de_cache_no_evita_registrar_el_reciente() {
+        let dir = temp_dir_de_test("cache-falla");
+        let cdp = dir.join("mi.cdp");
+        let indice = dir.join("recientes.json");
+        let thumbs_como_archivo = dir.join("no-es-carpeta");
+        std::fs::write(&thumbs_como_archivo, b"x").unwrap();
+        super::registrar_guardado(&cdp, &indice, &thumbs_como_archivo, &[0u8; 16], 2, 2).unwrap();
+        assert_eq!(crate::recientes::leer_indice(&indice), vec![cdp]);
     }
 
     #[test]

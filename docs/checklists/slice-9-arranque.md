@@ -12,8 +12,11 @@ se ofrece en el menú; el ejecutable release no abre consola en Windows.
 - [x] `cargo build`
 - [x] `cargo fmt --all -- --check`
 - [x] `cargo clippy --all-targets -- -D warnings`
-- [x] `cargo test --workspace` — 398 tests en verde (118 lib + 2 bin + 1
+- [x] `cargo test --workspace` — 403 tests en verde (122 lib + 3 bin + 1
   integración + 256 core + 15 subs + 3 player + 3 varios; el resto 0).
+  Incluye los seis tests añadidos en la pasada de corrección de la revisión
+  final: seek al playhead, recovery conservado en fallo, miniatura/placeholder,
+  caché fallida, regeneración al abrir y aislamiento de `%APPDATA%`.
 
 ## Verificación observable
 

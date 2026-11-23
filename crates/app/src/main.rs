@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use iced::{Element, Subscription, Task};
 
@@ -24,9 +24,14 @@ enum Mensaje {
 }
 
 fn nuevo() -> Pantalla {
+    nuevo_con(&recientes::ruta_indice(), &recovery_io::ruta())
+}
+
+/// Las rutas entran como parámetro para que los tests no toquen el índice ni
+/// el recovery reales del usuario.
+fn nuevo_con(ruta_indice: &Path, ruta_recovery: &Path) -> Pantalla {
     let ahora = recovery_io::ms_ahora();
-    let ruta_indice = recientes::ruta_indice();
-    let rutas = recientes::leer_indice(&ruta_indice);
+    let rutas = recientes::leer_indice(ruta_indice);
     let total = rutas.len();
     // Las entradas cuyo `.cdp` ya no abre se omiten y se quitan del índice:
     // no se arrastra una lista de proyectos muertos entre sesiones.
@@ -35,21 +40,25 @@ fn nuevo() -> Pantalla {
         .filter_map(|ruta| recientes::metadata(&ruta, ahora).map(|meta| (meta, ruta)))
         .unzip();
     if validas.len() != total {
-        let _ = recientes::escribir_indice(&ruta_indice, &validas);
+        let _ = recientes::escribir_indice(ruta_indice, &validas);
     }
-    let aviso = recovery_io::pendiente(&recovery_io::ruta(), ahora);
+    let aviso = recovery_io::pendiente(ruta_recovery, ahora);
     Pantalla::Inicio(inicio::nuevo(visibles, aviso))
 }
 
 /// Abre el editor o devuelve al menú con el motivo del fallo. Nunca deja un
 /// editor a medias: si el video no abre, el usuario sigue en el menú.
-fn abrir(pantalla: &mut Pantalla, editor: Result<EditorApp, String>) {
+fn abrir(pantalla: &mut Pantalla, editor: Result<EditorApp, String>) -> bool {
     match editor {
-        Ok(editor) => *pantalla = Pantalla::Editor(Box::new(editor)),
+        Ok(editor) => {
+            *pantalla = Pantalla::Editor(Box::new(editor));
+            true
+        }
         Err(error) => {
             if let Pantalla::Inicio(estado) = pantalla {
                 estado.mensaje = Some(error);
             }
+            false
         }
     }
 }
@@ -71,8 +80,10 @@ fn despachar_salida(pantalla: &mut Pantalla, salida: Salida) -> Task<Mensaje> {
             Task::none()
         }
         Salida::Recuperar => {
+            // Clonar: si el video no abre, el aviso y el archivo tienen que
+            // seguir ahí para que el usuario pueda intentarlo de nuevo.
             let aviso = match pantalla {
-                Pantalla::Inicio(estado) => estado.aviso.take(),
+                Pantalla::Inicio(estado) => estado.aviso.clone(),
                 Pantalla::Editor(_) => None,
             };
             if let Some(aviso) = aviso {
@@ -83,11 +94,16 @@ fn despachar_salida(pantalla: &mut Pantalla, salida: Salida) -> Task<Mensaje> {
                     Some(PathBuf::from(&recovery.ruta_proyecto))
                 };
                 let posicion = recovery.proyecto.playhead;
-                abrir(
+                let abrio = abrir(
                     pantalla,
                     EditorApp::desde_proyecto(recovery.proyecto, ruta, posicion),
                 );
-                let _ = recovery_io::escribir(&recovery_io::ruta(), None);
+                if abrio {
+                    if let Pantalla::Inicio(estado) = pantalla {
+                        estado.aviso = None;
+                    }
+                    let _ = recovery_io::escribir(&recovery_io::ruta(), None);
+                }
             }
             Task::none()
         }
@@ -160,14 +176,36 @@ fn main() -> iced::Result {
 
 #[cfg(test)]
 mod tests {
+    use rod_app::inicio::{self, Salida};
+
+    fn pantalla_de_prueba() -> super::Pantalla {
+        let dir = std::env::temp_dir().join(format!("rod-router-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        super::nuevo_con(&dir.join("recientes.json"), &dir.join("recovery.json"))
+    }
+
+    #[test]
+    fn recuperar_con_video_inexistente_conserva_el_aviso() {
+        let proyecto = rod_core::Proyecto::nuevo("C:/no/existe/clip.mp4");
+        let recovery = rod_core::construir_recovery(proyecto, "C:/no/existe.cdp", 1_000.0);
+        let texto = rod_core::formatear_recovery(&recovery, "existe.cdp", 1_000.0);
+        let aviso = rod_app::recovery_io::AvisoRecovery { recovery, texto };
+        let mut pantalla = super::Pantalla::Inicio(inicio::nuevo(Vec::new(), Some(aviso)));
+        let _ = super::despachar_salida(&mut pantalla, Salida::Recuperar);
+        match pantalla {
+            super::Pantalla::Inicio(estado) => assert!(estado.aviso.is_some()),
+            super::Pantalla::Editor(_) => panic!("abrió un editor con video inexistente"),
+        }
+    }
+
     #[test]
     fn arranca_en_inicio_sin_abrir_player() {
-        assert!(matches!(super::nuevo(), super::Pantalla::Inicio(_)));
+        assert!(matches!(pantalla_de_prueba(), super::Pantalla::Inicio(_)));
     }
 
     #[test]
     fn video_invalido_no_cambia_de_pantalla() {
-        let mut pantalla = super::nuevo();
+        let mut pantalla = pantalla_de_prueba();
         let _ = super::actualizar(
             &mut pantalla,
             super::Mensaje::ArchivoSoltado("x.txt".into()),

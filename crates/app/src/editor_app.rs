@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use iced::widget::{
@@ -278,6 +278,15 @@ impl EditorApp {
         ruta: Option<PathBuf>,
         posicion: f64,
     ) -> Result<Self, String> {
+        Self::desde_proyecto_en(proyecto, ruta, posicion, &thumbnail::carpeta_cache())
+    }
+
+    pub fn desde_proyecto_en(
+        proyecto: Proyecto,
+        ruta: Option<PathBuf>,
+        posicion: f64,
+        base_thumbs: &Path,
+    ) -> Result<Self, String> {
         let video_path = proyecto.ruta_video.clone();
         let player = rod_player::Player::open(&video_path)
             .map_err(|error| format!("no se pudo abrir {video_path}: {error}"))?;
@@ -303,7 +312,7 @@ impl EditorApp {
         let limpio = editor.proyecto().clone();
         let miniatura_pendiente = ruta
             .as_ref()
-            .is_some_and(|ruta| thumbnail::leer(ruta).is_none());
+            .is_some_and(|ruta| !thumbnail::ruta_cache_en(base_thumbs, ruta).is_file());
 
         let mut estado = Self {
             editor,
@@ -346,8 +355,27 @@ impl EditorApp {
             mensaje: None,
             miniatura_pendiente,
         };
+        // El playhead del `.cdp` no se copia solo al estado: mpv sigue en 0.
+        // Sin este seek, el primer `Tick` sobreescribe `position` con 0 y la
+        // reanudación se pierde (y con ella la miniatura del reciente).
+        if estado.position > 0.0
+            && let Err(error) = estado.player.seek(estado.position)
+        {
+            eprintln!("no se pudo buscar el playhead guardado: {error}");
+        }
         refrescar_preview(&mut estado);
         Ok(estado)
+    }
+
+    /// Con el primer frame ya rasterizado se regenera la miniatura que faltaba
+    /// al abrir. No se hace en el constructor: allí `pixels` está a ceros.
+    fn regenerar_miniatura_en(&mut self, base: &Path) {
+        if self.miniatura_pendiente
+            && let Some(ruta) = self.ruta_proyecto.clone()
+        {
+            let _ = thumbnail::guardar_en(base, &ruta, &self.pixels, WIDTH as u32, HEIGHT as u32);
+            self.miniatura_pendiente = false;
+        }
     }
 }
 
@@ -641,12 +669,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEdit
                         .map(Capa::desde)
                         .collect(),
                 );
-                if state.miniatura_pendiente
-                    && let Some(ruta) = state.ruta_proyecto.clone()
-                {
-                    let _ = thumbnail::guardar(&ruta, &state.pixels, WIDTH as u32, HEIGHT as u32);
-                    state.miniatura_pendiente = false;
-                }
+                state.regenerar_miniatura_en(&thumbnail::carpeta_cache());
             }
         }
         MensajeEditor::AbrirVideo => {
@@ -1696,7 +1719,57 @@ fn boton(_theme: &iced::Theme, _status: button::Status) -> button::Style {
 
 #[cfg(test)]
 mod tests {
+    use image::GenericImageView;
+
     use super::{VELOCIDADES, Velocidad, resumen_srt};
+
+    #[test]
+    fn abrir_reciente_sin_miniatura_regenera_en_el_playhead() {
+        let dir = std::env::temp_dir().join(format!("rod-miniatura-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cdp = dir.join("mi.cdp");
+        let proyecto = Proyecto {
+            ruta_video: format!(
+                "{}/../../testdata/clip-15s-2audio.mp4",
+                env!("CARGO_MANIFEST_DIR")
+            ),
+            hablantes: Vec::new(),
+            captions: Vec::new(),
+            playhead: 3.25,
+        };
+        let mut editor =
+            super::EditorApp::desde_proyecto_en(proyecto, Some(cdp.clone()), 3.25, &dir)
+                .expect("abre el video de prueba");
+        assert!(editor.miniatura_pendiente);
+        assert!((editor.position - 3.25).abs() < 1e-6);
+        editor.pixels.fill(9);
+        editor.regenerar_miniatura_en(&dir);
+        let png = crate::thumbnail::ruta_cache_en(&dir, &cdp);
+        assert!(png.is_file(), "no se regeneró la miniatura");
+        assert_eq!(image::open(&png).unwrap().dimensions(), (160, 90));
+        assert!(!editor.miniatura_pendiente);
+    }
+
+    #[test]
+    fn desde_proyecto_hace_seek_al_playhead_guardado() {
+        let proyecto = Proyecto {
+            ruta_video: format!(
+                "{}/../../testdata/clip-15s-2audio.mp4",
+                env!("CARGO_MANIFEST_DIR")
+            ),
+            hablantes: Vec::new(),
+            captions: Vec::new(),
+            playhead: 3.25,
+        };
+        let editor = super::EditorApp::desde_proyecto(proyecto, None, 3.25)
+            .expect("abre el video de prueba");
+        assert!(
+            (editor.player.position() - 3.25).abs() < 0.5,
+            "el player quedó en {}",
+            editor.player.position()
+        );
+    }
+
     use crate::project_io::ExportacionSrt;
     use crate::recovery_io;
     use rod_core::{Caption, Proyecto};
