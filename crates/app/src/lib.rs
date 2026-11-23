@@ -4,6 +4,7 @@ pub mod presets_edicion;
 pub mod presets_io;
 pub mod preview;
 pub mod project_io;
+pub mod recientes;
 pub mod recovery_io;
 pub mod timeline;
 pub mod video;
