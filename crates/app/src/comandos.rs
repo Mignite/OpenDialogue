@@ -70,8 +70,39 @@ pub fn seccion(comando: Comando) -> Seccion {
         Comando::Estilos => Seccion::Estilos,
         Comando::PanelSubtitulos | Comando::PanelHablantes | Comando::PanelEstilos => Seccion::Ver,
         Comando::Ayuda => Seccion::Ayuda,
-        _ => Seccion::Edicion,
+        Comando::ReproducirPausa
+        | Comando::CaptionAnterior
+        | Comando::CaptionSiguiente
+        | Comando::RetrocederFino
+        | Comando::AvanzarFino
+        | Comando::Retroceder
+        | Comando::Avanzar
+        | Comando::NudgeIzquierda
+        | Comando::NudgeDerecha
+        | Comando::EditarTexto
+        | Comando::SimultaneoArriba
+        | Comando::SimultaneoAbajo
+        | Comando::AgregarFragmento
+        | Comando::Eliminar
+        | Comando::Deshacer
+        | Comando::Rehacer
+        | Comando::Copiar
+        | Comando::Pegar
+        | Comando::Dividir
+        | Comando::Buscar
+        | Comando::VelocidadMas
+        | Comando::VelocidadMenos
+        | Comando::Hablante(_) => Seccion::Edicion,
     }
+}
+
+/// En el arranque no hay proyecto ni timeline: esas entradas se muestran
+/// deshabilitadas en lugar de desaparecer.
+pub fn disponible_en_inicio(comando: Comando) -> bool {
+    matches!(
+        comando,
+        Comando::NuevoProyecto | Comando::AbrirProyecto | Comando::AbrirVideo | Comando::Ayuda
+    )
 }
 
 pub fn etiqueta(comando: Comando) -> String {
@@ -153,10 +184,11 @@ pub fn atajo(comando: Comando) -> String {
     texto.to_owned()
 }
 
-/// `en_campo_texto` reproduce el guardia del oráculo: con el foco en un
-/// `text_input` solo Ctrl+S y Ctrl+F se procesan; Ctrl+Z/Y/C/V quedan al
-/// comportamiento nativo del campo.
-pub fn desde_keyboard(key: &Key, modifiers: &Modifiers, en_campo_texto: bool) -> Option<Comando> {
+/// No hace falta un guardia de foco: `iced::keyboard::listen()` solo entrega
+/// eventos que ningún widget capturó, y `TextInput` captura los suyos. Así
+/// Ctrl+Z/Y/C/V quedan al campo de texto y las teclas sueltas no se pierden
+/// cuando el foco está en el timeline.
+pub fn desde_keyboard(key: &Key, modifiers: &Modifiers) -> Option<Comando> {
     let ctrl = modifiers.command();
     let shift = modifiers.shift();
     let alt = modifiers.alt();
@@ -173,10 +205,6 @@ pub fn desde_keyboard(key: &Key, modifiers: &Modifiers, en_campo_texto: bool) ->
             "f" => return Some(Comando::Buscar),
             _ => {}
         }
-    }
-
-    if en_campo_texto {
-        return None;
     }
 
     if ctrl {
@@ -250,24 +278,29 @@ mod tests {
     #[test]
     fn ctrl_s_y_ctrl_f_funcionan_dentro_de_un_campo() {
         assert_eq!(
-            desde_keyboard(&key("s"), &Modifiers::COMMAND, true),
+            desde_keyboard(&key("s"), &Modifiers::COMMAND),
             Some(Comando::Guardar)
         );
         assert_eq!(
-            desde_keyboard(&key("f"), &Modifiers::COMMAND, true),
+            desde_keyboard(&key("f"), &Modifiers::COMMAND),
             Some(Comando::Buscar)
         );
     }
 
     #[test]
-    fn ctrl_z_no_dispara_dentro_de_un_campo() {
-        assert_eq!(desde_keyboard(&key("z"), &Modifiers::COMMAND, true), None);
+    fn ctrl_z_se_mapea_a_deshacer() {
+        // Si un text_input está enfocado, iced captura el evento y la
+        // suscripción no lo recibe: el guardia vive en el runtime, no aquí.
+        assert_eq!(
+            desde_keyboard(&key("z"), &Modifiers::COMMAND),
+            Some(Comando::Deshacer)
+        );
     }
 
     #[test]
     fn ctrl_shift_s_es_guardar_como() {
         assert_eq!(
-            desde_keyboard(&key("s"), &(Modifiers::COMMAND | Modifiers::SHIFT), false),
+            desde_keyboard(&key("s"), &(Modifiers::COMMAND | Modifiers::SHIFT)),
             Some(Comando::GuardarComo)
         );
     }
@@ -275,15 +308,15 @@ mod tests {
     #[test]
     fn flechas_con_modificadores() {
         assert_eq!(
-            desde_keyboard(&Key::Named(Named::ArrowLeft), &Modifiers::ALT, false),
+            desde_keyboard(&Key::Named(Named::ArrowLeft), &Modifiers::ALT),
             Some(Comando::CaptionAnterior)
         );
         assert_eq!(
-            desde_keyboard(&Key::Named(Named::ArrowRight), &Modifiers::SHIFT, false),
+            desde_keyboard(&Key::Named(Named::ArrowRight), &Modifiers::SHIFT),
             Some(Comando::AvanzarFino)
         );
         assert_eq!(
-            desde_keyboard(&Key::Named(Named::ArrowRight), &Modifiers::NONE, false),
+            desde_keyboard(&Key::Named(Named::ArrowRight), &Modifiers::NONE),
             Some(Comando::Avanzar)
         );
     }
@@ -291,19 +324,19 @@ mod tests {
     #[test]
     fn teclas_de_hablante_y_atajos_simples() {
         assert_eq!(
-            desde_keyboard(&key("7"), &Modifiers::NONE, false),
+            desde_keyboard(&key("7"), &Modifiers::NONE),
             Some(Comando::Hablante(7))
         );
         assert_eq!(
-            desde_keyboard(&key("c"), &Modifiers::NONE, false),
+            desde_keyboard(&key("c"), &Modifiers::NONE),
             Some(Comando::Dividir)
         );
         assert_eq!(
-            desde_keyboard(&key("?"), &Modifiers::NONE, false),
+            desde_keyboard(&key("?"), &Modifiers::NONE),
             Some(Comando::Ayuda)
         );
         assert_eq!(
-            desde_keyboard(&Key::Named(Named::Space), &Modifiers::NONE, false),
+            desde_keyboard(&Key::Named(Named::Space), &Modifiers::NONE),
             Some(Comando::ReproducirPausa)
         );
     }

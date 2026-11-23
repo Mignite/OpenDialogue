@@ -55,16 +55,6 @@ const TODOS: &[Comando] = &[
     Comando::Ayuda,
 ];
 
-/// En el arranque no hay proyecto ni timeline: esas entradas se muestran
-/// deshabilitadas en lugar de desaparecer, para que el menú sea el mismo sitio
-/// en ambas pantallas.
-fn disponible_en_inicio(comando: Comando) -> bool {
-    matches!(
-        comando,
-        Comando::NuevoProyecto | Comando::AbrirProyecto | Comando::AbrirVideo | Comando::Ayuda
-    )
-}
-
 fn texto(comando: Comando) -> String {
     let etiqueta = comandos::etiqueta(comando);
     let atajo = comandos::atajo(comando);
@@ -98,7 +88,7 @@ where
             let entradas = comandos_de(seccion)
                 .into_iter()
                 .map(|comando| {
-                    let habilitado = !en_inicio || disponible_en_inicio(comando);
+                    let habilitado = !en_inicio || comandos::disponible_en_inicio(comando);
                     let mut boton =
                         button(iced::widget::text(texto(comando))).style(tema::boton_menu);
                     if habilitado {
@@ -153,7 +143,6 @@ mod tests {
         let por_teclado = crate::comandos::desde_keyboard(
             &iced::keyboard::Key::Character("s".into()),
             &iced::keyboard::Modifiers::COMMAND,
-            true,
         );
         assert!(en_menu);
         assert_eq!(por_teclado, Some(Comando::Guardar));
@@ -164,7 +153,7 @@ mod tests {
         let habilitadas = TODOS
             .iter()
             .copied()
-            .filter(|comando| disponible_en_inicio(*comando))
+            .filter(|comando| comandos::disponible_en_inicio(*comando))
             .count();
         assert_eq!(habilitadas, 4);
     }

@@ -9,8 +9,23 @@ Plan: `docs/superpowers/plans/2026-11-23-menu-atajos-visual.md`.
 - [x] `cargo build`
 - [x] `cargo fmt --all -- --check`
 - [x] `cargo clippy --all-targets -- -D warnings`
-- [x] `cargo test --workspace` — 415 tests en verde (134 lib + 3 bin + 1
+- [x] `cargo test --workspace` — 417 tests en verde (136 lib + 3 bin + 1
   integración + 256 core + 15 subs + 3 player + 3 varios).
+
+## Correcciones de la revisión final
+
+- Se quitó la guardia de foco por contenido del borrador: `keyboard::listen()`
+  ya recibe solo eventos no capturados por widgets (`iced_futures/keyboard.rs:11-18`),
+  y `TextInput` captura los suyos. Con la guardia vieja, seleccionar un caption
+  con texto dejaba muertos Space, flechas, E, A, C, Delete y 1-9.
+- `Ctrl+V` inserta fragmentos con `editor.agregar()` en vez de reconstruir
+  `EstadoEditor`: ya no reinicia el historial ni puede vaciar el proyecto con
+  el portapapeles vacío. Dos tests nuevos lo fijan.
+- `E` enfoca el campo de texto con `widget::operation::focus`; `ejecutar_comando`
+  devuelve su `Task` en vez de descartarlo.
+- Las entradas deshabilitadas del menú se pintan con el color secundario.
+- `disponible_en_inicio` vive en `comandos.rs` y `seccion` es exhaustiva: un
+  comando nuevo no cae silenciosamente en `Edición`.
 
 ## Qué quedó
 
@@ -34,7 +49,9 @@ Plan: `docs/superpowers/plans/2026-11-23-menu-atajos-visual.md`.
 - `docs/checklists/slice-10-inicio-visual.png`: arranque con barra de menú,
   botón principal mostaza, estado vacío y sin `Ver todos`.
 - `docs/checklists/slice-10-menu-abierto.png`: desplegable `Archivo` con las
-  etiquetas y sus atajos alineados a la derecha.
+  etiquetas y sus atajos entre corchetes. No están alineados a la derecha:
+  el ancho del menú se limitó para que cayera debajo de `Archivo`, y iced_aw
+  centra el texto de cada item.
 
 El menú se abrió con un clic real en `Archivo` sobre la ventana en ejecución;
 las capturas son de la app, no mockups.

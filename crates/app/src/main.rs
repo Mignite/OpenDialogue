@@ -191,15 +191,12 @@ fn suscripcion(pantalla: &Pantalla) -> Subscription<Mensaje> {
         iced::window::Event::FileDropped(ruta) => Some(Mensaje::ArchivoSoltado(ruta)),
         _ => None,
     });
-    let en_campo_texto = matches!(pantalla, Pantalla::Editor(editor) if editor.en_campo_texto());
-    let teclado = iced::keyboard::listen()
-        .with(en_campo_texto)
-        .filter_map(|(en_campo, evento)| match evento {
-            iced::keyboard::Event::KeyPressed { key, modifiers, .. } => {
-                comandos::desde_keyboard(&key, &modifiers, en_campo).map(Mensaje::Comando)
-            }
-            _ => None,
-        });
+    let teclado = iced::keyboard::listen().filter_map(|evento| match evento {
+        iced::keyboard::Event::KeyPressed { key, modifiers, .. } => {
+            comandos::desde_keyboard(&key, &modifiers).map(Mensaje::Comando)
+        }
+        _ => None,
+    });
     match pantalla {
         Pantalla::Inicio(_) => Subscription::batch([arrastre, teclado]),
         Pantalla::Editor(editor) => Subscription::batch([

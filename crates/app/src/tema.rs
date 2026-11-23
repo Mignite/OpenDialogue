@@ -62,10 +62,14 @@ pub fn boton_secundario(_theme: &iced::Theme, _status: button::Status) -> button
     }
 }
 
-pub fn boton_menu(_theme: &iced::Theme, _status: button::Status) -> button::Style {
+pub fn boton_menu(_theme: &iced::Theme, status: button::Status) -> button::Style {
     button::Style {
         background: Some(Background::Color(Color::TRANSPARENT)),
-        text_color: TEXTO,
+        text_color: if status == button::Status::Disabled {
+            SECUNDARIO
+        } else {
+            TEXTO
+        },
         border: Border {
             radius: RADIO.into(),
             ..Default::default()

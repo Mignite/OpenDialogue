@@ -25,6 +25,7 @@ use rod_player::AudioTrack;
 
 const WIDTH: usize = CANVAS.0 as usize;
 const HEIGHT: usize = CANVAS.1 as usize;
+const ID_TEXTO_SUBTITULO: iced::widget::Id = iced::widget::Id::new("texto-subtitulo");
 
 /// Velocidades que ofrece la barra de transporte. `pick_list` necesita un tipo
 /// propio porque `f32` no es `Display` y el texto de la lista es la etiqueta.
@@ -351,15 +352,6 @@ impl EditorApp {
             let _ = thumbnail::guardar_en(base, &ruta, &self.pixels, WIDTH as u32, HEIGHT as u32);
             self.miniatura_pendiente = false;
         }
-    }
-
-    /// Aproximación al guardia del oráculo: si hay un borrador vivo, un
-    /// hablante en edición o un campo de preset a medias, no disparamos atajos
-    /// de tecla suelta mientras el usuario escribe.
-    pub fn en_campo_texto(&self) -> bool {
-        !self.borrador.is_empty()
-            || self.editando_hablante.is_some()
-            || !self.borradores_preset.is_empty()
     }
 }
 
@@ -694,8 +686,10 @@ fn ejecutar_comando(state: &mut EditorApp, comando: Comando) -> Task<MensajeEdit
         C::EditarTexto => {
             if state.editor.seleccion.len() > 1 {
                 state.mensaje = Some("Selecciona un solo subtítulo para editar su texto".into());
+                Task::none()
+            } else {
+                iced::widget::operation::focus(ID_TEXTO_SUBTITULO)
             }
-            Task::none()
         }
         C::Buscar => {
             state.mensaje = Some("Buscar: usa el panel de subtítulos para localizar texto".into());
@@ -865,16 +859,20 @@ fn copiar(state: &mut EditorApp) -> Task<MensajeEditor> {
 }
 
 fn pegar(state: &mut EditorApp) -> Task<MensajeEditor> {
-    if let Some(documento) = rod_app_srt_documento(&state.portapapeles, &state.video_path) {
-        state.editor = EstadoEditor::nuevo(documento);
-        state.limpio = state.editor.proyecto().clone();
-        refrescar_preview(state);
+    if state.portapapeles.trim().is_empty() {
+        return Task::none();
     }
+    // Insertar fragmentos, nunca reconstruir el editor: `EstadoEditor::nuevo`
+    // reinicia el historial y `limpio`, y un Ctrl+V con el portapapeles vacío
+    // borraría el proyecto sin posibilidad de deshacer.
+    let Ok(documento) = crate::project_io::cargar(&state.portapapeles, &state.video_path) else {
+        return Task::none();
+    };
+    for caption in documento.proyecto.captions {
+        state.editor.agregar(caption);
+    }
+    refrescar_preview(state);
     Task::none()
-}
-
-fn rod_app_srt_documento(texto: &str, ruta_video: &str) -> Option<crate::project_io::Documento> {
-    crate::project_io::cargar(texto, ruta_video).ok()
 }
 
 fn cargar_subtitulos(state: &mut EditorApp, ass: bool) -> Task<MensajeEditor> {
@@ -904,9 +902,7 @@ fn cargar_subtitulos(state: &mut EditorApp, ass: bool) -> Task<MensajeEditor> {
 
 pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEditor> {
     match message {
-        MensajeEditor::Comando(comando) => {
-            let _ = ejecutar_comando(state, comando);
-        }
+        MensajeEditor::Comando(comando) => return ejecutar_comando(state, comando),
         MensajeEditor::Tick => {
             let frame_changed = state.player.update() & 1 != 0;
 
@@ -1636,6 +1632,7 @@ fn subtitle_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
             .spacing(12),
             row![
                 text_input("Texto del subtítulo", &state.borrador)
+                    .id(ID_TEXTO_SUBTITULO)
                     .on_input(MensajeEditor::Borrador)
                     .on_submit(MensajeEditor::AplicarTexto),
                 button("Aplicar").on_press_maybe(
@@ -1987,6 +1984,32 @@ mod tests {
     use image::GenericImageView;
 
     use super::{VELOCIDADES, Velocidad, resumen_srt};
+
+    #[test]
+    fn pegar_inserta_fragmento_y_no_reemplaza_el_proyecto() {
+        let ruta = format!(
+            "{}/../../testdata/clip-15s-2audio.mp4",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let mut editor = super::EditorApp::desde_video(&ruta).expect("abre el video de prueba");
+        let antes = editor.editor.proyecto().captions.len();
+        editor.portapapeles = "1\n00:00:01,000 --> 00:00:02,000\nHola\n".into();
+        let _ = super::pegar(&mut editor);
+        assert_eq!(editor.editor.proyecto().captions.len(), antes + 1);
+        assert_eq!(editor.limpio.captions.len(), antes);
+    }
+
+    #[test]
+    fn pegar_con_portapapeles_vacio_no_hace_nada() {
+        let ruta = format!(
+            "{}/../../testdata/clip-15s-2audio.mp4",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let mut editor = super::EditorApp::desde_video(&ruta).expect("abre el video de prueba");
+        editor.portapapeles.clear();
+        let _ = super::pegar(&mut editor);
+        assert!(editor.editor.proyecto().captions.is_empty());
+    }
 
     #[test]
     fn abrir_reciente_sin_miniatura_regenera_en_el_playhead() {
