@@ -625,6 +625,48 @@ fn id_nuevo() -> String {
     format!("cap-{nanos}")
 }
 
+/// Compone la lógica pura de `rod_core::autosubs`: turnos del TXT → números
+/// asignados a cada cue → hablantes con ids → captions con `hablante_id`.
+/// El orden de los hablantes es el de `hablantes_desde_nombres` (numérico).
+fn aplicar_autosubs(
+    captions: &[rod_core::Caption],
+    turnos: &[rod_core::TurnoAutosubs],
+) -> (Vec<rod_core::Hablante>, Vec<rod_core::Caption>) {
+    use rod_core::{asignar_hablantes_por_texto, hablantes_desde_nombres};
+
+    let numeros = asignar_hablantes_por_texto(captions, turnos);
+    let distintos: Vec<String> = numeros
+        .iter()
+        .flatten()
+        .cloned()
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect();
+    let hablantes = hablantes_desde_nombres(&distintos);
+    let id_por_numero: std::collections::HashMap<String, String> = hablantes
+        .iter()
+        .map(|hablante| {
+            (
+                hablante
+                    .nombre
+                    .strip_prefix("Hablante ")
+                    .unwrap_or_default()
+                    .to_owned(),
+                hablante.id.clone(),
+            )
+        })
+        .collect();
+    let captions_asignados = captions
+        .iter()
+        .zip(numeros)
+        .map(|(caption, numero)| rod_core::Caption {
+            hablante_id: numero.and_then(|numero| id_por_numero.get(&numero).cloned()),
+            ..caption.clone()
+        })
+        .collect();
+    (hablantes, captions_asignados)
+}
+
 /// Un único manejador para el menú y el teclado: los dos entregan un `Comando`.
 fn ejecutar_comando(state: &mut EditorApp, comando: Comando) -> Task<MensajeEditor> {
     use Comando as C;
@@ -701,16 +743,75 @@ fn ejecutar_comando(state: &mut EditorApp, comando: Comando) -> Task<MensajeEdit
             );
             Task::none()
         }
-        C::ImportarAutosubs => {
-            state.mensaje = Some("Importar auto-subs: pendiente en este slice".into());
-            Task::none()
-        }
+        C::ImportarAutosubs => importar_autosubs(state),
         C::CargarSrt | C::CargarAss => cargar_subtitulos(state, comando == C::CargarAss),
         C::NuevoProyecto | C::AbrirProyecto | C::AbrirVideo => {
             state.mensaje = Some("Usa el menú de inicio para abrir un proyecto".into());
             Task::none()
         }
     }
+}
+
+/// Par SRT+TXT del oráculo: se pide el SRT, se busca el TXT gemelo en la misma
+/// carpeta y, si no está, se pide en un segundo diálogo.
+fn importar_autosubs(state: &mut EditorApp) -> Task<MensajeEditor> {
+    use rod_core::{parse_autosubs_txt, parse_srt};
+
+    let Some(ruta_srt) = rfd::FileDialog::new()
+        .add_filter("Subtítulos", &["srt"])
+        .pick_file()
+    else {
+        return Task::none();
+    };
+    let Ok(texto_srt) = std::fs::read_to_string(&ruta_srt) else {
+        state.mensaje = Some("No se pudo leer el SRT".into());
+        return Task::none();
+    };
+    let captions = parse_srt(&texto_srt);
+    if captions.is_empty() {
+        state.mensaje = Some("El SRT no tiene subtítulos".into());
+        return Task::none();
+    }
+
+    let gemelo = ruta_srt.with_extension("txt");
+    let ruta_txt = if gemelo.is_file() {
+        Some(gemelo)
+    } else {
+        rfd::FileDialog::new()
+            .add_filter("Texto", &["txt"])
+            .pick_file()
+    };
+    let Some(ruta_txt) = ruta_txt else {
+        return Task::none();
+    };
+    let Ok(texto_txt) = std::fs::read_to_string(&ruta_txt) else {
+        state.mensaje = Some("No se pudo leer el TXT de turnos".into());
+        return Task::none();
+    };
+    let turnos = parse_autosubs_txt(&texto_txt);
+    let (hablantes, captions) = aplicar_autosubs(&captions, &turnos);
+    let asignados = captions
+        .iter()
+        .filter(|caption| caption.hablante_id.is_some())
+        .count();
+
+    state.editor.registrar_historial();
+    let mut proyecto = state.editor.proyecto().clone();
+    proyecto.hablantes = hablantes;
+    proyecto.captions = captions;
+    state.editor = EstadoEditor::nuevo(Documento {
+        proyecto,
+        formato: crate::project_io::FormatoSubtitulo::Srt,
+        estilos_ass: Vec::new(),
+    });
+    state.limpio = state.editor.proyecto().clone();
+    refrescar_preview(state);
+    state.mensaje = Some(format!(
+        "Auto-subs importados: {} captions, {} con hablante",
+        state.editor.proyecto().captions.len(),
+        asignados
+    ));
+    Task::none()
 }
 
 fn nudge_seleccion(state: &mut EditorApp, delta: f64) -> Task<MensajeEditor> {
@@ -1975,6 +2076,44 @@ mod tests {
     use image::GenericImageView;
 
     use super::{VELOCIDADES, Velocidad, resumen_srt};
+
+    #[test]
+    fn aplicar_autosubs_asigna_hablantes_y_produce_ids() {
+        let captions = vec![
+            rod_core::Caption {
+                id: "c1".into(),
+                inicio: 0.0,
+                fin: 1.0,
+                texto: "¡Hola, mundo!".into(),
+                hablante_id: None,
+            },
+            rod_core::Caption {
+                id: "c2".into(),
+                inicio: 1.0,
+                fin: 2.0,
+                texto: "Adiós".into(),
+                hablante_id: None,
+            },
+        ];
+        let turnos = vec![
+            rod_core::TurnoAutosubs {
+                speaker: "1".into(),
+                texto: "Hola mundo".into(),
+            },
+            rod_core::TurnoAutosubs {
+                speaker: "2".into(),
+                texto: "Adiós".into(),
+            },
+        ];
+        let (hablantes, asignados) = super::aplicar_autosubs(&captions, &turnos);
+        assert_eq!(hablantes.len(), 2);
+        assert_eq!(hablantes[0].nombre, "Hablante 1");
+        assert_eq!(asignados.len(), 2);
+        assert_eq!(asignados[0].hablante_id, Some(hablantes[0].id.clone()));
+        assert_eq!(asignados[1].hablante_id, Some(hablantes[1].id.clone()));
+        // Los ids son distintos: no se reutiliza el mismo para dos hablantes.
+        assert_ne!(hablantes[0].id, hablantes[1].id);
+    }
 
     #[test]
     fn pegar_inserta_fragmento_y_no_reemplaza_el_proyecto() {
