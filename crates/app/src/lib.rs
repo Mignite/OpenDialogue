@@ -1,3 +1,4 @@
+pub mod comandos;
 pub mod editor;
 pub mod editor_app;
 pub mod inicio;
