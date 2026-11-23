@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -7,6 +8,7 @@ use iced::widget::{
 use iced::{Background, Color, Element, Length, Subscription, Task};
 
 use rod_app::editor::{EstadoEditor, MAX_HABLANTES, normalizar_tecla};
+use rod_app::presets_edicion::{CampoPreset, aplicar_campo, valor_campo};
 use rod_app::presets_io;
 use rod_app::preview::{CANVAS, ass_del_proyecto};
 use rod_app::project_io::{
@@ -16,7 +18,7 @@ use rod_app::project_io::{
 use rod_app::recovery_io;
 use rod_app::timeline::{self, Vista};
 use rod_app::video::{Capa, Video};
-use rod_core::{PresetAss, Proyecto};
+use rod_core::{PresetAss, Proyecto, nombre_libre, nuevo_preset_desde};
 use rod_player::AudioTrack;
 
 const WIDTH: usize = CANVAS.0 as usize;
@@ -47,10 +49,33 @@ const VELOCIDADES: [Velocidad; 6] = [
     Velocidad(2.0),
 ];
 
+/// Una opción del selector de estilo de un hablante. `pick_list` exige un tipo
+/// `Display` y `PresetAss` no lo es; `id: None` es «sin preset» (usa el estilo
+/// `Default` del `.ass`).
+#[derive(Debug, Clone, PartialEq)]
+struct OpcionPreset {
+    id: Option<String>,
+    nombre: String,
+}
+
+impl std::fmt::Display for OpcionPreset {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.nombre)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 enum CampoHablante {
     Nombre,
     Tecla,
+}
+
+/// Las tres pestañas de la columna derecha, como en el oráculo (`PanelTabs`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Panel {
+    Subtitulos,
+    Hablantes,
+    Estilos,
 }
 
 #[derive(Debug, Clone)]
@@ -80,6 +105,17 @@ enum Message {
     BorrarHablante(String),
     /// `None` deja los captions seleccionados sin hablante.
     AsignarHablante(Option<String>),
+    /// Cambia el preset `.ass` de un hablante (`None` = sin preset).
+    AsignarPreset(String, Option<String>),
+    /// Pestaña de la columna derecha.
+    Panel(Panel),
+    /// Preset abierto en el panel de estilos.
+    SeleccionarPreset(String),
+    /// Duplica el preset seleccionado (parte del actual, como el oráculo).
+    NuevoPreset,
+    BorrarPreset,
+    /// Un campo del preset. El id y el campo son la clave del borrador.
+    EditarPreset(String, CampoPreset, String),
     Timeline(timeline::Mensaje),
     /// Zoom del timeline: `factor > 1` acerca. El ancla es el playhead.
     Zoom(f64),
@@ -122,6 +158,8 @@ struct Estado {
     velocidad: Velocidad,
     /// Lo que hay en el `text_input` del caption seleccionado.
     borrador: String,
+    /// Pestaña visible de la columna derecha.
+    panel: Panel,
     /// Campo de hablante que está recibiendo teclas. iced no da un evento de
     /// foco por widget, así que la sesión se cierra al tocar cualquier otra
     /// cosa: es el equivalente al `onFocus={onCommit}` del oráculo (una sesión
@@ -163,6 +201,15 @@ struct Estado {
     /// Presets `.ass` cargados al arrancar. Los usa el preview y el export por
     /// igual: son la única fuente de estilos de un caption con hablante.
     presets: Vec<PresetAss>,
+    /// Ruta del archivo compartido con el oráculo, resuelta una vez al arrancar.
+    ruta_presets: PathBuf,
+    /// Preset abierto en el panel de estilos. Si el archivo traía presets, el
+    /// primero; `None` solo si el panel no tiene nada que mostrar (no pasa:
+    /// siempre hay al menos la semilla).
+    preset_seleccionado: Option<String>,
+    /// Texto a medias de los campos numéricos, por id de preset y campo. Sin
+    /// esto, escribir `72.5` se quedaría en `72` al llegar al punto.
+    borradores_preset: HashMap<(String, CampoPreset), String>,
     /// Resultado de la última acción que no tiene otro lugar donde contarse
     /// (exportar, por ahora). iced no tiene toasts; la barra de estado es el
     /// sitio donde el usuario ya mira el estado del proyecto.
@@ -246,9 +293,12 @@ impl Estado {
         let audio_tracks = player.audio_tracks();
         let selected_audio = audio_tracks.first().cloned();
         let velocidad = Velocidad(player.speed() as f32);
-        // Los presets se leen una sola vez: el panel para editarlos llega en
-        // el slice 7d, así que nada los cambia en caliente todavía.
-        let presets = presets_io::leer(&presets_io::ruta());
+        // Los presets se leen del archivo que comparte el oráculo. El panel de
+        // estilos escribe en esa misma ruta, así que la próxima sesión arranca
+        // con lo que el usuario dejó guardado.
+        let ruta_presets = presets_io::ruta();
+        let presets = presets_io::leer(&ruta_presets);
+        let preset_seleccionado = presets.first().map(|preset| preset.id.clone());
         let ass = ass_del_proyecto(&editor, &presets);
         let subtitles = rod_subs::Subtitulos::nuevo(WIDTH as u32, HEIGHT as u32, &ass);
         let limpio = editor.proyecto().clone();
@@ -268,6 +318,7 @@ impl Estado {
             selected_audio,
             velocidad,
             borrador: String::new(),
+            panel: Panel::Subtitulos,
             editando_hablante: None,
             arrastre: None,
             // 15 s caben en ~750 px: el clip de prueba entra completo.
@@ -287,6 +338,9 @@ impl Estado {
             // el proyecto limpio y no escribe nada.
             ultimo_chequeo: 0.0,
             presets,
+            ruta_presets,
+            preset_seleccionado,
+            borradores_preset: HashMap::new(),
             mensaje: None,
         };
         refrescar_preview(&mut estado);
@@ -547,6 +601,19 @@ fn refrescar_preview(state: &mut Estado) {
             .map(Capa::desde)
             .collect(),
     );
+}
+
+/// Cada cambio del panel de estilos se guarda al instante, como en el oráculo:
+/// no hay botón «Guardar» y cerrar la app no debe perder lo que se acaba de
+/// teclear. El preview se recarga con la misma lista, así que lo que se ve es
+/// lo que se escribió en el `.ass`.
+fn guardar_presets(state: &mut Estado) -> Task<Message> {
+    state.mensaje = match presets_io::escribir(&state.ruta_presets, &state.presets) {
+        Ok(()) => None,
+        Err(error) => Some(format!("No se pudieron guardar los estilos: {error}")),
+    };
+    refrescar_preview(state);
+    Task::none()
 }
 
 /// El `text_input` muestra el texto del caption seleccionado. Sin selección
@@ -871,6 +938,73 @@ fn update(state: &mut Estado, message: Message) -> Task<Message> {
                 refrescar_preview(state);
             }
         }
+        Message::AsignarPreset(hablante_id, preset_id) => {
+            state.editando_hablante = None;
+            if state.editor.asignar_preset(&hablante_id, preset_id) {
+                refrescar_preview(state);
+            }
+        }
+        Message::Panel(panel) => {
+            state.panel = panel;
+            state.editando_hablante = None;
+        }
+        Message::SeleccionarPreset(id) => {
+            state.preset_seleccionado = Some(id);
+        }
+        Message::NuevoPreset => {
+            // Parte del preset abierto: casi siempre se quiere ajustar lo que
+            // ya gusta, no volver de cero. El nombre se renumera solo.
+            let base = state
+                .presets
+                .iter()
+                .find(|preset| Some(&preset.id) == state.preset_seleccionado.as_ref())
+                .or_else(|| state.presets.first())
+                .cloned();
+            let Some(base) = base else {
+                return Task::none();
+            };
+            let nombres = state
+                .presets
+                .iter()
+                .map(|preset| preset.nombre.clone())
+                .collect::<Vec<_>>();
+            let mut nuevo = nuevo_preset_desde(&base);
+            nuevo.nombre = nombre_libre(&base.nombre, &nombres);
+            state.preset_seleccionado = Some(nuevo.id.clone());
+            state.presets.push(nuevo);
+            return guardar_presets(state);
+        }
+        Message::BorrarPreset => {
+            if state.presets.len() <= 1 {
+                return Task::none();
+            }
+            let Some(id) = state.preset_seleccionado.clone() else {
+                return Task::none();
+            };
+            state.presets.retain(|preset| preset.id != id);
+            state
+                .borradores_preset
+                .retain(|(preset_id, _), _| preset_id != &id);
+            state.preset_seleccionado = state.presets.first().map(|preset| preset.id.clone());
+            // No se toca `preset_id` de los hablantes: el oráculo tampoco lo
+            // limpia, y `ass_del_proyecto` ya cae al Default si el id no existe.
+            return guardar_presets(state);
+        }
+        Message::EditarPreset(id, campo, texto) => {
+            let aplicado = state
+                .presets
+                .iter_mut()
+                .find(|preset| preset.id == id)
+                .is_some_and(|preset| aplicar_campo(preset, campo, &texto));
+            if !aplicado {
+                // Valor a medias: el preset sigue intacto y el `text_input`
+                // muestra este texto hasta que sea aceptable.
+                state.borradores_preset.insert((id, campo), texto);
+                return Task::none();
+            }
+            state.borradores_preset.remove(&(id.clone(), campo));
+            return guardar_presets(state);
+        }
         Message::Timeline(mensaje) => match mensaje {
             timeline::Mensaje::Ancho(ancho) => {
                 let primera_medida = state.ancho_timeline <= 0.0;
@@ -1063,7 +1197,19 @@ fn view(state: &Estado) -> Element<'_, Message> {
     let left = column![video, transport]
         .width(Length::FillPortion(3))
         .height(Length::Fill);
-    let right = column![subtitle_panel(state), speakers_panel(state),]
+    let pestanas = row![
+        pestana("Subtítulos", Panel::Subtitulos, state.panel),
+        pestana("Hablantes", Panel::Hablantes, state.panel),
+        pestana("Estilos", Panel::Estilos, state.panel),
+    ]
+    .spacing(4)
+    .padding(4);
+    let contenido = match state.panel {
+        Panel::Subtitulos => subtitle_panel(state),
+        Panel::Hablantes => speakers_panel(state),
+        Panel::Estilos => styles_panel(state),
+    };
+    let right = column![pestanas, contenido]
         .width(Length::FillPortion(2))
         .height(Length::Fill);
     let timeline = container(
@@ -1105,6 +1251,18 @@ fn view(state: &Estado) -> Element<'_, Message> {
         status_bar(state),
     ]
     .into()
+}
+
+fn pestana(etiqueta: &'static str, destino: Panel, actual: Panel) -> Element<'static, Message> {
+    button(etiqueta)
+        .on_press(Message::Panel(destino))
+        .width(Length::Fill)
+        .style(if actual == destino {
+            boton_activo
+        } else {
+            boton
+        })
+        .into()
 }
 
 /// Aviso de copia automática al arrancar. `None` (sin recovery pendiente) se
@@ -1184,7 +1342,7 @@ fn subtitle_panel(state: &Estado) -> Element<'_, Message> {
         .spacing(14)
         .padding(14),
     )
-    .width(Length::FillPortion(2))
+    .width(Length::Fill)
     .height(Length::Fill)
     .style(panel)
     .into()
@@ -1192,13 +1350,29 @@ fn subtitle_panel(state: &Estado) -> Element<'_, Message> {
 
 fn speakers_panel(state: &Estado) -> Element<'_, Message> {
     let hablantes = state.editor.proyecto().hablantes.as_slice();
+    // Una sola lista de opciones para todas las filas: el `pick_list` la pide
+    // por valor, así que se clona por hablante (son unos pocos presets).
+    let mut opciones = vec![OpcionPreset {
+        id: None,
+        nombre: "Sin preset".into(),
+    }];
+    opciones.extend(state.presets.iter().map(|preset| OpcionPreset {
+        id: Some(preset.id.clone()),
+        nombre: preset.nombre.clone(),
+    }));
+
     let rows = hablantes
         .iter()
         .map(|hablante| {
             let id_nombre = hablante.id.clone();
             let id_tecla = hablante.id.clone();
             let id_asignar = hablante.id.clone();
+            let id_preset = hablante.id.clone();
             let hay_seleccion = !state.editor.seleccion.is_empty();
+            let seleccionado = opciones
+                .iter()
+                .find(|opcion| opcion.id == hablante.preset_id)
+                .cloned();
             row![
                 text_input("Nombre", &hablante.nombre).on_input(move |texto| {
                     Message::EditarHablante(id_nombre.clone(), CampoHablante::Nombre, texto)
@@ -1210,6 +1384,14 @@ fn speakers_panel(state: &Estado) -> Element<'_, Message> {
                         texto
                     ))
                     .width(44),
+                pick_list(
+                    opciones.clone(),
+                    seleccionado,
+                    move |opcion: OpcionPreset| {
+                        Message::AsignarPreset(id_preset.clone(), opcion.id)
+                    }
+                )
+                .width(140),
                 button("Asignar").on_press_maybe(
                     hay_seleccion.then(|| Message::AsignarHablante(Some(id_asignar.clone())))
                 ),
@@ -1235,9 +1417,8 @@ fn speakers_panel(state: &Estado) -> Element<'_, Message> {
                 ),
             ]
             .spacing(12),
-            // El oráculo pinta aquí el dot con el color del preset `.ass`; sin
-            // panel de estilos no hay preset que mostrar y `Hablante.color`
-            // sería un color que el `.ass` exportado no usa.
+            // El oráculo pinta aquí el dot con el color del preset `.ass`; aquí
+            // el selector de estilo hace visible qué preset usa cada hablante.
             text("SPEAKERS").size(14),
             scrollable(column(rows).spacing(6)),
         ]
@@ -1245,7 +1426,156 @@ fn speakers_panel(state: &Estado) -> Element<'_, Message> {
         .padding(14),
     )
     .width(Length::Fill)
-    .height(240)
+    .height(Length::Fill)
+    .style(panel)
+    .into()
+}
+
+const ORDEN_ALINEACION: [i32; 9] = [7, 8, 9, 4, 5, 6, 1, 2, 3];
+const GLIFOS_ALINEACION: [&str; 9] = ["↖", "↑", "↗", "←", "•", "→", "↙", "↓", "↘"];
+
+/// Un campo de texto del preset. El borrador (si hay uno a medias) tapa al
+/// valor guardado; el `update` lo descarta en cuanto `aplicar_campo` lo acepta.
+fn campo_texto<'a>(
+    preset: &'a PresetAss,
+    campo: CampoPreset,
+    etiqueta: &'static str,
+    borradores: &'a HashMap<(String, CampoPreset), String>,
+) -> Element<'a, Message> {
+    let valor = valor_campo(preset, campo, borradores);
+    let id = preset.id.clone();
+    row![
+        text(etiqueta).width(96),
+        text_input(etiqueta, &valor)
+            .on_input(move |texto| Message::EditarPreset(id.clone(), campo, texto))
+            .width(190),
+    ]
+    .spacing(8)
+    .into()
+}
+
+/// Panel de estilos: la lista de presets del oráculo, sus campos y la
+/// alineación en cuadrícula (7-9 arriba, 1-3 abajo, como libass piensa).
+/// Cada cambio escribe `presets_ass.json` y recarga el preview: no hay botón
+/// de guardar porque el oráculo tampoco lo tiene.
+fn styles_panel(state: &Estado) -> Element<'_, Message> {
+    let seleccionado = state
+        .presets
+        .iter()
+        .find(|preset| Some(&preset.id) == state.preset_seleccionado.as_ref())
+        .or_else(|| state.presets.first());
+
+    let Some(preset) = seleccionado else {
+        return container(text("Sin presets"))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(panel)
+            .into();
+    };
+
+    let lista = state
+        .presets
+        .iter()
+        .map(|otro| {
+            let activo = otro.id == preset.id;
+            button(row![
+                text(if activo { "●" } else { " " }).size(12),
+                text(otro.nombre.clone()),
+            ])
+            .on_press(Message::SeleccionarPreset(otro.id.clone()))
+            .width(Length::Fill)
+            .style(if activo { boton_activo } else { boton })
+            .into()
+        })
+        .collect::<Vec<Element<'_, Message>>>();
+
+    let alineacion = ORDEN_ALINEACION
+        .iter()
+        .zip(GLIFOS_ALINEACION.iter())
+        .collect::<Vec<_>>()
+        .chunks(3)
+        .map(|fila| {
+            row(fila.iter().map(|(valor, glifo)| {
+                let glifo = **glifo;
+                let valor = **valor;
+                button(text(glifo))
+                    .on_press(Message::EditarPreset(
+                        preset.id.clone(),
+                        CampoPreset::Alignment,
+                        valor.to_string(),
+                    ))
+                    .width(38)
+                    .style(if preset.alignment == valor {
+                        boton_activo
+                    } else {
+                        boton
+                    })
+                    .into()
+            }))
+            .spacing(4)
+            .into()
+        })
+        .collect::<Vec<Element<'_, Message>>>();
+
+    let borradores = &state.borradores_preset;
+    container(scrollable(
+        column![
+            row![
+                text("Styles").size(20),
+                // Sin `space::horizontal()`: dentro de un `scrollable` el
+                // espacio elástico crece sin límite y empuja los botones
+                // fuera del viewport.
+                button("＋").on_press(Message::NuevoPreset).width(36),
+                button("Borrar")
+                    .on_press_maybe((state.presets.len() > 1).then_some(Message::BorrarPreset)),
+            ]
+            .spacing(8),
+            text("PRESETS").size(14),
+            column(lista).spacing(4),
+            text("ESTILO").size(14),
+            campo_texto(preset, CampoPreset::Nombre, "Nombre", borradores),
+            campo_texto(preset, CampoPreset::Fontname, "Fuente", borradores),
+            campo_texto(preset, CampoPreset::Fontsize, "Tamaño", borradores),
+            campo_texto(preset, CampoPreset::Outline, "Contorno", borradores),
+            campo_texto(preset, CampoPreset::Shadow, "Sombra", borradores),
+            campo_texto(preset, CampoPreset::MarginL, "Margen L", borradores),
+            campo_texto(preset, CampoPreset::MarginR, "Margen R", borradores),
+            campo_texto(preset, CampoPreset::MarginV, "Margen V", borradores),
+            campo_texto(preset, CampoPreset::Color, "Color", borradores),
+            campo_texto(
+                preset,
+                CampoPreset::OutlineColor,
+                "Color contorno",
+                borradores
+            ),
+            row![text("Alineación").width(96), column(alineacion).spacing(4),].spacing(8),
+            row![
+                text("Peso").width(96),
+                button("B")
+                    .on_press(Message::EditarPreset(
+                        preset.id.clone(),
+                        CampoPreset::Bold,
+                        (!preset.bold).to_string(),
+                    ))
+                    .width(38)
+                    .style(if preset.bold { boton_activo } else { boton }),
+                button("I")
+                    .on_press(Message::EditarPreset(
+                        preset.id.clone(),
+                        CampoPreset::Italic,
+                        (!preset.italic).to_string(),
+                    ))
+                    .width(38)
+                    .style(if preset.italic { boton_activo } else { boton }),
+            ]
+            .spacing(8),
+            text("Cada cambio se guarda y se aplica al preview.").size(11),
+        ]
+        .spacing(8)
+        .padding(14),
+    ))
+    .width(Length::Fill)
+    .height(Length::Fill)
     .style(panel)
     .into()
 }

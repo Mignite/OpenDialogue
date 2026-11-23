@@ -378,9 +378,18 @@ el seguimiento del timeline se mueven con el reloj real del player.
   al arrancar. Las otras dos exportaciones son puras:
   `project_io::exportar_srt_por_hablante` devuelve los archivos y el reporte de
   solapes, y `exportar_json_combinado` devuelve el texto; el `update` solo pone
-  el diálogo de carpeta y la E/S. El diálogo de estilos del oráculo (editar
-  presets y asignarlos al exportar) es el slice 7d: mientras tanto se exporta
-  con la asignación guardada en cada hablante.
+  el diálogo de carpeta y la E/S.
+- **Estilos: columna derecha con pestañas, edición directa y guardado
+  inmediato.** `Panel::{Subtitulos,Hablantes,Estilos}` reparte la altura de la
+  columna derecha (el oráculo hace lo mismo con `PanelTabs`). Cada hablante
+  elige su preset en la pestaña «Hablantes» y ese `preset_id` viaja en el
+  `.cdp`. La pestaña «Estilos» edita los presets del archivo compartido: los
+  borradores por `(id de preset, campo)` permiten escribir decimales a medias,
+  y `presets_edicion::aplicar_campo` es la única puerta de conversión de texto
+  a valor (pura y testeable sin iced). Cada cambio aceptado escribe
+  `presets_ass.json` y recarga el preview con la misma lista; no hay botón de
+  guardar porque los presets no viven en el historial del proyecto. Fuente y
+  color son campos de texto (sin selector de fuentes ni color picker).
 
 ### 4.5 Flujo de un frame
 
@@ -453,9 +462,10 @@ warnings` y `cargo test` en verde, en Windows y en Linux.
 - **Slice 6 — timeline.** Carriles por hablante, clips, drag de bordes y en
   bloque, marquee, snap, zoom y pan.
 - **Slice 7 - proyecto.** Guardar/cargar JSON, importar SRT y ASS, exportar SRT
-  por hablante, JSON combinado y `.ass` con presets. Copia automática
-  (`recovery.json`) mientras hay cambios sin guardar, ofrecida al arrancar;
-  guardar con Ctrl+S la borra.
+  por hablante, JSON combinado y `.ass` con presets. Asignar un preset por
+  hablante y editar los presets en el panel de estilos con guardado inmediato.
+  Copia automática (`recovery.json`) mientras hay cambios sin guardar,
+  ofrecida al arrancar; guardar con Ctrl+S la borra.
 - **Slice 8 — empaquetado.** NSIS en Windows, `.deb`/AppImage en Linux, con las
   DLLs de libmpv y libass.
 

@@ -220,6 +220,30 @@ impl EstadoEditor {
         true
     }
 
+    /// Asigna (o quita, con `None`) el preset `.ass` de un hablante. Elegir un
+    /// preset en una lista es un cambio discreto, así que registra un paso de
+    /// historial propio; teclear el nombre de un preset no (eso es del panel de
+    /// estilos, que vive fuera del historial del proyecto).
+    pub fn asignar_preset(&mut self, id: &str, preset_id: Option<String>) -> bool {
+        let Some(hablante) = self.hablante(id) else {
+            return false;
+        };
+        if hablante.preset_id == preset_id {
+            return false;
+        }
+        self.registrar_historial();
+        if let Some(hablante) = self
+            .documento
+            .proyecto
+            .hablantes
+            .iter_mut()
+            .find(|hablante| hablante.id == id)
+        {
+            hablante.preset_id = preset_id;
+        }
+        true
+    }
+
     /// Borra el hablante y suelta sus captions (`hablante_id = None`), como el
     /// oráculo. Un solo paso de historial: sin eso, deshacer devolvería el
     /// hablante pero los captions quedarían huérfanos.
@@ -416,6 +440,31 @@ mod tests {
             editor.proyecto().captions[2].hablante_id.as_deref(),
             Some("speaker")
         );
+    }
+
+    #[test]
+    fn asignar_preset_es_un_paso_de_historial_y_deshacer_lo_devuelve() {
+        let mut editor = editor();
+        let hablante = editor.agregar_hablante().expect("hay espacio");
+        assert_eq!(editor.hablante(&hablante).expect("existe").preset_id, None);
+
+        assert!(editor.asignar_preset(&hablante, Some("p-cine".into())));
+        assert_eq!(
+            editor
+                .hablante(&hablante)
+                .expect("existe")
+                .preset_id
+                .as_deref(),
+            Some("p-cine")
+        );
+        assert!(editor.deshacer());
+        assert_eq!(editor.hablante(&hablante).expect("existe").preset_id, None);
+
+        // Repetir el mismo preset no deja un paso vacío de historial.
+        assert!(editor.asignar_preset(&hablante, Some("p-cine".into())));
+        assert!(!editor.asignar_preset(&hablante, Some("p-cine".into())));
+        // Un hablante que no existe no cambia nada.
+        assert!(!editor.asignar_preset("sp-99", Some("p-cine".into())));
     }
 
     fn texto_de(editor: &EstadoEditor, id: &str) -> String {
