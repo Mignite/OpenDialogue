@@ -19,6 +19,8 @@ use iced::widget::canvas::{self, Canvas, Frame, Geometry, Path, Program, Text};
 use iced::{Color, Point, Rectangle, Renderer, Size, Theme, mouse};
 use rod_core::{Caption, Proyecto, agrupar_captions_por_carril};
 
+use crate::tema;
+
 /// Altura de la regla de tiempo (arriba del todo).
 pub const ALTO_REGLA: f32 = 22.0;
 /// Altura de cada carril.
@@ -38,10 +40,10 @@ pub const EDGE_TRIGGER: f64 = 0.92;
 pub const NEW_MARGIN: f64 = 0.08;
 pub const LERP: f64 = 0.12;
 
-const FONDO: Color = Color::from_rgb(0.03, 0.04, 0.06);
-const SEPARADOR: Color = Color::from_rgb(0.14, 0.16, 0.20);
-const TEXTO: Color = Color::from_rgb(0.62, 0.66, 0.74);
-const PLAYHEAD: Color = Color::from_rgb(0.95, 0.36, 0.32);
+const FONDO: Color = tema::SUPERFICIE;
+const SEPARADOR: Color = tema::HAIRLINE;
+const TEXTO: Color = tema::SECUNDARIO;
+const PLAYHEAD: Color = tema::MOSTAZA;
 const CARRIL_VACIO: Color = Color::from_rgb(0.28, 0.30, 0.34);
 /// Paleta de carriles mientras no hay presets: el color del `.ass` es del
 /// hablante (slice 7), aquí es solo una ayuda para distinguir carriles.

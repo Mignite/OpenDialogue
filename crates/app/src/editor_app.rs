@@ -5,7 +5,7 @@ use std::sync::Arc;
 use iced::widget::{
     button, column, container, pick_list, row, scrollable, shader, slider, space, text, text_input,
 };
-use iced::{Background, Color, Element, Length, Subscription, Task};
+use iced::{Background, Element, Length, Subscription, Task};
 
 use crate::comandos::Comando;
 use crate::editor::{EstadoEditor, MAX_HABLANTES, normalizar_tecla};
@@ -19,7 +19,7 @@ use crate::project_io::{
 use crate::recovery_io::{self, AvisoRecovery};
 use crate::timeline::{self, Vista};
 use crate::video::{Capa, Video};
-use crate::{recientes, thumbnail};
+use crate::{recientes, tema, thumbnail};
 use rod_core::{PresetAss, Proyecto, nombre_libre, nuevo_preset_desde};
 use rod_player::AudioTrack;
 
@@ -1435,16 +1435,26 @@ pub fn view(state: &EditorApp) -> Element<'_, MensajeEditor> {
     let transport = container(
         column![
             row![
-                button("Abrir video").on_press(MensajeEditor::AbrirVideo),
-                button("Abrir .cdp").on_press(MensajeEditor::AbrirProyecto),
-                button("Guardar").on_press(MensajeEditor::GuardarProyecto),
+                button("Abrir video")
+                    .style(tema::boton_secundario)
+                    .on_press(MensajeEditor::AbrirVideo),
+                button("Abrir .cdp")
+                    .style(tema::boton_secundario)
+                    .on_press(MensajeEditor::AbrirProyecto),
+                button("Guardar")
+                    .style(tema::boton_primario)
+                    .on_press(MensajeEditor::GuardarProyecto),
                 // Ancho fijo: si no, el botón cambia de tamaño al alternar y la
                 // fila entera se corre bajo el cursor.
                 button(if state.paused { "▶" } else { "❚❚" })
                     .on_press(MensajeEditor::PlayPause)
                     .width(44),
-                button("−5 s").on_press(MensajeEditor::Step(-5.0)),
-                button("+5 s").on_press(MensajeEditor::Step(5.0)),
+                button("−5 s")
+                    .style(tema::boton_secundario)
+                    .on_press(MensajeEditor::Step(-5.0)),
+                button("+5 s")
+                    .style(tema::boton_secundario)
+                    .on_press(MensajeEditor::Step(5.0)),
                 pick_list(
                     state.audio_tracks.clone(),
                     state.selected_audio.clone(),
@@ -1461,9 +1471,15 @@ pub fn view(state: &EditorApp) -> Element<'_, MensajeEditor> {
             .spacing(8),
             row![
                 text("Exportar").size(12),
-                button("SRT por hablante").on_press(MensajeEditor::ExportarSrtHablantes),
-                button("JSON combinado").on_press(MensajeEditor::ExportarJson),
-                button(".ass").on_press(MensajeEditor::ExportarAss),
+                button("SRT por hablante")
+                    .style(tema::boton_secundario)
+                    .on_press(MensajeEditor::ExportarSrtHablantes),
+                button("JSON combinado")
+                    .style(tema::boton_secundario)
+                    .on_press(MensajeEditor::ExportarJson),
+                button(".ass")
+                    .style(tema::boton_secundario)
+                    .on_press(MensajeEditor::ExportarAss),
             ]
             .spacing(8)
             .align_y(iced::Center),
@@ -1519,8 +1535,12 @@ pub fn view(state: &EditorApp) -> Element<'_, MensajeEditor> {
                     .on_press(MensajeEditor::Seguir)
                     .width(62)
                     .style(if state.seguir { boton_activo } else { boton }),
-                button("+").on_press(MensajeEditor::Zoom(1.5)).width(62),
+                button("+")
+                    .style(tema::boton_secundario)
+                    .on_press(MensajeEditor::Zoom(1.5))
+                    .width(62),
                 button("−")
+                    .style(tema::boton_secundario)
                     .on_press(MensajeEditor::Zoom(1.0 / 1.5))
                     .width(62),
             ]
@@ -1548,6 +1568,7 @@ fn pestana(
     actual: Panel,
 ) -> Element<'static, MensajeEditor> {
     button(etiqueta)
+        .style(tema::boton_secundario)
         .on_press(MensajeEditor::Panel(destino))
         .width(Length::Fill)
         .style(if actual == destino {
@@ -1570,8 +1591,12 @@ fn banner_recovery(state: &EditorApp) -> Option<Element<'_, MensajeEditor>> {
                 text("● COPIA AUTOMÁTICA").size(13),
                 text(aviso.texto.clone()),
                 space::horizontal(),
-                button("Recuperar").on_press(MensajeEditor::Recuperar),
-                button("Descartar").on_press(MensajeEditor::DescartarRecovery),
+                button("Recuperar")
+                    .style(tema::boton_secundario)
+                    .on_press(MensajeEditor::Recuperar),
+                button("Descartar")
+                    .style(tema::boton_secundario)
+                    .on_press(MensajeEditor::DescartarRecovery),
             ]
             .spacing(12)
             .padding([6, 12]),
@@ -1598,6 +1623,7 @@ fn subtitle_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                 caption.texto
             );
             button(text(label))
+                .style(tema::boton_secundario)
                 .on_press(MensajeEditor::Seleccionar(caption.id.clone()))
                 .width(Length::Fill)
                 .into()
@@ -1610,6 +1636,7 @@ fn subtitle_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                 text("Subtitles").size(20),
                 space::horizontal(),
                 button("↶")
+                    .style(tema::boton_secundario)
                     .on_press_maybe(
                         state
                             .editor
@@ -1618,6 +1645,7 @@ fn subtitle_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                     )
                     .width(44),
                 button("↷")
+                    .style(tema::boton_secundario)
                     .on_press_maybe(
                         state
                             .editor
@@ -1625,19 +1653,25 @@ fn subtitle_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                             .then_some(MensajeEditor::Rehacer)
                     )
                     .width(44),
-                button("Borrar").on_press_maybe(
-                    (!state.editor.seleccion.is_empty()).then_some(MensajeEditor::BorrarSeleccion)
-                ),
+                button("Borrar")
+                    .style(tema::boton_secundario)
+                    .on_press_maybe(
+                        (!state.editor.seleccion.is_empty())
+                            .then_some(MensajeEditor::BorrarSeleccion)
+                    ),
             ]
             .spacing(12),
             row![
                 text_input("Texto del subtítulo", &state.borrador)
                     .id(ID_TEXTO_SUBTITULO)
+                    .style(tema::entrada)
                     .on_input(MensajeEditor::Borrador)
                     .on_submit(MensajeEditor::AplicarTexto),
-                button("Aplicar").on_press_maybe(
-                    (state.editor.seleccion.len() == 1).then_some(MensajeEditor::AplicarTexto)
-                ),
+                button("Aplicar")
+                    .style(tema::boton_secundario)
+                    .on_press_maybe(
+                        (state.editor.seleccion.len() == 1).then_some(MensajeEditor::AplicarTexto)
+                    ),
             ]
             .spacing(8),
             text("CAPTIONS").size(14),
@@ -1682,6 +1716,7 @@ fn speakers_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                     MensajeEditor::EditarHablante(id_nombre.clone(), CampoHablante::Nombre, texto)
                 }),
                 text_input("1", &hablante.tecla)
+                    .style(tema::entrada)
                     .on_input(move |texto| MensajeEditor::EditarHablante(
                         id_tecla.clone(),
                         CampoHablante::Tecla,
@@ -1696,10 +1731,14 @@ fn speakers_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                     }
                 )
                 .width(140),
-                button("Asignar").on_press_maybe(
-                    hay_seleccion.then(|| MensajeEditor::AsignarHablante(Some(id_asignar.clone())))
-                ),
+                button("Asignar")
+                    .style(tema::boton_secundario)
+                    .on_press_maybe(
+                        hay_seleccion
+                            .then(|| MensajeEditor::AsignarHablante(Some(id_asignar.clone())))
+                    ),
                 button("×")
+                    .style(tema::boton_secundario)
                     .on_press(MensajeEditor::BorrarHablante(hablante.id.clone()))
                     .width(36),
             ]
@@ -1713,11 +1752,13 @@ fn speakers_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
             row![
                 text("Speakers").size(20),
                 space::horizontal(),
-                button("Sin hablante").on_press_maybe(
-                    (!state.editor.seleccion.is_empty())
-                        .then_some(MensajeEditor::AsignarHablante(None))
-                ),
-                button("＋").on_press_maybe(
+                button("Sin hablante")
+                    .style(tema::boton_secundario)
+                    .on_press_maybe(
+                        (!state.editor.seleccion.is_empty())
+                            .then_some(MensajeEditor::AsignarHablante(None))
+                    ),
+                button("＋").style(tema::boton_secundario).on_press_maybe(
                     (hablantes.len() < MAX_HABLANTES).then_some(MensajeEditor::AgregarHablante)
                 ),
             ]
@@ -1752,6 +1793,7 @@ fn campo_texto<'a>(
     row![
         text(etiqueta).width(96),
         text_input(etiqueta, &valor)
+            .style(tema::entrada)
             .on_input(move |texto| MensajeEditor::EditarPreset(id.clone(), campo, texto))
             .width(190),
     ]
@@ -1804,6 +1846,7 @@ fn styles_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                 let glifo = **glifo;
                 let valor = **valor;
                 button(text(glifo))
+                    .style(tema::boton_secundario)
                     .on_press(MensajeEditor::EditarPreset(
                         preset.id.clone(),
                         CampoPreset::Alignment,
@@ -1830,10 +1873,15 @@ fn styles_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                 // Sin `space::horizontal()`: dentro de un `scrollable` el
                 // espacio elástico crece sin límite y empuja los botones
                 // fuera del viewport.
-                button("＋").on_press(MensajeEditor::NuevoPreset).width(36),
-                button("Borrar").on_press_maybe(
-                    (state.presets.len() > 1).then_some(MensajeEditor::BorrarPreset)
-                ),
+                button("＋")
+                    .style(tema::boton_secundario)
+                    .on_press(MensajeEditor::NuevoPreset)
+                    .width(36),
+                button("Borrar")
+                    .style(tema::boton_secundario)
+                    .on_press_maybe(
+                        (state.presets.len() > 1).then_some(MensajeEditor::BorrarPreset)
+                    ),
             ]
             .spacing(8),
             text("PRESETS").size(14),
@@ -1858,6 +1906,7 @@ fn styles_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
             row![
                 text("Peso").width(96),
                 button("B")
+                    .style(tema::boton_secundario)
                     .on_press(MensajeEditor::EditarPreset(
                         preset.id.clone(),
                         CampoPreset::Bold,
@@ -1866,6 +1915,7 @@ fn styles_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                     .width(38)
                     .style(if preset.bold { boton_activo } else { boton }),
                 button("I")
+                    .style(tema::boton_secundario)
                     .on_press(MensajeEditor::EditarPreset(
                         preset.id.clone(),
                         CampoPreset::Italic,
@@ -1916,67 +1966,31 @@ fn status_bar(state: &EditorApp) -> Element<'_, MensajeEditor> {
     .into()
 }
 
-fn black_panel(_theme: &iced::Theme) -> container::Style {
-    container::Style {
-        background: Some(Background::Color(Color::BLACK)),
-        ..container::Style::default()
-    }
+fn black_panel(theme: &iced::Theme) -> container::Style {
+    let mut estilo = tema::fondo(theme);
+    estilo.background = Some(Background::Color(tema::SUPERFICIE));
+    estilo
 }
 
-fn panel(_theme: &iced::Theme) -> container::Style {
-    container::Style {
-        background: Some(Background::Color(Color::from_rgb(0.04, 0.05, 0.07))),
-        border: iced::Border {
-            color: Color::from_rgb(0.16, 0.18, 0.22),
-            width: 1.0,
-            radius: 0.0.into(),
-        },
-        ..container::Style::default()
-    }
+fn panel(theme: &iced::Theme) -> container::Style {
+    tema::panel(theme)
 }
 
-/// Aviso de recuperación: ámbar sobre el fondo oscuro. No es un error (no se
+/// Aviso de recuperación: mostaza sobre fondo oscuro. No es un error (no se
 /// perdió nada todavía), pero sí algo que reclama una decisión.
-fn banner(_theme: &iced::Theme) -> container::Style {
-    container::Style {
-        background: Some(Background::Color(Color::from_rgb(0.22, 0.16, 0.05))),
-        text_color: Some(Color::from_rgb(0.95, 0.80, 0.55)),
-        border: iced::Border {
-            color: Color::from_rgb(0.55, 0.40, 0.12),
-            width: 1.0,
-            radius: 0.0.into(),
-        },
-        ..container::Style::default()
-    }
+fn banner(theme: &iced::Theme) -> container::Style {
+    tema::aviso(theme)
 }
 
-/// Botón encendido: el estilo por defecto no distingue un toggle de un botón
-/// cualquiera, y «sigue»/«manual» es un estado, no una acción.
-fn boton_activo(_theme: &iced::Theme, _status: button::Status) -> button::Style {
-    button::Style {
-        background: Some(Background::Color(Color::from_rgb(0.16, 0.30, 0.52))),
-        text_color: Color::WHITE,
-        border: iced::Border {
-            color: Color::from_rgb(0.31, 0.49, 0.91),
-            width: 1.0,
-            radius: 2.0.into(),
-        },
-        ..button::Style::default()
-    }
+/// Toggle encendido: el mostaza marca el estado activo, igual que la acción
+/// principal del arranque.
+fn boton_activo(theme: &iced::Theme, status: button::Status) -> button::Style {
+    tema::boton_primario(theme, status)
 }
 
-/// Botón apagado, con la forma del encendido para que el toggle no baile.
-fn boton(_theme: &iced::Theme, _status: button::Status) -> button::Style {
-    button::Style {
-        background: Some(Background::Color(Color::from_rgb(0.07, 0.08, 0.11))),
-        text_color: Color::from_rgb(0.62, 0.66, 0.74),
-        border: iced::Border {
-            color: Color::from_rgb(0.16, 0.18, 0.22),
-            width: 1.0,
-            radius: 2.0.into(),
-        },
-        ..button::Style::default()
-    }
+/// Toggle apagado, con la forma del encendido para que el toggle no baile.
+fn boton(theme: &iced::Theme, status: button::Status) -> button::Style {
+    tema::boton_secundario(theme, status)
 }
 
 #[cfg(test)]

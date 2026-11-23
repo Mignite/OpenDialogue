@@ -59,7 +59,9 @@ las capturas son de la app, no mockups.
 ## Verificación que NO se hizo
 
 - No se capturó el editor con el menú: abrir un video requiere el diálogo del
-  SO y no se automatizó el gesto.
+  SO; se intentó automatizar el clic, pero el foco fue a otra ventana y la
+  captura resultante no sirvió. El cambio visual del editor se verificó con
+  build, clippy y tests, no con una imagen. Queda pendiente una captura manual.
 - No se pulsaron los atajos en la GUI real; la cobertura es de las funciones
   puras de mapeo y del despachador. Queda pendiente una pasada manual de
   Ctrl+S, Ctrl+O, Space y las flechas.

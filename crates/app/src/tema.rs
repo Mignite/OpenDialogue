@@ -78,6 +78,37 @@ pub fn boton_menu(_theme: &iced::Theme, status: button::Status) -> button::Style
     }
 }
 
+pub fn entrada(
+    _theme: &iced::Theme,
+    _status: iced::widget::text_input::Status,
+) -> iced::widget::text_input::Style {
+    iced::widget::text_input::Style {
+        background: Background::Color(PANEL),
+        border: Border {
+            color: HAIRLINE,
+            width: 1.0,
+            radius: RADIO.into(),
+        },
+        icon: SECUNDARIO,
+        placeholder: SECUNDARIO,
+        value: TEXTO,
+        selection: MOSTAZA,
+    }
+}
+
+pub fn aviso(_theme: &iced::Theme) -> iced::widget::container::Style {
+    iced::widget::container::Style {
+        background: Some(Background::Color(Color::from_rgb(0.18, 0.14, 0.04))),
+        text_color: Some(MOSTAZA),
+        border: Border {
+            color: MOSTAZA,
+            width: 1.0,
+            radius: RADIO.into(),
+        },
+        ..Default::default()
+    }
+}
+
 pub fn barra_menu(
     _theme: &iced::Theme,
     _status: iced_aw::style::Status,
