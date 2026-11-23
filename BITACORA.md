@@ -332,3 +332,23 @@ cara.
   (45196981951) ya había pasado en Ubuntu, así que la corrección se verifica
   con un rerun posterior.
 - **Dónde quedó:** `crates/player/tests/controles.rs` y esta entrada.
+
+---
+
+## 2026-11-23 — el menú no mostraba recientes ni recovery en la prueba GUI
+
+- **Intentaba:** verificar con una captura que el menú lee `recientes.json` y
+  `recovery.json` de un `%APPDATA%` aislado.
+- **Error literal:** ninguno. La app arrancaba, pero la columna de recientes
+  estaba vacía y no aparecía el aviso; un `eprintln!` temporal decía
+  `recientes=0 aviso=false`.
+- **Qué estaba mal:** escribí los fixtures directamente en `%APPDATA%`, pero
+  `recovery_io::ruta()` y `recientes::ruta_indice()` añaden el subdirectorio
+  `RustyOpenDialogue`. El diagnóstico costó tres capturas porque el síntoma
+  parecía un fallo de parseo de serde, no una ruta mal compuesta.
+- **Qué aprendí:** antes de depurar el contenido de un archivo de configuración,
+  imprime la ruta resuelta. Un `eprintln!` de dos líneas separó «no lee» de
+  «no parsea» en un solo arranque. El `eprintln!` se quitó antes del commit.
+- **Dónde quedó:** `docs/checklists/slice-9-arranque.md` (evidencia y nota de
+  alcance), commit `861042f`.
+
