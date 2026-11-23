@@ -1,0 +1,263 @@
+//! Pantalla de arranque: arrastrar video, abrir proyecto, recientes y recovery.
+//!
+//! No conoce mpv ni el editor: solo decide qué quiere hacer el usuario.
+
+use std::path::{Path, PathBuf};
+
+use iced::widget::{button, column, container, row, scrollable, text};
+use iced::{Element, Length, Task};
+
+use crate::recientes::Reciente;
+use crate::recovery_io::AvisoRecovery;
+
+/// Lo que la vista necesita para dibujarse. Los recientes ya vienen resueltos
+/// (metadata leída del `.cdp` al arrancar); aquí no se toca ningún archivo.
+pub struct EstadoInicio {
+    pub recientes: Vec<Reciente>,
+    pub expandido: bool,
+    pub aviso: Option<AvisoRecovery>,
+    pub mensaje: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub enum MensajeInicio {
+    ArchivoSoltado(PathBuf),
+    AbrirVideo,
+    AbrirProyecto,
+    AbrirReciente(PathBuf),
+    VerTodos,
+    Recuperar,
+    DescartarRecovery,
+    DialogoVideo(Option<PathBuf>),
+    DialogoProyecto(Option<PathBuf>),
+}
+
+/// Una intención que el enrutador convierte en editor o en una acción de
+/// recovery. `inicio` no construye editores: solo dice qué se pidió.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Salida {
+    Video(PathBuf),
+    Proyecto(PathBuf),
+    Recuperar,
+    DescartarRecovery,
+}
+
+pub fn nuevo(recientes: Vec<Reciente>, aviso: Option<AvisoRecovery>) -> EstadoInicio {
+    EstadoInicio {
+        recientes,
+        expandido: false,
+        aviso,
+        mensaje: None,
+    }
+}
+
+/// Extensiones que el menú acepta. Es un filtro de interfaz: mpv decide si el
+/// archivo abre de verdad.
+fn es_video(ruta: &Path) -> bool {
+    ruta.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            ["mp4", "mkv", "mov", "webm"]
+                .iter()
+                .any(|valida| extension.eq_ignore_ascii_case(valida))
+        })
+}
+
+pub fn update(
+    estado: &mut EstadoInicio,
+    mensaje: MensajeInicio,
+) -> (Task<MensajeInicio>, Option<Salida>) {
+    match mensaje {
+        MensajeInicio::ArchivoSoltado(ruta) => {
+            if es_video(&ruta) {
+                estado.mensaje = None;
+                (Task::none(), Some(Salida::Video(ruta)))
+            } else {
+                estado.mensaje = Some("Ese archivo no es un video (mp4, mkv, mov o webm)".into());
+                (Task::none(), None)
+            }
+        }
+        MensajeInicio::AbrirVideo => (
+            Task::future(async {
+                let ruta = rfd::AsyncFileDialog::new()
+                    .add_filter("Video", &["mp4", "mkv", "mov", "webm"])
+                    .pick_file()
+                    .await
+                    .map(|archivo| archivo.path().to_path_buf());
+                MensajeInicio::DialogoVideo(ruta)
+            }),
+            None,
+        ),
+        MensajeInicio::AbrirProyecto => (
+            Task::future(async {
+                let ruta = rfd::AsyncFileDialog::new()
+                    .add_filter("Proyecto", &["cdp"])
+                    .pick_file()
+                    .await
+                    .map(|archivo| archivo.path().to_path_buf());
+                MensajeInicio::DialogoProyecto(ruta)
+            }),
+            None,
+        ),
+        MensajeInicio::DialogoVideo(Some(ruta)) => {
+            if es_video(&ruta) {
+                (Task::none(), Some(Salida::Video(ruta)))
+            } else {
+                estado.mensaje = Some("Ese archivo no es un video (mp4, mkv, mov o webm)".into());
+                (Task::none(), None)
+            }
+        }
+        MensajeInicio::DialogoProyecto(Some(ruta)) => (Task::none(), Some(Salida::Proyecto(ruta))),
+        MensajeInicio::DialogoVideo(None) | MensajeInicio::DialogoProyecto(None) => {
+            (Task::none(), None)
+        }
+        MensajeInicio::AbrirReciente(ruta) => (Task::none(), Some(Salida::Proyecto(ruta))),
+        MensajeInicio::VerTodos => {
+            estado.expandido = !estado.expandido;
+            (Task::none(), None)
+        }
+        MensajeInicio::Recuperar => (Task::none(), Some(Salida::Recuperar)),
+        MensajeInicio::DescartarRecovery => {
+            estado.aviso = None;
+            (Task::none(), Some(Salida::DescartarRecovery))
+        }
+    }
+}
+
+fn vista_recientes(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
+    let cantidad = if estado.expandido {
+        estado.recientes.len()
+    } else {
+        estado.recientes.len().min(3)
+    };
+    let entries = estado
+        .recientes
+        .iter()
+        .take(cantidad)
+        .map(|reciente| {
+            button(column![
+                text(
+                    reciente
+                        .ruta
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                ),
+                text(format!(
+                    "{} líneas · {} hablantes · {}",
+                    reciente.lineas, reciente.hablantes, reciente.fecha
+                )),
+            ])
+            .on_press(MensajeInicio::AbrirReciente(reciente.ruta.clone()))
+            .into()
+        })
+        .collect::<Vec<Element<'_, MensajeInicio>>>();
+
+    column![
+        row![
+            text("RECIENTES").width(Length::Fill),
+            button(if estado.expandido {
+                "Ver menos"
+            } else {
+                "Ver todos"
+            })
+            .on_press(MensajeInicio::VerTodos),
+        ],
+        scrollable(column(entries).spacing(6)),
+    ]
+    .spacing(10)
+    .into()
+}
+
+fn vista_aviso(aviso: &AvisoRecovery) -> Element<'_, MensajeInicio> {
+    column![
+        text(aviso.texto.clone()),
+        row![
+            button("Recuperar").on_press(MensajeInicio::Recuperar),
+            button("Descartar").on_press(MensajeInicio::DescartarRecovery),
+        ]
+        .spacing(8),
+    ]
+    .spacing(8)
+    .into()
+}
+
+pub fn view(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
+    let zona = container(
+        column![
+            text("[ > ]").size(40),
+            text("Arrastra un video aquí").size(22),
+            text("MP4, MKV, MOV o WebM"),
+            row![
+                button("Abrir video").on_press(MensajeInicio::AbrirVideo),
+                button("Abrir proyecto").on_press(MensajeInicio::AbrirProyecto),
+            ]
+            .spacing(10),
+            text(estado.mensaje.clone().unwrap_or_default()),
+        ]
+        .spacing(12)
+        .align_x(iced::alignment::Horizontal::Center),
+    )
+    .width(Length::FillPortion(2))
+    .padding(24)
+    .center_x(Length::Fill)
+    .center_y(Length::Fill);
+
+    let derecha = match estado.aviso.as_ref() {
+        Some(aviso) => column![vista_recientes(estado), vista_aviso(aviso)],
+        None => column![vista_recientes(estado)],
+    }
+    .width(Length::FillPortion(1))
+    .spacing(20);
+
+    row![zona, derecha].spacing(24).padding(24).into()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    fn aviso() -> crate::recovery_io::AvisoRecovery {
+        let proyecto = rod_core::Proyecto::nuevo("clip.mp4");
+        let recovery = rod_core::construir_recovery(proyecto, "", 1_000.0);
+        let texto = rod_core::formatear_recovery(&recovery, "clip.cdp", 1_000.0);
+        crate::recovery_io::AvisoRecovery { recovery, texto }
+    }
+
+    #[test]
+    fn soltar_video_con_extension_valida_pide_abrir_editor() {
+        let mut estado = super::nuevo(Vec::new(), None);
+        let (_tarea, salida) = super::update(
+            &mut estado,
+            super::MensajeInicio::ArchivoSoltado(PathBuf::from("clip.mp4")),
+        );
+        assert!(matches!(salida, Some(super::Salida::Video(_))));
+    }
+
+    #[test]
+    fn soltar_extension_no_valida_deja_mensaje_y_no_sale() {
+        let mut estado = super::nuevo(Vec::new(), None);
+        let (_tarea, salida) = super::update(
+            &mut estado,
+            super::MensajeInicio::ArchivoSoltado(PathBuf::from("notas.txt")),
+        );
+        assert!(salida.is_none());
+        assert!(estado.mensaje.is_some());
+    }
+
+    #[test]
+    fn ver_todos_expande_la_lista() {
+        let mut estado = super::nuevo(Vec::new(), None);
+        assert!(!estado.expandido);
+        let _ = super::update(&mut estado, super::MensajeInicio::VerTodos);
+        assert!(estado.expandido);
+    }
+
+    #[test]
+    fn descartar_recovery_quita_el_aviso() {
+        let mut estado = super::nuevo(Vec::new(), Some(aviso()));
+        let (_tarea, salida) = super::update(&mut estado, super::MensajeInicio::DescartarRecovery);
+        assert!(estado.aviso.is_none());
+        assert!(matches!(salida, Some(super::Salida::DescartarRecovery)));
+    }
+}
