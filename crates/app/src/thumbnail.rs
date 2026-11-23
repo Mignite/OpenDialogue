@@ -52,6 +52,20 @@ pub fn guardar_en(
             format!("el frame no mide {ancho}x{alto}×4 bytes"),
         )
     })?;
+    // Un buffer sin rellenar (pixels del constructor, antes del primer frame)
+    // es todo ceros: guardarlo daría un PNG blanco que luego se muestra como
+    // miniatura falsa. No escribir nada deja el placeholder en su lugar.
+    if frame
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .all(|pixel| pixel == &[0, 0, 0, 0])
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "el frame está vacío",
+        ));
+    }
     let pequeno = image::imageops::resize(
         &original,
         ANCHO,
@@ -101,6 +115,28 @@ mod tests {
     #[test]
     fn leer_devuelve_none_si_falta() {
         assert!(super::leer(Path::new("/no/existe.cdp")).is_none());
+    }
+
+    #[test]
+    fn frame_con_alfa_cero_no_se_guarda_como_blanco() {
+        let dir = temp_dir_de_test("alfa-cero");
+        let cdp = dir.join("mi.cdp");
+        // mpv rellena RGB con el frame pero deja el alfa a 0 fuera del área
+        // activa: escalar eso tal cual produce un PNG blanco.
+        let mut frame = vec![0u8; 4 * 4 * 4];
+        for pixel in frame.as_chunks_mut::<4>().0.iter_mut() {
+            pixel[0] = 200;
+            pixel[1] = 30;
+            pixel[2] = 40;
+            pixel[3] = 0;
+        }
+        super::guardar_en(&dir, &cdp, &frame, 4, 4).unwrap();
+        let img = image::open(super::ruta_cache_en(&dir, &cdp)).unwrap();
+        let pixel = img.get_pixel(80, 45);
+        assert!(
+            (pixel[0] as i32 - 200).abs() < 40 && pixel[1] < 100,
+            "se guardó un PNG en blanco: {pixel:?}"
+        );
     }
 
     #[test]

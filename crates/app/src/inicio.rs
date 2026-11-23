@@ -183,6 +183,7 @@ fn vista_recientes(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
                 ]
                 .spacing(8),
             )
+            .style(tema::boton_secundario)
             .on_press(MensajeInicio::AbrirReciente(reciente.ruta.clone()))
             .into()
         })
