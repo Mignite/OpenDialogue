@@ -214,6 +214,11 @@ Sin dependencias de UI ni de sistema. Portado desde `src/utils/*.ts`:
   `debe_guardar` (15 s entre escrituras, nada si no hay cambios ni captions),
   `leer` (valida campo por campo y caduca a los 7 días) y `formatear`. Puro: la
   ruta, el reloj y la E/S viven en `rod-app`.
+- `ass_presets`: `presets_desde_json` / `presets_a_json` para el
+  `presets_ass.json` que comparte con el oráculo (camelCase, `bold`/`italic`
+  opcionales rellenados a `false`), más `nuevo_preset` y `nombre_libre`. Un
+  archivo ausente, roto, vacío o con entradas incompletas cae a la semilla de un
+  preset por defecto: la app tiene que abrir siempre con algo usable.
 
 Los 306 tests de vitest son la especificación. Se portan uno a uno; cuando un
 comportamiento esté documentado como limitación (por ejemplo, que importar un
@@ -364,6 +369,18 @@ el seguimiento del timeline se mueven con el reloj real del player.
   así que probarlos por separado no dice nada: o el conjunto funciona o el
   reproductor no está listo. Los controles restantes (velocidad, volumen,
   stepping) se cuelgan del mismo `Row` después, sin cambiar el diseño.
+- **Exportar reusa la generación del preview, no la reimplementa.**
+  `preview::ass_del_proyecto(editor, presets)` es la única función que produce
+  el `.ass`; la exportación escribe exactamente esa cadena, así que el
+  invariante preview == export es estructural y no una promesa que hay que
+  recordar. Los presets viven en `%APPDATA%\RustyOpenDialogue\presets_ass.json`
+  (`rod_app::presets_io`, el mismo nombre de archivo que el oráculo) y se leen
+  al arrancar. Las otras dos exportaciones son puras:
+  `project_io::exportar_srt_por_hablante` devuelve los archivos y el reporte de
+  solapes, y `exportar_json_combinado` devuelve el texto; el `update` solo pone
+  el diálogo de carpeta y la E/S. El diálogo de estilos del oráculo (editar
+  presets y asignarlos al exportar) es el slice 7d: mientras tanto se exporta
+  con la asignación guardada en cada hablante.
 
 ### 4.5 Flujo de un frame
 
@@ -435,9 +452,10 @@ warnings` y `cargo test` en verde, en Windows y en Linux.
   undo, atajos.
 - **Slice 6 — timeline.** Carriles por hablante, clips, drag de bordes y en
   bloque, marquee, snap, zoom y pan.
-- **Slice 7 - proyecto.** Guardar/cargar JSON, importar SRT y ASS, exportar SRT y
-  `.ass` con presets. Copia automática (`recovery.json`) mientras hay cambios
-  sin guardar, ofrecida al arrancar; guardar con Ctrl+S la borra.
+- **Slice 7 - proyecto.** Guardar/cargar JSON, importar SRT y ASS, exportar SRT
+  por hablante, JSON combinado y `.ass` con presets. Copia automática
+  (`recovery.json`) mientras hay cambios sin guardar, ofrecida al arrancar;
+  guardar con Ctrl+S la borra.
 - **Slice 8 — empaquetado.** NSIS en Windows, `.deb`/AppImage en Linux, con las
   DLLs de libmpv y libass.
 

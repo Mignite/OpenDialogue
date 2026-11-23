@@ -90,10 +90,13 @@ mod tests {
 
     #[test]
     fn la_ruta_es_un_recovery_json() {
+        // Sin `APPDATA` (Linux) la ruta cae al temporal pero conserva el
+        // nombre: el test no puede asumir la carpeta de Windows.
         let ruta = ruta();
-        assert_eq!(
-            ruta.file_name().and_then(|nombre| nombre.to_str()),
-            Some("recovery.json")
+        assert!(
+            ruta.to_string_lossy().ends_with("recovery.json"),
+            "{}",
+            ruta.display()
         );
     }
 

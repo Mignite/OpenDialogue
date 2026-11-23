@@ -24,7 +24,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let antes = render(&editor)?;
     antes.save("docs/checklists/slice-5-preview-antes.png")?;
 
-    println!("ass del preview: {} bytes", ass_del_proyecto(&editor).len());
+    println!(
+        "ass del preview: {} bytes",
+        ass_del_proyecto(&editor, &[]).len()
+    );
     println!("texto del caption 1: {:?}", editor.texto_de("cap-1"));
     println!("píxeles con texto antes: {}", encendidos(&antes));
 
@@ -53,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     editor.seleccionar_uno("cap-1");
     assert_eq!(editor.asignar_a_seleccion(Some(hablante.clone())), 1);
 
-    let ass_con_hablante = ass_del_proyecto(&editor);
+    let ass_con_hablante = ass_del_proyecto(&editor, &[]);
     for linea in ass_con_hablante
         .lines()
         .filter(|linea| linea.starts_with("Style:") || linea.starts_with("Dialogue:"))
@@ -71,7 +74,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// El `.ass` del proyecto rasterizado por libass y compuesto sobre negro.
 fn render(editor: &EstadoEditor) -> Result<image::RgbImage, Box<dyn std::error::Error>> {
-    let ass = ass_del_proyecto(editor);
+    let ass = ass_del_proyecto(editor, &[]);
     let mut subtitulos = rod_subs::Subtitulos::nuevo(CANVAS.0, CANVAS.1, &ass);
     let bitmaps = subtitulos.render(INSTANTE_MS);
 

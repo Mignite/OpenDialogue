@@ -7,12 +7,16 @@ use iced::widget::{
 use iced::{Background, Color, Element, Length, Subscription, Task};
 
 use rod_app::editor::{EstadoEditor, MAX_HABLANTES, normalizar_tecla};
+use rod_app::presets_io;
 use rod_app::preview::{CANVAS, ass_del_proyecto};
-use rod_app::project_io::{Documento, FormatoSubtitulo, abrir_proyecto, cargar, guardar_proyecto};
+use rod_app::project_io::{
+    Documento, ExportacionSrt, FormatoSubtitulo, abrir_proyecto, cargar, exportar_json_combinado,
+    exportar_srt_por_hablante, guardar_proyecto,
+};
 use rod_app::recovery_io;
 use rod_app::timeline::{self, Vista};
 use rod_app::video::{Capa, Video};
-use rod_core::Proyecto;
+use rod_core::{PresetAss, Proyecto};
 use rod_player::AudioTrack;
 
 const WIDTH: usize = CANVAS.0 as usize;
@@ -93,6 +97,12 @@ enum Message {
     Recuperar,
     /// Rechaza la copia automática y la borra.
     DescartarRecovery,
+    /// Un `.srt` por hablante (y `solapes.txt`) en una carpeta elegida.
+    ExportarSrtHablantes,
+    /// `subtitulos_combinado.json` con tiempos, texto y hablante.
+    ExportarJson,
+    /// El `.ass` del preview, con los presets guardados.
+    ExportarAss,
 }
 
 struct Estado {
@@ -150,6 +160,13 @@ struct Estado {
     /// proyecto entero en cada frame para nada es tirar CPU.
     ultima_escritura: Option<f64>,
     ultimo_chequeo: f64,
+    /// Presets `.ass` cargados al arrancar. Los usa el preview y el export por
+    /// igual: son la única fuente de estilos de un caption con hablante.
+    presets: Vec<PresetAss>,
+    /// Resultado de la última acción que no tiene otro lugar donde contarse
+    /// (exportar, por ahora). iced no tiene toasts; la barra de estado es el
+    /// sitio donde el usuario ya mira el estado del proyecto.
+    mensaje: Option<String>,
 }
 
 /// Lo que el aviso de recuperación necesita: la copia y el texto ya formateado.
@@ -229,7 +246,10 @@ impl Estado {
         let audio_tracks = player.audio_tracks();
         let selected_audio = audio_tracks.first().cloned();
         let velocidad = Velocidad(player.speed() as f32);
-        let ass = ass_del_proyecto(&editor);
+        // Los presets se leen una sola vez: el panel para editarlos llega en
+        // el slice 7d, así que nada los cambia en caliente todavía.
+        let presets = presets_io::leer(&presets_io::ruta());
+        let ass = ass_del_proyecto(&editor, &presets);
         let subtitles = rod_subs::Subtitulos::nuevo(WIDTH as u32, HEIGHT as u32, &ass);
         let limpio = editor.proyecto().clone();
 
@@ -266,6 +286,8 @@ impl Estado {
             // 0 = todavía no se ha chequeado; el primer `Tick` ya decide con
             // el proyecto limpio y no escribe nada.
             ultimo_chequeo: 0.0,
+            presets,
+            mensaje: None,
         };
         refrescar_preview(&mut estado);
         estado
@@ -404,6 +426,28 @@ fn borrar_recovery(state: &mut Estado) {
     state.ultima_escritura = None;
 }
 
+/// Resumen de «Exportar SRT por hablante» para la barra de estado. Dice lo que
+/// el usuario no ve: cuántos captions quedaron sin hablante y si hubo solapes.
+fn resumen_srt(exportacion: &ExportacionSrt, escritos: usize) -> String {
+    if escritos == 0 {
+        return "No se exportó ningún SRT: ningún caption tiene hablante.".into();
+    }
+    let mut texto = format!("Exportados {escritos} SRT");
+    if exportacion.sin_asignar > 0 {
+        texto.push_str(&format!(
+            "; {} caption(s) sin hablante",
+            exportacion.sin_asignar
+        ));
+    }
+    if exportacion.solapes > 0 {
+        texto.push_str(&format!(
+            "; {} solape(s) en solapes.txt",
+            exportacion.solapes
+        ));
+    }
+    texto
+}
+
 /// Reemplaza el proyecto abierto entero: editor (con su historial), video y
 /// playhead. Si el video del proyecto no abre, no se toca nada: esta app no
 /// sabe trabajar un proyecto sin video (el oráculo ofrece seguir sin él; aquí
@@ -492,7 +536,7 @@ fn seguir_playhead(state: &mut Estado) {
 /// actual. Se llama tras cada edición: el video no cambia, pero los subtítulos
 /// sí, y en pausa mpv no entrega un frame nuevo para disparar el repintado.
 fn refrescar_preview(state: &mut Estado) {
-    let ass = ass_del_proyecto(&state.editor);
+    let ass = ass_del_proyecto(&state.editor, &state.presets);
     state.subtitles.cargar(&ass);
     let position = state.position;
     state.layers = Arc::new(
@@ -625,6 +669,77 @@ fn update(state: &mut Estado, message: Message) -> Task<Message> {
         }
         Message::Recuperar => recuperar(state),
         Message::DescartarRecovery => descartar_recovery(state),
+        Message::ExportarSrtHablantes => {
+            if state.editor.proyecto().captions.is_empty() {
+                state.mensaje = Some("No hay subtítulos para exportar.".into());
+                return Task::none();
+            }
+            let Some(carpeta) = rfd::FileDialog::new().pick_folder() else {
+                return Task::none();
+            };
+            let exportacion = exportar_srt_por_hablante(state.editor.proyecto());
+            let mut escritos = 0;
+            for (nombre, contenido) in &exportacion.archivos {
+                let ruta = carpeta.join(nombre);
+                match std::fs::write(&ruta, contenido) {
+                    Ok(()) => escritos += 1,
+                    Err(error) => eprintln!("no se pudo escribir '{}': {error}", ruta.display()),
+                }
+            }
+            // El reporte va aparte porque no es un SRT ni cuenta como archivo
+            // exportado en el resumen, igual que en el oráculo.
+            if let Some(reporte) = &exportacion.reporte_solapes {
+                let ruta = carpeta.join("solapes.txt");
+                if let Err(error) = std::fs::write(&ruta, reporte) {
+                    eprintln!("no se pudo escribir '{}': {error}", ruta.display());
+                }
+            }
+            state.mensaje = Some(resumen_srt(&exportacion, escritos));
+        }
+        Message::ExportarJson => {
+            if state.editor.proyecto().captions.is_empty() {
+                state.mensaje = Some("No hay subtítulos para exportar.".into());
+                return Task::none();
+            }
+            let Some(ruta) = rfd::FileDialog::new()
+                .add_filter("JSON combinado", &["json"])
+                .set_file_name("subtitulos_combinado.json")
+                .save_file()
+            else {
+                return Task::none();
+            };
+            let texto = exportar_json_combinado(state.editor.proyecto());
+            state.mensaje = Some(match std::fs::write(&ruta, texto) {
+                Ok(()) => format!("JSON exportado: {}", ruta.display()),
+                Err(error) => {
+                    eprintln!("no se pudo escribir el JSON: {error}");
+                    format!("No se pudo exportar el JSON: {error}")
+                }
+            });
+        }
+        Message::ExportarAss => {
+            if state.editor.proyecto().captions.is_empty() {
+                state.mensaje = Some("No hay subtítulos para exportar.".into());
+                return Task::none();
+            }
+            let Some(ruta) = rfd::FileDialog::new()
+                .add_filter("Subtítulos ASS", &["ass"])
+                .set_file_name("subtitulos.ass")
+                .save_file()
+            else {
+                return Task::none();
+            };
+            // La misma cadena que rasteriza el preview: si el archivo y la
+            // imagen divergieran, sería un bug (invariante del proyecto).
+            let texto = ass_del_proyecto(&state.editor, &state.presets);
+            state.mensaje = Some(match std::fs::write(&ruta, texto) {
+                Ok(()) => format!("ASS exportado: {}", ruta.display()),
+                Err(error) => {
+                    eprintln!("no se pudo escribir el .ass: {error}");
+                    format!("No se pudo exportar el .ass: {error}")
+                }
+            });
+        }
         Message::PlayPause => {
             let destino = !state.player.paused();
             if destino && state.player.position() >= state.duration - 0.05 {
@@ -923,6 +1038,14 @@ fn view(state: &Estado) -> Element<'_, Message> {
                 )),
             ]
             .spacing(8),
+            row![
+                text("Exportar").size(12),
+                button("SRT por hablante").on_press(Message::ExportarSrtHablantes),
+                button("JSON combinado").on_press(Message::ExportarJson),
+                button(".ass").on_press(Message::ExportarAss),
+            ]
+            .spacing(8)
+            .align_y(iced::Center),
             slider(
                 0.0..=state.duration.max(0.01) as f32,
                 state.position.clamp(0.0, state.duration.max(0.01)) as f32,
@@ -935,7 +1058,6 @@ fn view(state: &Estado) -> Element<'_, Message> {
         .padding(8),
     )
     .width(Length::Fill)
-    .height(48)
     .style(panel);
 
     let left = column![video, transport]
@@ -1138,6 +1260,10 @@ fn status_bar(state: &Estado) -> Element<'_, Message> {
             text("● RUSTYOPENDIALOGUE"),
             text(state.video_path.clone()),
             text(proyecto),
+            // Último resultado de exportar (o nada). Va aquí y no en un modal
+            // porque iced no tiene toasts y la barra de estado ya es el lugar
+            // donde el usuario mira qué pasó.
+            state.mensaje.clone().map(text),
             space::horizontal(),
             text(format!(
                 "ventana {:.1} s · {} captions · {} capas libass",
@@ -1219,7 +1345,8 @@ fn boton(_theme: &iced::Theme, _status: button::Status) -> button::Style {
 
 #[cfg(test)]
 mod tests {
-    use super::{VELOCIDADES, Velocidad, recovery_pendiente};
+    use super::{VELOCIDADES, Velocidad, recovery_pendiente, resumen_srt};
+    use rod_app::project_io::ExportacionSrt;
     use rod_core::{Caption, Proyecto};
 
     #[test]
@@ -1234,6 +1361,35 @@ mod tests {
     fn la_lista_esta_ordenada_y_contiene_la_normal() {
         assert!(VELOCIDADES.windows(2).all(|par| par[0].0 < par[1].0));
         assert!(VELOCIDADES.contains(&Velocidad(1.0)));
+    }
+
+    fn exportacion(sin_asignar: usize, solapes: usize) -> ExportacionSrt {
+        ExportacionSrt {
+            archivos: vec![("Ana.srt".into(), String::new())],
+            reporte_solapes: (solapes > 0).then(|| "reporte".into()),
+            sin_asignar,
+            solapes,
+        }
+    }
+
+    #[test]
+    fn el_resumen_nombra_lo_que_quedo_fuera() {
+        let texto = resumen_srt(&exportacion(2, 1), 1);
+        assert!(texto.contains("Exportados 1 SRT"), "{texto}");
+        assert!(texto.contains("2 caption(s) sin hablante"), "{texto}");
+        assert!(texto.contains("1 solape(s)"), "{texto}");
+    }
+
+    #[test]
+    fn el_resumen_no_menciona_lo_que_no_paso() {
+        let texto = resumen_srt(&exportacion(0, 0), 3);
+        assert_eq!(texto, "Exportados 3 SRT");
+    }
+
+    #[test]
+    fn sin_hablantes_el_resumen_lo_dice() {
+        let texto = resumen_srt(&exportacion(4, 0), 0);
+        assert!(texto.contains("ningún caption tiene hablante"), "{texto}");
     }
 
     /// Un recovery propio por test: los tests corren en paralelo.
