@@ -12,7 +12,7 @@ use crate::presets_edicion::{CampoPreset, aplicar_campo, valor_campo};
 use crate::presets_io;
 use crate::preview::{CANVAS, ass_del_proyecto};
 use crate::project_io::{
-    Documento, ExportacionSrt, FormatoSubtitulo, abrir_proyecto, cargar, exportar_json_combinado,
+    Documento, ExportacionSrt, FormatoSubtitulo, abrir_proyecto, exportar_json_combinado,
     exportar_srt_por_hablante, guardar_proyecto,
 };
 use crate::recovery_io::{self, AvisoRecovery};
@@ -263,17 +263,26 @@ pub fn subscription(_state: &EditorApp) -> Subscription<MensajeEditor> {
 }
 
 impl EditorApp {
-    pub fn nuevo() -> Self {
-        let documento = cargar(
-            "1\n00:00:01,000 --> 00:00:03,000\nPrimer caption\n\n\
-             2\n00:00:04,000 --> 00:00:06,500\nSegundo caption",
-            "testdata/clip-15s-2audio.mp4",
-        )
-        .expect("el fixture inicial debe ser SRT valido");
-        let editor = EstadoEditor::nuevo(documento);
-        let video_path = "testdata/clip-15s-2audio.mp4".to_owned();
+    /// Proyecto nuevo en memoria: captions vacíos y todavía sin `.cdp`.
+    pub fn desde_video(path: &str) -> Result<Self, String> {
+        Self::desde_proyecto(Proyecto::nuevo(path), None, 0.0)
+    }
+
+    /// Abre un `.cdp` ya cargado. `posicion` es su `playhead` guardado.
+    pub fn desde_proyecto(
+        proyecto: Proyecto,
+        ruta: Option<PathBuf>,
+        posicion: f64,
+    ) -> Result<Self, String> {
+        let video_path = proyecto.ruta_video.clone();
         let player = rod_player::Player::open(&video_path)
-            .expect("no se pudo abrir testdata/clip-15s-2audio.mp4");
+            .map_err(|error| format!("no se pudo abrir {video_path}: {error}"))?;
+        let documento = Documento {
+            proyecto,
+            formato: FormatoSubtitulo::Srt,
+            estilos_ass: Vec::new(),
+        };
+        let editor = EstadoEditor::nuevo(documento);
         let duration = player.duration();
         let paused = player.paused();
         let audio_tracks = player.audio_tracks();
@@ -296,7 +305,7 @@ impl EditorApp {
             pixels: vec![0; WIDTH * HEIGHT * 4],
             layers: Arc::new(Vec::new()),
             duration,
-            position: 0.0,
+            position: posicion,
             arrastrando: false,
             paused,
             video_path,
@@ -316,9 +325,9 @@ impl EditorApp {
             seguir: true,
             objetivo_vista: None,
             modificadores: iced::keyboard::Modifiers::default(),
-            ruta_proyecto: None,
+            ruta_proyecto: ruta,
             limpio,
-            recovery: recovery_io::pendiente(&recovery_io::ruta(), recovery_io::ms_ahora()),
+            recovery: None,
             ultima_escritura: None,
             // 0 = todavía no se ha chequeado; el primer `Tick` ya decide con
             // el proyecto limpio y no escribe nada.
@@ -330,7 +339,7 @@ impl EditorApp {
             mensaje: None,
         };
         refrescar_preview(&mut estado);
-        estado
+        Ok(estado)
     }
 }
 
