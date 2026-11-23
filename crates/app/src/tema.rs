@@ -102,6 +102,18 @@ pub fn wash(_theme: &iced::Theme) -> iced::widget::container::Style {
     }
 }
 
+/// Marca de registro de la zona de arrastre: cuadrado de 18 px sin relleno.
+pub fn marca(_theme: &iced::Theme) -> iced::widget::container::Style {
+    iced::widget::container::Style {
+        border: Border {
+            color: MOSTAZA_LINE,
+            width: 1.0,
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
 /// Línea de 1 px: regla, borde inferior de la barra de menú, cruz de registro.
 pub fn hairline(_theme: &iced::Theme) -> iced::widget::container::Style {
     iced::widget::container::Style {
