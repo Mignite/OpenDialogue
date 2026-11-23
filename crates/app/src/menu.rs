@@ -115,7 +115,10 @@ where
                 Seccion::Estilos => "Estilos",
                 Seccion::Ayuda => "Ayuda",
             };
-            Item::with_menu(button(nombre).style(tema::boton_menu), Menu::new(entradas))
+            Item::with_menu(
+                button(nombre).style(tema::boton_menu),
+                Menu::new(entradas).max_width(280.0).padding(8.0).offset(2.0),
+            )
         })
         .collect::<Vec<_>>();
     MenuBar::new(raices).style(tema::barra_menu)
