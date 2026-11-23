@@ -1,4 +1,5 @@
 pub mod editor;
+pub mod editor_app;
 pub mod presets_edicion;
 pub mod presets_io;
 pub mod preview;

@@ -42,6 +42,30 @@ pub fn leer(ruta: &Path, corte: f64, ahora: f64) -> Option<Recovery> {
     rod_core::leer_recovery(Some(&texto), corte, ahora)
 }
 
+/// Lo que el aviso de recuperación necesita: la copia y el texto ya formateado.
+#[derive(Debug, Clone)]
+pub struct AvisoRecovery {
+    pub recovery: Recovery,
+    pub texto: String,
+}
+
+/// Copia automática que quedó de la sesión anterior, si la hay y sirve.
+///
+/// La ruta y el reloj entran como parámetros para poder probar esto sin tocar
+/// el `%APPDATA%` real ni depender de la hora.
+pub fn pendiente(ruta: &Path, ahora: f64) -> Option<AvisoRecovery> {
+    let recovery = leer(ruta, 0.0, ahora)?;
+    // El nombre es el del archivo (`mi-video.cdp`), como en el oráculo: con la
+    // ruta entera el aviso no cabe en una barra.
+    let nombre = Path::new(&recovery.ruta_proyecto)
+        .file_name()
+        .and_then(|nombre| nombre.to_str())
+        .unwrap_or_default()
+        .to_owned();
+    let texto = rod_core::formatear_recovery(&recovery, &nombre, ahora);
+    Some(AvisoRecovery { recovery, texto })
+}
+
 /// Escribe `contenido` (o borra el archivo con `None`). Atómico como el
 /// guardado del proyecto: un crash a mitad no deja un recovery truncado que
 /// rompa el arranque siguiente. Que el archivo ya no esté al borrar no es un
