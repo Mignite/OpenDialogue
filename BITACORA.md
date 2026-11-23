@@ -310,3 +310,25 @@ cara.
 - **Dónde quedé:** `docs/checklists/slice-7b-recovery.md`; el aviso se verifica
   con `slice-7b-recovery-aviso.png` y el camino «Recuperar» con los tests de
   `recovery_pendiente` más `cargar_proyecto`.
+
+## 2026-11-23 - `la_pista_de_audio_cambia_en_mpv` dependía del hardware de audio
+
+- **Intentaba:** verificar en CI que el slice 7d no rompiera nada. El job de
+  Ubuntu del run 45186579223 llevaba más de una hora `in_progress` sin logs; se
+  canceló y se relanzó.
+- **Error literal:** `assertion left == right failed`, `left: None`,
+  `right: Some(1)` en `crates/player/tests/controles.rs:96`, junto a
+  `couldn't open play stream: No such file or directory` y varios errores ALSA
+  (`Unknown PCM default`).
+- **Qué estaba mal:** el runner de Ubuntu no tiene dispositivo de audio. mpv
+  abre el clip con dos pistas, intenta la salida por defecto, falla y
+  deselecciona la pista, así que `aid` pasa a `no` (`None`). El test pasó en el
+  run anterior y falló en este: era no determinista, no un regreso de 7d ni de
+  8. El test comprueba el mapeo de `set_audio_track`/`audio_track` a la
+  propiedad `aid`, no el hardware.
+- **Qué aprendí:** un test de propiedades de mpv debe fijar su propio entorno.
+  Se llama a `mpv().set_property("ao", "null")` dentro del test antes de cambiar
+  de pista; con salida nula la selección no depende de ALSA. El run de 8
+  (45196981951) ya había pasado en Ubuntu, así que la corrección se verifica
+  con un rerun posterior.
+- **Dónde quedó:** `crates/player/tests/controles.rs` y esta entrada.

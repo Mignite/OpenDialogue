@@ -82,6 +82,15 @@ fn la_pista_de_audio_cambia_en_mpv() {
     let Some(player) = abrir() else {
         return;
     };
+    // En un runner sin dispositivo ALSA, mpv no abre la salida por defecto y
+    // deselecciona la pista (`aid` vuelve a "no"): el test pasaría o no según
+    // el hardware del runner. Aquí se comprueba el mapeo de `set_audio_track` y
+    // `audio_track` a la propiedad `aid`, no el audio en sí, así que se fuerza
+    // una salida nula para que el resultado sea el mismo en todas partes.
+    player
+        .mpv()
+        .set_property("ao", "null")
+        .expect("salida de audio nula para el test");
     let pistas = player.audio_tracks();
     assert!(
         pistas.len() >= 2,
