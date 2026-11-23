@@ -117,7 +117,10 @@ where
             };
             Item::with_menu(
                 button(nombre).style(tema::boton_menu),
-                Menu::new(entradas).max_width(280.0).padding(8.0).offset(2.0),
+                Menu::new(entradas)
+                    .max_width(280.0)
+                    .padding(8.0)
+                    .offset(2.0),
             )
         })
         .collect::<Vec<_>>();
