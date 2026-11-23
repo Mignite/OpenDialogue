@@ -103,6 +103,21 @@ pub fn metadata(ruta_cdp: &Path, ahora_ms: f64) -> Option<Reciente> {
     })
 }
 
+/// Justo después de guardar el `.cdp`: mete la ruta en el índice y refresca
+/// su miniatura con el frame que el editor tiene en memoria en ese instante.
+/// Imagen y `playhead` salen del mismo momento del guardado.
+pub fn registrar_guardado(
+    proyecto: &Path,
+    ruta_indice: &Path,
+    ruta_thumbs: &Path,
+    frame: &[u8],
+    ancho: u32,
+    alto: u32,
+) -> std::io::Result<()> {
+    crate::thumbnail::guardar_en(ruta_thumbs, proyecto, frame, ancho, alto)?;
+    registrar(ruta_indice, proyecto)
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::{Path, PathBuf};
@@ -186,6 +201,17 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[test]
+    fn guardar_registra_imagen_en_el_playhead() {
+        let dir = temp_dir_de_test("guardar");
+        let cdp = dir.join("mi.cdp");
+        let indice = dir.join("recientes.json");
+        let frame = vec![7u8; 1920 * 1080 * 4];
+        super::registrar_guardado(&cdp, &indice, &dir.join("thumbs"), &frame, 1920, 1080).unwrap();
+        assert_eq!(crate::recientes::leer_indice(&indice), vec![cdp.clone()]);
+        assert_eq!(dir.join("thumbs").read_dir().unwrap().count(), 1);
     }
 
     #[test]

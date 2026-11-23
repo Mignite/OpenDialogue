@@ -18,6 +18,7 @@ use crate::project_io::{
 use crate::recovery_io::{self, AvisoRecovery};
 use crate::timeline::{self, Vista};
 use crate::video::{Capa, Video};
+use crate::{recientes, thumbnail};
 use rod_core::{PresetAss, Proyecto, nombre_libre, nuevo_preset_desde};
 use rod_player::AudioTrack;
 
@@ -214,6 +215,9 @@ pub struct EditorApp {
     /// (exportar, por ahora). iced no tiene toasts; la barra de estado es el
     /// sitio donde el usuario ya mira el estado del proyecto.
     mensaje: Option<String>,
+    /// La miniatura del reciente faltaba al abrir: se genera con el primer
+    /// frame que rasterice mpv, no con el buffer vacío del constructor.
+    miniatura_pendiente: bool,
 }
 
 pub fn subscription(_state: &EditorApp) -> Subscription<MensajeEditor> {
@@ -297,6 +301,9 @@ impl EditorApp {
         let ass = ass_del_proyecto(&editor, &presets);
         let subtitles = rod_subs::Subtitulos::nuevo(WIDTH as u32, HEIGHT as u32, &ass);
         let limpio = editor.proyecto().clone();
+        let miniatura_pendiente = ruta
+            .as_ref()
+            .is_some_and(|ruta| thumbnail::leer(ruta).is_none());
 
         let mut estado = Self {
             editor,
@@ -337,6 +344,7 @@ impl EditorApp {
             preset_seleccionado,
             borradores_preset: HashMap::new(),
             mensaje: None,
+            miniatura_pendiente,
         };
         refrescar_preview(&mut estado);
         Ok(estado)
@@ -633,6 +641,12 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEdit
                         .map(Capa::desde)
                         .collect(),
                 );
+                if state.miniatura_pendiente
+                    && let Some(ruta) = state.ruta_proyecto.clone()
+                {
+                    let _ = thumbnail::guardar(&ruta, &state.pixels, WIDTH as u32, HEIGHT as u32);
+                    state.miniatura_pendiente = false;
+                }
             }
         }
         MensajeEditor::AbrirVideo => {
@@ -697,6 +711,19 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEdit
             proyecto.playhead = state.position;
             match guardar_proyecto(&ruta, &proyecto) {
                 Ok(()) => {
+                    if let Err(error) = recientes::registrar_guardado(
+                        &ruta,
+                        &recientes::ruta_indice(),
+                        &thumbnail::carpeta_cache(),
+                        &state.pixels,
+                        WIDTH as u32,
+                        HEIGHT as u32,
+                    ) {
+                        state.mensaje = Some(format!(
+                            "Proyecto guardado, pero no se pudo registrar en recientes: {error}"
+                        ));
+                    }
+                    state.miniatura_pendiente = false;
                     state.ruta_proyecto = Some(ruta);
                     // Lo que hay en disco es lo que hay en memoria: la línea
                     // base del «sucio» se mueve aquí.
