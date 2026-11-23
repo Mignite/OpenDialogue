@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use iced::widget::column;
+use iced::widget::{column, container};
 use iced::{Element, Subscription, Task};
 
 use rod_app::comandos::{self, Comando};
@@ -10,6 +10,7 @@ use rod_app::editor_app::{self, EditorApp, MensajeEditor};
 use rod_app::inicio::{self, EstadoInicio, MensajeInicio, Salida};
 use rod_app::menu;
 use rod_app::project_io::abrir_proyecto;
+use rod_app::tema;
 use rod_app::{recientes, recovery_io};
 
 /// Las dos pantallas de la app. El editor solo existe cuando se abrió un
@@ -178,7 +179,11 @@ fn vista(pantalla: &Pantalla) -> Element<'_, Mensaje> {
         Pantalla::Inicio(estado) => (true, inicio::view(estado).map(Mensaje::Inicio)),
         Pantalla::Editor(editor) => (false, editor_app::view(editor).map(Mensaje::Editor)),
     };
-    column![menu::barra(en_inicio, Mensaje::Comando), contenido].into()
+    container(column![menu::barra(en_inicio, Mensaje::Comando), contenido])
+        .style(tema::fondo)
+        .width(iced::Length::Fill)
+        .height(iced::Length::Fill)
+        .into()
 }
 
 fn suscripcion(pantalla: &Pantalla) -> Subscription<Mensaje> {

@@ -9,6 +9,7 @@ use iced::{Element, Length, Task};
 
 use crate::recientes::Reciente;
 use crate::recovery_io::AvisoRecovery;
+use crate::tema;
 use crate::thumbnail;
 
 /// Lo que la vista necesita para dibujarse. Los recientes ya vienen resueltos
@@ -162,8 +163,20 @@ fn vista_recientes(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
                                 .to_string_lossy()
                         ),
                         text(format!(
-                            "{} líneas · {} hablantes · {}",
-                            reciente.lineas, reciente.hablantes, reciente.fecha
+                            "{} {} · {} {} · {}",
+                            reciente.lineas,
+                            if reciente.lineas == 1 {
+                                "línea"
+                            } else {
+                                "líneas"
+                            },
+                            reciente.hablantes,
+                            if reciente.hablantes == 1 {
+                                "hablante"
+                            } else {
+                                "hablantes"
+                            },
+                            reciente.fecha
                         )),
                     ]
                     .spacing(4),
@@ -175,28 +188,48 @@ fn vista_recientes(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
         })
         .collect::<Vec<Element<'_, MensajeInicio>>>();
 
-    column![
+    let cabecera = if mostrar_ver_todos(&estado.recientes) {
         row![
-            text("RECIENTES").width(Length::Fill),
+            text("Recientes").width(Length::Fill),
             button(if estado.expandido {
                 "Ver menos"
             } else {
                 "Ver todos"
             })
+            .style(tema::boton_secundario)
             .on_press(MensajeInicio::VerTodos),
-        ],
-        scrollable(column(entries).spacing(6)),
-    ]
-    .spacing(10)
-    .into()
+        ]
+    } else {
+        row![text("Recientes").width(Length::Fill)]
+    };
+
+    let mut columna = column![cabecera];
+    if entries.is_empty() {
+        columna = columna.push(text(
+            "Todavía no hay proyectos. El primero aparece aquí al guardar.",
+        ));
+    } else {
+        columna = columna.push(scrollable(column(entries).spacing(6)));
+    }
+    columna.spacing(10).into()
+}
+
+/// `Ver todos` aparece solo cuando la lista supera las tres entradas que se
+/// muestran por defecto: con cero recientes sería una decisión muerta.
+pub fn mostrar_ver_todos(recientes: &[Reciente]) -> bool {
+    recientes.len() > 3
 }
 
 fn vista_aviso(aviso: &AvisoRecovery) -> Element<'_, MensajeInicio> {
     column![
         text(aviso.texto.clone()),
         row![
-            button("Recuperar").on_press(MensajeInicio::Recuperar),
-            button("Descartar").on_press(MensajeInicio::DescartarRecovery),
+            button("Recuperar")
+                .style(tema::boton_primario)
+                .on_press(MensajeInicio::Recuperar),
+            button("Descartar")
+                .style(tema::boton_secundario)
+                .on_press(MensajeInicio::DescartarRecovery),
         ]
         .spacing(8),
     ]
@@ -211,8 +244,12 @@ pub fn view(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
             text("Arrastra un video aquí").size(22),
             text("MP4, MKV, MOV o WebM"),
             row![
-                button("Abrir video").on_press(MensajeInicio::AbrirVideo),
-                button("Abrir proyecto").on_press(MensajeInicio::AbrirProyecto),
+                button("Abrir video")
+                    .style(tema::boton_primario)
+                    .on_press(MensajeInicio::AbrirVideo),
+                button("Abrir proyecto")
+                    .style(tema::boton_secundario)
+                    .on_press(MensajeInicio::AbrirProyecto),
             ]
             .spacing(10),
             text(estado.mensaje.clone().unwrap_or_default()),
@@ -220,6 +257,7 @@ pub fn view(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
         .spacing(12)
         .align_x(iced::alignment::Horizontal::Center),
     )
+    .style(tema::panel)
     .width(Length::FillPortion(2))
     .padding(24)
     .center_x(Length::Fill)
@@ -238,6 +276,29 @@ pub fn view(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+
+    #[test]
+    fn ver_todos_aparece_solo_con_mas_de_tres_recientes() {
+        assert!(!super::mostrar_ver_todos(&[]));
+        let tres = (0..3)
+            .map(|_| crate::recientes::Reciente {
+                ruta: PathBuf::from("a.cdp"),
+                lineas: 1,
+                hablantes: 1,
+                fecha: "hoy".into(),
+            })
+            .collect::<Vec<_>>();
+        assert!(!super::mostrar_ver_todos(&tres));
+        let cuatro = (0..4)
+            .map(|_| crate::recientes::Reciente {
+                ruta: PathBuf::from("a.cdp"),
+                lineas: 1,
+                hablantes: 1,
+                fecha: "hoy".into(),
+            })
+            .collect::<Vec<_>>();
+        assert!(super::mostrar_ver_todos(&cuatro));
+    }
 
     #[test]
     fn miniatura_ausente_muestra_placeholder_y_presente_devuelve_ruta() {

@@ -5,6 +5,7 @@ use iced::widget::button;
 use iced_aw::menu::{Item, Menu, MenuBar};
 
 use crate::comandos::{self, Comando, Seccion};
+use crate::tema;
 
 const SECCIONES: [Seccion; 6] = [
     Seccion::Archivo,
@@ -98,7 +99,8 @@ where
                 .into_iter()
                 .map(|comando| {
                     let habilitado = !en_inicio || disponible_en_inicio(comando);
-                    let mut boton = button(iced::widget::text(texto(comando)));
+                    let mut boton =
+                        button(iced::widget::text(texto(comando))).style(tema::boton_menu);
                     if habilitado {
                         boton = boton.on_press(on_comando(comando));
                     }
@@ -113,10 +115,10 @@ where
                 Seccion::Estilos => "Estilos",
                 Seccion::Ayuda => "Ayuda",
             };
-            Item::with_menu(button(nombre), Menu::new(entradas))
+            Item::with_menu(button(nombre).style(tema::boton_menu), Menu::new(entradas))
         })
         .collect::<Vec<_>>();
-    MenuBar::new(raices)
+    MenuBar::new(raices).style(tema::barra_menu)
 }
 
 #[cfg(test)]
