@@ -6,5 +6,6 @@ pub mod preview;
 pub mod project_io;
 pub mod recientes;
 pub mod recovery_io;
+pub mod thumbnail;
 pub mod timeline;
 pub mod video;
