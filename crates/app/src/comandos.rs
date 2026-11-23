@@ -156,18 +156,12 @@ pub fn atajo(comando: Comando) -> String {
 /// `en_campo_texto` reproduce el guardia del oráculo: con el foco en un
 /// `text_input` solo Ctrl+S y Ctrl+F se procesan; Ctrl+Z/Y/C/V quedan al
 /// comportamiento nativo del campo.
-pub fn desde_keyboard(
-    key: &Key,
-    modifiers: &Modifiers,
-    en_campo_texto: bool,
-) -> Option<Comando> {
+pub fn desde_keyboard(key: &Key, modifiers: &Modifiers, en_campo_texto: bool) -> Option<Comando> {
     let ctrl = modifiers.command();
     let shift = modifiers.shift();
     let alt = modifiers.alt();
 
-    if ctrl
-        && let Key::Character(c) = key.as_ref()
-    {
+    if ctrl && let Key::Character(c) = key.as_ref() {
         match c.to_ascii_lowercase().as_str() {
             "s" => {
                 return Some(if shift {
@@ -240,7 +234,6 @@ pub fn desde_keyboard(
                 .ok()
                 .filter(|numero| (1..=9).contains(numero))
                 .map(Comando::Hablante),
-            _ => None,
         },
         _ => None,
     }

@@ -2,10 +2,13 @@
 
 use std::path::{Path, PathBuf};
 
+use iced::widget::column;
 use iced::{Element, Subscription, Task};
 
+use rod_app::comandos::{self, Comando};
 use rod_app::editor_app::{self, EditorApp, MensajeEditor};
 use rod_app::inicio::{self, EstadoInicio, MensajeInicio, Salida};
+use rod_app::menu;
 use rod_app::project_io::abrir_proyecto;
 use rod_app::{recientes, recovery_io};
 
@@ -20,6 +23,7 @@ enum Pantalla {
 enum Mensaje {
     Inicio(MensajeInicio),
     Editor(MensajeEditor),
+    Comando(Comando),
     ArchivoSoltado(PathBuf),
 }
 
@@ -116,6 +120,30 @@ fn despachar_salida(pantalla: &mut Pantalla, salida: Salida) -> Task<Mensaje> {
 
 fn actualizar(pantalla: &mut Pantalla, mensaje: Mensaje) -> Task<Mensaje> {
     match mensaje {
+        Mensaje::Comando(comando) => match pantalla {
+            Pantalla::Editor(editor) => {
+                editor_app::update(editor, MensajeEditor::Comando(comando)).map(Mensaje::Editor)
+            }
+            Pantalla::Inicio(estado) => {
+                if comando == Comando::Ayuda {
+                    estado.mensaje = Some(
+                        "Atajos: Ctrl+S guardar, Ctrl+O abrir, Space reproducir, ←/→ saltar, ? ayuda"
+                            .into(),
+                    );
+                    return Task::none();
+                }
+                let mensaje_inicio = match comando {
+                    Comando::NuevoProyecto | Comando::AbrirVideo => MensajeInicio::AbrirVideo,
+                    Comando::AbrirProyecto => MensajeInicio::AbrirProyecto,
+                    _ => return Task::none(),
+                };
+                let (tarea, salida) = inicio::update(estado, mensaje_inicio);
+                if let Some(salida) = salida {
+                    return despachar_salida(pantalla, salida);
+                }
+                tarea.map(Mensaje::Inicio)
+            }
+        },
         Mensaje::ArchivoSoltado(ruta) => {
             let (tarea, salida) = match pantalla {
                 Pantalla::Inicio(estado) => {
@@ -146,10 +174,11 @@ fn actualizar(pantalla: &mut Pantalla, mensaje: Mensaje) -> Task<Mensaje> {
 }
 
 fn vista(pantalla: &Pantalla) -> Element<'_, Mensaje> {
-    match pantalla {
-        Pantalla::Inicio(estado) => inicio::view(estado).map(Mensaje::Inicio),
-        Pantalla::Editor(editor) => editor_app::view(editor).map(Mensaje::Editor),
-    }
+    let (en_inicio, contenido) = match pantalla {
+        Pantalla::Inicio(estado) => (true, inicio::view(estado).map(Mensaje::Inicio)),
+        Pantalla::Editor(editor) => (false, editor_app::view(editor).map(Mensaje::Editor)),
+    };
+    column![menu::barra(en_inicio, Mensaje::Comando), contenido].into()
 }
 
 fn suscripcion(pantalla: &Pantalla) -> Subscription<Mensaje> {
@@ -157,10 +186,20 @@ fn suscripcion(pantalla: &Pantalla) -> Subscription<Mensaje> {
         iced::window::Event::FileDropped(ruta) => Some(Mensaje::ArchivoSoltado(ruta)),
         _ => None,
     });
+    let en_campo_texto = matches!(pantalla, Pantalla::Editor(editor) if editor.en_campo_texto());
+    let teclado = iced::keyboard::listen()
+        .with(en_campo_texto)
+        .filter_map(|(en_campo, evento)| match evento {
+            iced::keyboard::Event::KeyPressed { key, modifiers, .. } => {
+                comandos::desde_keyboard(&key, &modifiers, en_campo).map(Mensaje::Comando)
+            }
+            _ => None,
+        });
     match pantalla {
-        Pantalla::Inicio(_) => arrastre,
+        Pantalla::Inicio(_) => Subscription::batch([arrastre, teclado]),
         Pantalla::Editor(editor) => Subscription::batch([
             arrastre,
+            teclado,
             editor_app::subscription(editor).map(Mensaje::Editor),
         ]),
     }

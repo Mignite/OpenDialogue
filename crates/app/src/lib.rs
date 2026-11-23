@@ -2,6 +2,7 @@ pub mod comandos;
 pub mod editor;
 pub mod editor_app;
 pub mod inicio;
+pub mod menu;
 pub mod presets_edicion;
 pub mod presets_io;
 pub mod preview;

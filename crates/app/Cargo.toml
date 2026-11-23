@@ -8,6 +8,9 @@ rod-core.workspace = true
 rod-player.workspace = true
 rod-subs.workspace = true
 iced = { workspace = true, features = ["image"] }
+# Menú dibujado por la app: iced no trae barra de menú; muda sería nativo y
+# exigiría unsafe para enganchar el HWND, además de no poder estilizarse.
+iced_aw = { version = "0.14.1", features = ["menu", "quad"] }
 rfd = "0.15"
 serde_json = "1"
 # Codifica las miniaturas de recientes; también usado por `examples/preview.rs`.

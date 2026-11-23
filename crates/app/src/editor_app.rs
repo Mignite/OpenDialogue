@@ -7,6 +7,7 @@ use iced::widget::{
 };
 use iced::{Background, Color, Element, Length, Subscription, Task};
 
+use crate::comandos::Comando;
 use crate::editor::{EstadoEditor, MAX_HABLANTES, normalizar_tecla};
 use crate::presets_edicion::{CampoPreset, aplicar_campo, valor_campo};
 use crate::presets_io;
@@ -81,6 +82,8 @@ pub enum Panel {
 
 #[derive(Debug, Clone)]
 pub enum MensajeEditor {
+    /// Un comando del menú o del teclado. Un solo manejador para los dos.
+    Comando(Comando),
     Tick,
     AbrirVideo,
     AudioTrack(AudioTrack),
@@ -218,48 +221,19 @@ pub struct EditorApp {
     /// La miniatura del reciente faltaba al abrir: se genera con el primer
     /// frame que rasterice mpv, no con el buffer vacío del constructor.
     miniatura_pendiente: bool,
+    /// Portapapeles interno para Ctrl+C/V entre captions.
+    portapapeles: String,
 }
 
 pub fn subscription(_state: &EditorApp) -> Subscription<MensajeEditor> {
     Subscription::batch([
         iced::window::frames().map(|_| MensajeEditor::Tick),
-        // Ctrl+Z / Ctrl+Shift+Z (y Ctrl+Y, que es el redo de Windows). El
-        // atajo se decide aquí y no en el `update` porque la app no recibe el
-        // teclado de otra forma: los `text_input` se comen los caracteres.
         // Los modificadores se copian aparte: `WheelScrolled` no los trae y el
-        // «Shift + rueda = zoom» necesita saberlos.
+        // «Shift + rueda = zoom» necesita saberlos. El teclado ya no vive aquí:
+        // `main.rs` mapea las tecas a `Comando`, el mismo registro que el menú.
         iced::keyboard::listen().filter_map(|evento| match evento {
             iced::keyboard::Event::ModifiersChanged(modifiers) => {
                 Some(MensajeEditor::Modificadores(modifiers))
-            }
-            iced::keyboard::Event::KeyPressed { key, modifiers, .. } => {
-                if !modifiers.command() {
-                    return None;
-                }
-                let iced::keyboard::Key::Character(texto) = key.as_ref() else {
-                    return None;
-                };
-                if texto.eq_ignore_ascii_case("z") {
-                    return Some(if modifiers.shift() {
-                        MensajeEditor::Rehacer
-                    } else {
-                        MensajeEditor::Deshacer
-                    });
-                }
-                if texto.eq_ignore_ascii_case("y") && !modifiers.shift() {
-                    return Some(MensajeEditor::Rehacer);
-                }
-                if texto.eq_ignore_ascii_case("s") {
-                    return Some(if modifiers.shift() {
-                        MensajeEditor::GuardarProyectoComo
-                    } else {
-                        MensajeEditor::GuardarProyecto
-                    });
-                }
-                if texto.eq_ignore_ascii_case("o") && !modifiers.shift() {
-                    return Some(MensajeEditor::AbrirProyecto);
-                }
-                None
             }
             _ => None,
         }),
@@ -354,6 +328,7 @@ impl EditorApp {
             borradores_preset: HashMap::new(),
             mensaje: None,
             miniatura_pendiente,
+            portapapeles: String::new(),
         };
         // El playhead del `.cdp` no se copia solo al estado: mpv sigue en 0.
         // Sin este seek, el primer `Tick` sobreescribe `position` con 0 y la
@@ -376,6 +351,15 @@ impl EditorApp {
             let _ = thumbnail::guardar_en(base, &ruta, &self.pixels, WIDTH as u32, HEIGHT as u32);
             self.miniatura_pendiente = false;
         }
+    }
+
+    /// Aproximación al guardia del oráculo: si hay un borrador vivo, un
+    /// hablante en edición o un campo de preset a medias, no disparamos atajos
+    /// de tecla suelta mientras el usuario escribe.
+    pub fn en_campo_texto(&self) -> bool {
+        !self.borrador.is_empty()
+            || self.editando_hablante.is_some()
+            || !self.borradores_preset.is_empty()
     }
 }
 
@@ -640,8 +624,289 @@ fn sincronizar_borrador(state: &mut EditorApp) {
         .unwrap_or_default();
 }
 
+/// Identificador único para captions nuevos, sin depender de una crate más.
+fn id_nuevo() -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duracion| duracion.as_nanos())
+        .unwrap_or(0);
+    format!("cap-{nanos}")
+}
+
+/// Un único manejador para el menú y el teclado: los dos entregan un `Comando`.
+fn ejecutar_comando(state: &mut EditorApp, comando: Comando) -> Task<MensajeEditor> {
+    use Comando as C;
+    match comando {
+        C::Guardar => update(state, MensajeEditor::GuardarProyecto),
+        C::GuardarComo => update(state, MensajeEditor::GuardarProyectoComo),
+        C::ExportarSrt => update(state, MensajeEditor::ExportarSrtHablantes),
+        C::ExportarJson => update(state, MensajeEditor::ExportarJson),
+        C::ExportarAss => update(state, MensajeEditor::ExportarAss),
+        C::Estilos => update(state, MensajeEditor::Panel(Panel::Estilos)),
+        C::PanelSubtitulos => update(state, MensajeEditor::Panel(Panel::Subtitulos)),
+        C::PanelHablantes => update(state, MensajeEditor::Panel(Panel::Hablantes)),
+        C::PanelEstilos => update(state, MensajeEditor::Panel(Panel::Estilos)),
+        C::Deshacer => update(state, MensajeEditor::Deshacer),
+        C::Rehacer => update(state, MensajeEditor::Rehacer),
+        C::ReproducirPausa => update(state, MensajeEditor::PlayPause),
+        C::Retroceder => update(state, MensajeEditor::Step(-5.0)),
+        C::Avanzar => update(state, MensajeEditor::Step(5.0)),
+        C::RetrocederFino => update(state, MensajeEditor::Step(-0.1)),
+        C::AvanzarFino => update(state, MensajeEditor::Step(0.1)),
+        C::Eliminar => update(state, MensajeEditor::BorrarSeleccion),
+        C::Hablante(numero) => {
+            let tecla = numero.to_string();
+            let id = state
+                .editor
+                .proyecto()
+                .hablantes
+                .iter()
+                .find(|hablante| hablante.tecla == tecla)
+                .map(|hablante| hablante.id.clone());
+            match id {
+                Some(id) => update(state, MensajeEditor::AsignarHablante(Some(id))),
+                None => {
+                    state.mensaje = Some(format!("No hay hablante con la tecla {numero}"));
+                    Task::none()
+                }
+            }
+        }
+        C::NudgeIzquierda => nudge_seleccion(state, -0.1),
+        C::NudgeDerecha => nudge_seleccion(state, 0.1),
+        C::AgregarFragmento => agregar_fragmento(state),
+        C::Dividir => dividir_en_playhead(state),
+        C::CaptionAnterior => ciclar_caption(state, -1),
+        C::CaptionSiguiente => ciclar_caption(state, 1),
+        C::SimultaneoArriba => ciclar_simultaneo(state, -1),
+        C::SimultaneoAbajo => ciclar_simultaneo(state, 1),
+        C::Copiar => copiar(state),
+        C::Pegar => pegar(state),
+        C::VelocidadMas | C::VelocidadMenos => {
+            let actual = VELOCIDADES
+                .iter()
+                .position(|velocidad| velocidad == &state.velocidad)
+                .unwrap_or(2);
+            let salto = if comando == C::VelocidadMas { 1 } else { -1 };
+            let indice =
+                (actual as isize + salto).clamp(0, VELOCIDADES.len() as isize - 1) as usize;
+            update(state, MensajeEditor::Velocidad(VELOCIDADES[indice]))
+        }
+        C::EditarTexto => {
+            if state.editor.seleccion.len() > 1 {
+                state.mensaje = Some("Selecciona un solo subtítulo para editar su texto".into());
+            }
+            Task::none()
+        }
+        C::Buscar => {
+            state.mensaje = Some("Buscar: usa el panel de subtítulos para localizar texto".into());
+            Task::none()
+        }
+        C::Ayuda => {
+            state.mensaje = Some(
+                "Atajos: Space, ←/→, Alt+←/→, Shift+←/→, Ctrl+Shift+←/→, E, A, C, Delete, Ctrl+Z/Y/C/V, ?, +/−".into(),
+            );
+            Task::none()
+        }
+        C::ImportarAutosubs => {
+            state.mensaje = Some("Importar auto-subs: pendiente en este slice".into());
+            Task::none()
+        }
+        C::CargarSrt | C::CargarAss => cargar_subtitulos(state, comando == C::CargarAss),
+        C::NuevoProyecto | C::AbrirProyecto | C::AbrirVideo => {
+            state.mensaje = Some("Usa el menú de inicio para abrir un proyecto".into());
+            Task::none()
+        }
+    }
+}
+
+fn nudge_seleccion(state: &mut EditorApp, delta: f64) -> Task<MensajeEditor> {
+    let duracion = state.duration;
+    let ids = state.editor.seleccion.clone();
+    for id in ids {
+        let Some(caption) = state
+            .editor
+            .proyecto()
+            .captions
+            .iter()
+            .find(|caption| caption.id == id)
+            .cloned()
+        else {
+            continue;
+        };
+        state
+            .editor
+            .editar_tiempos(&id, caption.inicio + delta, caption.fin + delta, duracion);
+    }
+    refrescar_preview(state);
+    Task::none()
+}
+
+fn agregar_fragmento(state: &mut EditorApp) -> Task<MensajeEditor> {
+    let inicio = state.position;
+    let fin = (inicio + 2.0).min(state.duration.max(inicio + 0.5));
+    let caption = rod_core::Caption {
+        id: id_nuevo(),
+        inicio,
+        fin,
+        texto: String::new(),
+        hablante_id: None,
+    };
+    state.editor.agregar(caption);
+    refrescar_preview(state);
+    Task::none()
+}
+
+fn dividir_en_playhead(state: &mut EditorApp) -> Task<MensajeEditor> {
+    let Some(id) = state.editor.seleccion.first().cloned() else {
+        return Task::none();
+    };
+    let Some(caption) = state
+        .editor
+        .proyecto()
+        .captions
+        .iter()
+        .find(|caption| caption.id == id)
+        .cloned()
+    else {
+        return Task::none();
+    };
+    let corte = state
+        .position
+        .clamp(caption.inicio + 0.05, caption.fin - 0.05);
+    if corte <= caption.inicio || corte >= caption.fin {
+        return Task::none();
+    }
+    state
+        .editor
+        .editar_tiempos(&id, caption.inicio, corte, state.duration);
+    let segunda = rod_core::Caption {
+        id: id_nuevo(),
+        inicio: corte,
+        fin: caption.fin,
+        texto: caption.texto.clone(),
+        hablante_id: caption.hablante_id.clone(),
+    };
+    state.editor.agregar(segunda);
+    refrescar_preview(state);
+    Task::none()
+}
+
+fn ciclar_caption(state: &mut EditorApp, paso: i32) -> Task<MensajeEditor> {
+    let captions = &state.editor.proyecto().captions;
+    if captions.is_empty() {
+        return Task::none();
+    }
+    let seleccionada = state
+        .editor
+        .seleccion
+        .first()
+        .and_then(|id| captions.iter().position(|caption| &caption.id == id));
+    let indice = match seleccionada {
+        Some(actual) => {
+            (actual as isize + paso as isize).rem_euclid(captions.len() as isize) as usize
+        }
+        None => {
+            if paso < 0 {
+                captions.len() - 1
+            } else {
+                0
+            }
+        }
+    };
+    let id = captions[indice].id.clone();
+    state.editor.seleccionar_uno(&id);
+    Task::none()
+}
+
+fn ciclar_simultaneo(state: &mut EditorApp, paso: i32) -> Task<MensajeEditor> {
+    let simultaneos: Vec<String> = state
+        .editor
+        .proyecto()
+        .captions
+        .iter()
+        .filter(|caption| caption.inicio <= state.position && caption.fin >= state.position)
+        .map(|caption| caption.id.clone())
+        .collect();
+    if simultaneos.is_empty() {
+        return ciclar_caption(state, paso);
+    }
+    let actual = state
+        .editor
+        .seleccion
+        .first()
+        .and_then(|id| simultaneos.iter().position(|candidato| candidato == id));
+    let indice = match actual {
+        Some(actual) => {
+            (actual as isize + paso as isize).rem_euclid(simultaneos.len() as isize) as usize
+        }
+        None => 0,
+    };
+    state.editor.seleccionar_uno(&simultaneos[indice]);
+    Task::none()
+}
+
+fn copiar(state: &mut EditorApp) -> Task<MensajeEditor> {
+    if let Some(id) = state.editor.seleccion.first()
+        && let Some(caption) = state
+            .editor
+            .proyecto()
+            .captions
+            .iter()
+            .find(|c| &c.id == id)
+    {
+        state.portapapeles = format!(
+            "{} --> {}\n{}",
+            rod_core::format_srt_timestamp(caption.inicio),
+            rod_core::format_srt_timestamp(caption.fin),
+            caption.texto
+        );
+    }
+    Task::none()
+}
+
+fn pegar(state: &mut EditorApp) -> Task<MensajeEditor> {
+    if let Some(documento) = rod_app_srt_documento(&state.portapapeles, &state.video_path) {
+        state.editor = EstadoEditor::nuevo(documento);
+        state.limpio = state.editor.proyecto().clone();
+        refrescar_preview(state);
+    }
+    Task::none()
+}
+
+fn rod_app_srt_documento(texto: &str, ruta_video: &str) -> Option<crate::project_io::Documento> {
+    crate::project_io::cargar(texto, ruta_video).ok()
+}
+
+fn cargar_subtitulos(state: &mut EditorApp, ass: bool) -> Task<MensajeEditor> {
+    let filtro = if ass { "ass" } else { "srt" };
+    let Some(ruta) = rfd::FileDialog::new()
+        .add_filter("Subtítulos", &[filtro])
+        .pick_file()
+    else {
+        return Task::none();
+    };
+    let Ok(texto) = std::fs::read_to_string(ruta) else {
+        state.mensaje = Some("No se pudo leer el archivo de subtítulos".into());
+        return Task::none();
+    };
+    match crate::project_io::cargar(&texto, &state.video_path) {
+        Ok(documento) => {
+            state.editor = EstadoEditor::nuevo(documento);
+            state.limpio = state.editor.proyecto().clone();
+            refrescar_preview(state);
+        }
+        Err(error) => {
+            state.mensaje = Some(format!("No se pudieron cargar los subtítulos: {error}"))
+        }
+    }
+    Task::none()
+}
+
 pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEditor> {
     match message {
+        MensajeEditor::Comando(comando) => {
+            let _ = ejecutar_comando(state, comando);
+        }
         MensajeEditor::Tick => {
             let frame_changed = state.player.update() & 1 != 0;
 
