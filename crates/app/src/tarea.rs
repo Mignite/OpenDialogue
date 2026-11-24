@@ -10,6 +10,14 @@ pub enum Tarea {
     DialogoCarpeta,
     DialogoGuardar,
     EnfocarTexto,
+    /// Los diálogos del editor que no caben en las cuatro formas de arranque.
+    AbrirVideoEditor,
+    CargarSrt,
+    CargarAss,
+    GuardarJson,
+    GuardarAss,
+    ImportarSrt,
+    ImportarTxt,
 }
 
 impl Tarea {

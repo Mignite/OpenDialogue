@@ -1,7 +1,7 @@
 //! Registro único de comandos: menú y teclado producen exactamente lo mismo.
 //! Portado de `App.tsx:1528-1712` más Ctrl+O, añadido en la versión Rust.
 
-use iced::keyboard::{Key, Modifiers, key::Named};
+use egui::{Key, Modifiers};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Comando {
@@ -184,86 +184,96 @@ pub fn atajo(comando: Comando) -> String {
     texto.to_owned()
 }
 
-/// No hace falta un guardia de foco: `iced::keyboard::listen()` solo entrega
-/// eventos que ningún widget capturó, y `TextInput` captura los suyos. Así
-/// Ctrl+Z/Y/C/V quedan al campo de texto y las teclas sueltas no se pierden
-/// cuando el foco está en el timeline.
-pub fn desde_keyboard(key: &Key, modifiers: &Modifiers) -> Option<Comando> {
-    let ctrl = modifiers.command();
-    let shift = modifiers.shift();
-    let alt = modifiers.alt();
+/// Carácter lógico de una tecla de egui, en minúsculas. La rejilla de egui no
+/// tiene `Key::Character`: las letras y dígitos son variantes propias.
+fn character(key: Key) -> Option<char> {
+    match key {
+        Key::Equals => Some('='),
+        Key::Plus => Some('+'),
+        Key::Minus => Some('-'),
+        Key::Questionmark => Some('?'),
+        _ => {
+            let nombre = key.name();
+            let mut caracteres = nombre.chars();
+            match (caracteres.next(), caracteres.next()) {
+                (Some(letra), None) if letra.is_ascii_alphanumeric() => {
+                    Some(letra.to_ascii_lowercase())
+                }
+                _ => None,
+            }
+        }
+    }
+}
 
-    if ctrl && let Key::Character(c) = key.as_ref() {
-        match c.to_ascii_lowercase().as_str() {
-            "s" => {
+/// Un único registro de atajos para menú y teclado. `update` de egui entrega
+/// la tecla y los modificadores del evento; el foco lo decide egui, igual que
+/// lo decidía `iced::keyboard::listen()`.
+pub fn desde_input(key: Key, modifiers: Modifiers) -> Option<Comando> {
+    let ctrl = modifiers.ctrl || modifiers.command || modifiers.mac_cmd;
+    let shift = modifiers.shift;
+    let alt = modifiers.alt;
+
+    if ctrl {
+        match character(key) {
+            Some('s') => {
                 return Some(if shift {
                     Comando::GuardarComo
                 } else {
                     Comando::Guardar
                 });
             }
-            "f" => return Some(Comando::Buscar),
-            _ => {}
-        }
-    }
-
-    if ctrl {
-        if let Key::Character(c) = key.as_ref() {
-            return match c.to_ascii_lowercase().as_str() {
-                "o" => Some(Comando::AbrirProyecto),
-                "z" => Some(if shift {
+            Some('f') => return Some(Comando::Buscar),
+            Some('o') => return Some(Comando::AbrirProyecto),
+            Some('z') => {
+                return Some(if shift {
                     Comando::Rehacer
                 } else {
                     Comando::Deshacer
-                }),
-                "y" => Some(Comando::Rehacer),
-                "c" => Some(Comando::Copiar),
-                "v" => Some(Comando::Pegar),
-                _ => None,
-            };
+                });
+            }
+            Some('y') => return Some(Comando::Rehacer),
+            Some('c') => return Some(Comando::Copiar),
+            Some('v') => return Some(Comando::Pegar),
+            _ => {}
         }
-        if shift && matches!(key.as_ref(), Key::Named(Named::ArrowLeft)) {
+        if shift && key == Key::ArrowLeft {
             return Some(Comando::NudgeIzquierda);
         }
-        if shift && matches!(key.as_ref(), Key::Named(Named::ArrowRight)) {
+        if shift && key == Key::ArrowRight {
             return Some(Comando::NudgeDerecha);
         }
         return None;
     }
 
-    match key.as_ref() {
-        Key::Named(Named::Space) => Some(Comando::ReproducirPausa),
-        Key::Named(Named::ArrowLeft) => Some(if shift {
+    match key {
+        Key::Space => Some(Comando::ReproducirPausa),
+        Key::ArrowLeft => Some(if shift {
             Comando::RetrocederFino
         } else if alt {
             Comando::CaptionAnterior
         } else {
             Comando::Retroceder
         }),
-        Key::Named(Named::ArrowRight) => Some(if shift {
+        Key::ArrowRight => Some(if shift {
             Comando::AvanzarFino
         } else if alt {
             Comando::CaptionSiguiente
         } else {
             Comando::Avanzar
         }),
-        Key::Named(Named::ArrowUp) => Some(Comando::SimultaneoArriba),
-        Key::Named(Named::ArrowDown) => Some(Comando::SimultaneoAbajo),
-        Key::Named(Named::Delete) => Some(Comando::Eliminar),
-        Key::Character(c) => match c.to_ascii_lowercase().as_str() {
-            "e" => Some(Comando::EditarTexto),
-            "a" => Some(Comando::AgregarFragmento),
-            "c" => Some(Comando::Dividir),
-            "?" => Some(Comando::Ayuda),
-            "+" | "=" => Some(Comando::VelocidadMas),
-            "-" | "_" => Some(Comando::VelocidadMenos),
-            n => n
-                .parse::<u8>()
-                .ok()
-                .filter(|numero| (1..=9).contains(numero))
-                .map(Comando::Hablante),
+        Key::ArrowUp => Some(Comando::SimultaneoArriba),
+        Key::ArrowDown => Some(Comando::SimultaneoAbajo),
+        Key::Delete => Some(Comando::Eliminar),
+        _ => match character(key)?.to_ascii_lowercase() {
+            'e' => Some(Comando::EditarTexto),
+            'a' => Some(Comando::AgregarFragmento),
+            'c' => Some(Comando::Dividir),
+            '?' => Some(Comando::Ayuda),
+            '+' | '=' => Some(Comando::VelocidadMas),
+            '-' | '_' => Some(Comando::VelocidadMenos),
+            numero @ '1'..='9' => Some(Comando::Hablante(numero as u8 - b'0')),
+            _ => None,
         },
-        _ => None,
     }
 }
 
@@ -272,27 +282,44 @@ mod tests {
     use super::*;
 
     fn key(c: &str) -> Key {
-        Key::Character(c.into())
+        egui::Key::from_name(c).expect("tecla conocida")
+    }
+
+    fn mods(ctrl: bool, shift: bool, alt: bool) -> Modifiers {
+        Modifiers {
+            ctrl,
+            command: ctrl,
+            shift,
+            alt,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn ctrl_s_es_guardar() {
+        let mods = egui::Modifiers {
+            ctrl: true,
+            ..Default::default()
+        };
+        assert_eq!(desde_input(egui::Key::S, mods), Some(Comando::Guardar));
     }
 
     #[test]
     fn ctrl_s_y_ctrl_f_funcionan_dentro_de_un_campo() {
         assert_eq!(
-            desde_keyboard(&key("s"), &Modifiers::COMMAND),
+            desde_input(key("s"), mods(true, false, false)),
             Some(Comando::Guardar)
         );
         assert_eq!(
-            desde_keyboard(&key("f"), &Modifiers::COMMAND),
+            desde_input(key("f"), mods(true, false, false)),
             Some(Comando::Buscar)
         );
     }
 
     #[test]
     fn ctrl_z_se_mapea_a_deshacer() {
-        // Si un text_input está enfocado, iced captura el evento y la
-        // suscripción no lo recibe: el guardia vive en el runtime, no aquí.
         assert_eq!(
-            desde_keyboard(&key("z"), &Modifiers::COMMAND),
+            desde_input(key("z"), mods(true, false, false)),
             Some(Comando::Deshacer)
         );
     }
@@ -300,7 +327,7 @@ mod tests {
     #[test]
     fn ctrl_shift_s_es_guardar_como() {
         assert_eq!(
-            desde_keyboard(&key("s"), &(Modifiers::COMMAND | Modifiers::SHIFT)),
+            desde_input(key("s"), mods(true, true, false)),
             Some(Comando::GuardarComo)
         );
     }
@@ -308,15 +335,15 @@ mod tests {
     #[test]
     fn flechas_con_modificadores() {
         assert_eq!(
-            desde_keyboard(&Key::Named(Named::ArrowLeft), &Modifiers::ALT),
+            desde_input(Key::ArrowLeft, mods(false, false, true)),
             Some(Comando::CaptionAnterior)
         );
         assert_eq!(
-            desde_keyboard(&Key::Named(Named::ArrowRight), &Modifiers::SHIFT),
+            desde_input(Key::ArrowRight, mods(false, true, false)),
             Some(Comando::AvanzarFino)
         );
         assert_eq!(
-            desde_keyboard(&Key::Named(Named::ArrowRight), &Modifiers::NONE),
+            desde_input(Key::ArrowRight, mods(false, false, false)),
             Some(Comando::Avanzar)
         );
     }
@@ -324,19 +351,19 @@ mod tests {
     #[test]
     fn teclas_de_hablante_y_atajos_simples() {
         assert_eq!(
-            desde_keyboard(&key("7"), &Modifiers::NONE),
+            desde_input(key("7"), mods(false, false, false)),
             Some(Comando::Hablante(7))
         );
         assert_eq!(
-            desde_keyboard(&key("c"), &Modifiers::NONE),
+            desde_input(key("c"), mods(false, false, false)),
             Some(Comando::Dividir)
         );
         assert_eq!(
-            desde_keyboard(&key("?"), &Modifiers::NONE),
+            desde_input(key("?"), mods(false, false, false)),
             Some(Comando::Ayuda)
         );
         assert_eq!(
-            desde_keyboard(&Key::Named(Named::Space), &Modifiers::NONE),
+            desde_input(Key::Space, mods(false, false, false)),
             Some(Comando::ReproducirPausa)
         );
     }

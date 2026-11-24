@@ -71,6 +71,13 @@ fn despachar_tarea(tarea: Tarea, tx: &std::sync::mpsc::Sender<RespuestaDialogo>)
         Tarea::DialogoProyecto => dialogos::pedir_proyecto(tx.clone()),
         Tarea::DialogoCarpeta => dialogos::pedir_carpeta(tx.clone()),
         Tarea::DialogoGuardar => dialogos::pedir_guardar(tx.clone()),
+        Tarea::AbrirVideoEditor => dialogos::pedir_video_editor(tx.clone()),
+        Tarea::CargarSrt => dialogos::pedir_srt(tx.clone()),
+        Tarea::CargarAss => dialogos::pedir_ass(tx.clone()),
+        Tarea::GuardarJson => dialogos::pedir_json(tx.clone()),
+        Tarea::GuardarAss => dialogos::pedir_ass_guardar(tx.clone()),
+        Tarea::ImportarSrt => dialogos::pedir_autosubs_srt(tx.clone()),
+        Tarea::ImportarTxt => dialogos::pedir_autosubs_txt(tx.clone()),
         Tarea::EnfocarTexto | Tarea::Ninguna => {}
     }
     Task::none()
@@ -181,14 +188,36 @@ fn actualizar(state: &mut AppState, mensaje: Mensaje) -> Task<Mensaje> {
             }
             tarea_total
         }
-        Mensaje::RespuestaDialogo(respuesta) => {
-            let mensaje = match respuesta {
-                RespuestaDialogo::Video(ruta) => MensajeInicio::DialogoVideo(ruta),
-                RespuestaDialogo::Proyecto(ruta) => MensajeInicio::DialogoProyecto(ruta),
-                RespuestaDialogo::Carpeta(_) | RespuestaDialogo::Guardar(_) => return Task::none(),
-            };
-            actualizar(state, Mensaje::Inicio(mensaje))
-        }
+        Mensaje::RespuestaDialogo(respuesta) => match pantalla {
+            Pantalla::Inicio(_) => {
+                let mensaje = match respuesta {
+                    RespuestaDialogo::Video(ruta) => Some(MensajeInicio::DialogoVideo(ruta)),
+                    RespuestaDialogo::Proyecto(ruta) => Some(MensajeInicio::DialogoProyecto(ruta)),
+                    _ => None,
+                };
+                match mensaje {
+                    Some(mensaje) => actualizar(state, Mensaje::Inicio(mensaje)),
+                    None => Task::none(),
+                }
+            }
+            Pantalla::Editor(_) => {
+                use rod_app::editor_app::MensajeEditor as E;
+                let mensaje = match respuesta {
+                    RespuestaDialogo::VideoEditor(ruta) => E::DialogoVideoEditor(ruta),
+                    RespuestaDialogo::Proyecto(ruta) => E::DialogoProyecto(ruta),
+                    RespuestaDialogo::Srt(ruta) => E::DialogoSubtitulos(ruta, false),
+                    RespuestaDialogo::Ass(ruta) => E::DialogoSubtitulos(ruta, true),
+                    RespuestaDialogo::AssGuardar(ruta) => E::DialogoAssExportar(ruta),
+                    RespuestaDialogo::Guardar(ruta) => E::DialogoGuardarProyecto(ruta),
+                    RespuestaDialogo::Carpeta(ruta) => E::DialogoCarpetaExportar(ruta),
+                    RespuestaDialogo::Json(ruta) => E::DialogoJson(ruta),
+                    RespuestaDialogo::AutosubsSrt(ruta) => E::DialogoAutosubsSrt(ruta),
+                    RespuestaDialogo::AutosubsTxt(ruta) => E::DialogoAutosubsTxt(ruta),
+                    RespuestaDialogo::Video(_) => return Task::none(),
+                };
+                actualizar(state, Mensaje::Editor(mensaje))
+            }
+        },
         Mensaje::VentanaId(id) => {
             state.ventana = id;
             Task::none()
@@ -216,23 +245,26 @@ fn actualizar(state: &mut AppState, mensaje: Mensaje) -> Task<Mensaje> {
         },
         Mensaje::Comando(comando) => match pantalla {
             Pantalla::Editor(editor) => match comando {
-                Comando::NuevoProyecto | Comando::AbrirVideo => {
-                    editor_app::update(editor, MensajeEditor::AbrirVideo).map(Mensaje::Editor)
-                }
-                Comando::AbrirProyecto => {
-                    editor_app::update(editor, MensajeEditor::AbrirProyecto).map(Mensaje::Editor)
-                }
+                Comando::NuevoProyecto | Comando::AbrirVideo => despachar_tarea(
+                    editor_app::update(editor, MensajeEditor::AbrirVideo),
+                    &state.tx_dialogos,
+                ),
+                Comando::AbrirProyecto => despachar_tarea(
+                    editor_app::update(editor, MensajeEditor::AbrirProyecto),
+                    &state.tx_dialogos,
+                ),
                 Comando::Guardar | Comando::GuardarComo => {
                     let mensaje = if comando == Comando::GuardarComo {
                         MensajeEditor::GuardarProyectoComo
                     } else {
                         MensajeEditor::GuardarProyecto
                     };
-                    editor_app::update(editor, mensaje).map(Mensaje::Editor)
+                    despachar_tarea(editor_app::update(editor, mensaje), &state.tx_dialogos)
                 }
-                _ => {
-                    editor_app::update(editor, MensajeEditor::Comando(comando)).map(Mensaje::Editor)
-                }
+                _ => despachar_tarea(
+                    editor_app::update(editor, MensajeEditor::Comando(comando)),
+                    &state.tx_dialogos,
+                ),
             },
             Pantalla::Inicio(estado) => {
                 if comando == Comando::Ayuda {
@@ -277,7 +309,9 @@ fn actualizar(state: &mut AppState, mensaje: Mensaje) -> Task<Mensaje> {
             despachar_tarea(tarea, &state.tx_dialogos)
         }
         Mensaje::Editor(mensaje) => match pantalla {
-            Pantalla::Editor(editor) => editor_app::update(editor, mensaje).map(Mensaje::Editor),
+            Pantalla::Editor(editor) => {
+                despachar_tarea(editor_app::update(editor, mensaje), &state.tx_dialogos)
+            }
             Pantalla::Inicio(_) => Task::none(),
         },
     }
@@ -387,6 +421,34 @@ fn vista(state: &AppState) -> Element<'_, Mensaje> {
         .into()
 }
 
+/// Puente temporal mientras el binario sigue siendo de iced: traduce la tecla
+/// y los modificadores al tipo que espera el registro de comandos de egui.
+fn tecla_egui(key: iced::keyboard::Key) -> Option<egui::Key> {
+    use iced::keyboard::{Key, key::Named};
+    match key {
+        Key::Character(c) => egui::Key::from_name(&c),
+        Key::Named(Named::Space) => Some(egui::Key::Space),
+        Key::Named(Named::ArrowLeft) => Some(egui::Key::ArrowLeft),
+        Key::Named(Named::ArrowRight) => Some(egui::Key::ArrowRight),
+        Key::Named(Named::ArrowUp) => Some(egui::Key::ArrowUp),
+        Key::Named(Named::ArrowDown) => Some(egui::Key::ArrowDown),
+        Key::Named(Named::Delete) => Some(egui::Key::Delete),
+        Key::Named(Named::Enter) => Some(egui::Key::Enter),
+        _ => None,
+    }
+}
+
+fn mods_egui(mods: iced::keyboard::Modifiers) -> egui::Modifiers {
+    use iced::keyboard::Modifiers as M;
+    egui::Modifiers {
+        ctrl: mods.contains(M::CTRL),
+        command: mods.contains(M::LOGO),
+        mac_cmd: cfg!(target_os = "macos") && mods.contains(M::LOGO),
+        shift: mods.shift(),
+        alt: mods.alt(),
+    }
+}
+
 fn suscripcion(state: &AppState) -> Subscription<Mensaje> {
     let pantalla = &state.pantalla;
     let arrastre = iced::window::events().filter_map(|(_id, evento)| match evento {
@@ -395,7 +457,8 @@ fn suscripcion(state: &AppState) -> Subscription<Mensaje> {
     });
     let teclado = iced::keyboard::listen().filter_map(|evento| match evento {
         iced::keyboard::Event::KeyPressed { key, modifiers, .. } => {
-            comandos::desde_keyboard(&key, &modifiers).map(Mensaje::Comando)
+            let (key, mods) = (tecla_egui(key)?, mods_egui(modifiers));
+            comandos::desde_input(key, mods).map(Mensaje::Comando)
         }
         _ => None,
     });

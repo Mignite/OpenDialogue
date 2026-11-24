@@ -140,9 +140,12 @@ mod tests {
     #[test]
     fn menu_y_teclado_producen_el_mismo_comando() {
         let en_menu = comandos_de(Seccion::Archivo).contains(&Comando::Guardar);
-        let por_teclado = crate::comandos::desde_keyboard(
-            &iced::keyboard::Key::Character("s".into()),
-            &iced::keyboard::Modifiers::COMMAND,
+        let por_teclado = crate::comandos::desde_input(
+            egui::Key::S,
+            egui::Modifiers {
+                ctrl: true,
+                ..Default::default()
+            },
         );
         assert!(en_menu);
         assert_eq!(por_teclado, Some(Comando::Guardar));

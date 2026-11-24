@@ -5,7 +5,7 @@ use std::sync::Arc;
 use iced::widget::{
     button, column, container, pick_list, row, scrollable, shader, slider, space, text, text_input,
 };
-use iced::{Background, Color, Element, Length, Subscription, Task};
+use iced::{Background, Color, Element, Length, Subscription};
 
 use crate::comandos::Comando;
 use crate::editor::{EstadoEditor, MAX_HABLANTES, normalizar_tecla};
@@ -18,6 +18,7 @@ use crate::project_io::{
     exportar_srt_por_hablante, guardar_proyecto,
 };
 use crate::recovery_io::{self, AvisoRecovery};
+use crate::tarea::Tarea;
 use crate::timeline::{self, Vista};
 use crate::video::{Capa, Video};
 use crate::{recientes, tema, thumbnail};
@@ -140,7 +141,7 @@ pub enum MensajeEditor {
     /// El usuario enciende o apaga el seguimiento del playhead.
     Seguir,
     /// Modificadores del teclado, para que la rueda sepa si hay Shift.
-    Modificadores(iced::keyboard::Modifiers),
+    Modificadores(egui::Modifiers),
     /// Abre un `.cdp`: proyecto, video y playhead.
     AbrirProyecto,
     /// Guarda en la ruta actual o, si no hay, pregunta una.
@@ -157,6 +158,16 @@ pub enum MensajeEditor {
     ExportarJson,
     /// El `.ass` del preview, con los presets guardados.
     ExportarAss,
+    /// Respuestas de los diálogos nativos pedidos desde el editor.
+    DialogoVideoEditor(Option<PathBuf>),
+    DialogoProyecto(Option<PathBuf>),
+    DialogoSubtitulos(Option<PathBuf>, bool),
+    DialogoGuardarProyecto(Option<PathBuf>),
+    DialogoCarpetaExportar(Option<PathBuf>),
+    DialogoJson(Option<PathBuf>),
+    DialogoAssExportar(Option<PathBuf>),
+    DialogoAutosubsSrt(Option<PathBuf>),
+    DialogoAutosubsTxt(Option<PathBuf>),
 }
 
 pub struct EditorApp {
@@ -201,7 +212,7 @@ pub struct EditorApp {
     objetivo_vista: Option<f64>,
     /// Modificadores del teclado. La rueda no los lleva en su evento, así que
     /// el «Shift para acercar» se decide con este espejo.
-    modificadores: iced::keyboard::Modifiers,
+    modificadores: egui::Modifiers,
     /// Dónde se guardó el proyecto. `None` = nunca se guardó: «Guardar» pide
     /// ruta y «Guardar como» la vuelve a pedir.
     ruta_proyecto: Option<PathBuf>,
@@ -240,21 +251,14 @@ pub struct EditorApp {
     miniatura_pendiente: bool,
     /// Portapapeles interno para Ctrl+C/V entre captions.
     portapapeles: String,
+    /// Contenido del SRT leído mientras se pide el TXT gemelo del autosubs.
+    pendiente_srt: Option<String>,
 }
 
 pub fn subscription(_state: &EditorApp) -> Subscription<MensajeEditor> {
-    Subscription::batch([
-        iced::window::frames().map(|_| MensajeEditor::Tick),
-        // Los modificadores se copian aparte: `WheelScrolled` no los trae y el
-        // «Shift + rueda = zoom» necesita saberlos. El teclado ya no vive aquí:
-        // `main.rs` mapea las tecas a `Comando`, el mismo registro que el menú.
-        iced::keyboard::listen().filter_map(|evento| match evento {
-            iced::keyboard::Event::ModifiersChanged(modifiers) => {
-                Some(MensajeEditor::Modificadores(modifiers))
-            }
-            _ => None,
-        }),
-    ])
+    // Transitorio hasta el task 8: el front-end de egui entregará los
+    // modificadores desde `egui::Context` con `MensajeEditor::Modificadores`.
+    iced::window::frames().map(|_| MensajeEditor::Tick)
 }
 
 impl EditorApp {
@@ -333,7 +337,7 @@ impl EditorApp {
             ancho_timeline: 0.0,
             seguir: true,
             objetivo_vista: None,
-            modificadores: iced::keyboard::Modifiers::default(),
+            modificadores: egui::Modifiers::default(),
             ruta_proyecto: ruta,
             limpio,
             recovery: None,
@@ -348,6 +352,7 @@ impl EditorApp {
             mensaje: None,
             miniatura_pendiente,
             portapapeles: String::new(),
+            pendiente_srt: None,
         };
         // El playhead del `.cdp` no se copia solo al estado: mpv sigue en 0.
         // Sin este seek, el primer `Tick` sobreescribe `position` con 0 y la
@@ -613,13 +618,13 @@ fn refrescar_preview(state: &mut EditorApp) {
 /// no hay botón «Guardar» y cerrar la app no debe perder lo que se acaba de
 /// teclear. El preview se recarga con la misma lista, así que lo que se ve es
 /// lo que se escribió en el `.ass`.
-fn guardar_presets(state: &mut EditorApp) -> Task<MensajeEditor> {
+fn guardar_presets(state: &mut EditorApp) -> Tarea {
     state.mensaje = match presets_io::escribir(&state.ruta_presets, &state.presets) {
         Ok(()) => None,
         Err(error) => Some(format!("No se pudieron guardar los estilos: {error}")),
     };
     refrescar_preview(state);
-    Task::none()
+    Tarea::Ninguna
 }
 
 /// El `text_input` muestra el texto del caption seleccionado. Sin selección
@@ -716,7 +721,7 @@ fn aplicar_autosubs(
 }
 
 /// Un único manejador para el menú y el teclado: los dos entregan un `Comando`.
-fn ejecutar_comando(state: &mut EditorApp, comando: Comando) -> Task<MensajeEditor> {
+fn ejecutar_comando(state: &mut EditorApp, comando: Comando) -> Tarea {
     use Comando as C;
     match comando {
         C::Guardar => update(state, MensajeEditor::GuardarProyecto),
@@ -749,7 +754,7 @@ fn ejecutar_comando(state: &mut EditorApp, comando: Comando) -> Task<MensajeEdit
                 Some(id) => update(state, MensajeEditor::AsignarHablante(Some(id))),
                 None => {
                     state.mensaje = Some(format!("No hay hablante con la tecla {numero}"));
-                    Task::none()
+                    Tarea::Ninguna
                 }
             }
         }
@@ -776,66 +781,77 @@ fn ejecutar_comando(state: &mut EditorApp, comando: Comando) -> Task<MensajeEdit
         C::EditarTexto => {
             if state.editor.seleccion.len() > 1 {
                 state.mensaje = Some("Selecciona un solo subtítulo para editar su texto".into());
-                Task::none()
+                Tarea::Ninguna
             } else {
-                iced::widget::operation::focus(ID_TEXTO_SUBTITULO)
+                Tarea::EnfocarTexto
             }
         }
         C::Buscar => {
             state.mensaje = Some("Buscar: usa el panel de subtítulos para localizar texto".into());
-            Task::none()
+            Tarea::Ninguna
         }
         C::Ayuda => {
             state.mensaje = Some(
                 "Atajos: Space, ←/→, Alt+←/→, Shift+←/→, Ctrl+Shift+←/→, E, A, C, Delete, Ctrl+Z/Y/C/V, ?, +/−".into(),
             );
-            Task::none()
+            Tarea::Ninguna
         }
         C::ImportarAutosubs => importar_autosubs(state),
         C::CargarSrt | C::CargarAss => cargar_subtitulos(state, comando == C::CargarAss),
         C::NuevoProyecto | C::AbrirProyecto | C::AbrirVideo => {
             state.mensaje = Some("Usa el menú de inicio para abrir un proyecto".into());
-            Task::none()
+            Tarea::Ninguna
         }
     }
 }
 
 /// Par SRT+TXT del oráculo: se pide el SRT, se busca el TXT gemelo en la misma
 /// carpeta y, si no está, se pide en un segundo diálogo.
-fn importar_autosubs(state: &mut EditorApp) -> Task<MensajeEditor> {
-    use rod_core::{parse_autosubs_txt, parse_srt};
+fn importar_autosubs(_state: &mut EditorApp) -> Tarea {
+    // El primer diálogo (SRT) se pide al front-end; el resultado llega como
+    // `MensajeEditor::DialogoAutosubsSrt`.
+    Tarea::ImportarSrt
+}
 
-    let Some(ruta_srt) = rfd::FileDialog::new()
-        .add_filter("Subtítulos", &["srt"])
-        .pick_file()
-    else {
-        return Task::none();
+fn importar_autosubs_srt(state: &mut EditorApp, ruta_srt: Option<PathBuf>) -> Tarea {
+    use rod_core::parse_srt;
+
+    let Some(ruta_srt) = ruta_srt else {
+        return Tarea::Ninguna;
     };
     let Ok(texto_srt) = std::fs::read_to_string(&ruta_srt) else {
         state.mensaje = Some("No se pudo leer el SRT".into());
-        return Task::none();
+        return Tarea::Ninguna;
     };
     let captions = parse_srt(&texto_srt);
     if captions.is_empty() {
         state.mensaje = Some("El SRT no tiene subtítulos".into());
-        return Task::none();
+        return Tarea::Ninguna;
     }
 
     let gemelo = ruta_srt.with_extension("txt");
-    let ruta_txt = if gemelo.is_file() {
-        Some(gemelo)
-    } else {
-        rfd::FileDialog::new()
-            .add_filter("Texto", &["txt"])
-            .pick_file()
-    };
+    if gemelo.is_file() {
+        return importar_autosubs_txt(state, Some(gemelo));
+    }
+    state.pendiente_srt = Some(texto_srt);
+    Tarea::ImportarTxt
+}
+
+fn importar_autosubs_txt(state: &mut EditorApp, ruta_txt: Option<PathBuf>) -> Tarea {
+    use rod_core::{parse_autosubs_txt, parse_srt};
+
     let Some(ruta_txt) = ruta_txt else {
-        return Task::none();
+        state.pendiente_srt = None;
+        return Tarea::Ninguna;
     };
     let Ok(texto_txt) = std::fs::read_to_string(&ruta_txt) else {
         state.mensaje = Some("No se pudo leer el TXT de turnos".into());
-        return Task::none();
+        return Tarea::Ninguna;
     };
+    let Some(texto_srt) = state.pendiente_srt.take() else {
+        return Tarea::Ninguna;
+    };
+    let captions = parse_srt(&texto_srt);
     let turnos = parse_autosubs_txt(&texto_txt);
     let (hablantes, captions) = aplicar_autosubs(&captions, &turnos);
     let asignados = captions
@@ -859,10 +875,10 @@ fn importar_autosubs(state: &mut EditorApp) -> Task<MensajeEditor> {
         state.editor.proyecto().captions.len(),
         asignados
     ));
-    Task::none()
+    Tarea::Ninguna
 }
 
-fn nudge_seleccion(state: &mut EditorApp, delta: f64) -> Task<MensajeEditor> {
+fn nudge_seleccion(state: &mut EditorApp, delta: f64) -> Tarea {
     let duracion = state.duration;
     let ids = state.editor.seleccion.clone();
     for id in ids {
@@ -881,10 +897,10 @@ fn nudge_seleccion(state: &mut EditorApp, delta: f64) -> Task<MensajeEditor> {
             .editar_tiempos(&id, caption.inicio + delta, caption.fin + delta, duracion);
     }
     refrescar_preview(state);
-    Task::none()
+    Tarea::Ninguna
 }
 
-fn agregar_fragmento(state: &mut EditorApp) -> Task<MensajeEditor> {
+fn agregar_fragmento(state: &mut EditorApp) -> Tarea {
     let inicio = state.position;
     let fin = (inicio + 2.0).min(state.duration.max(inicio + 0.5));
     let caption = rod_core::Caption {
@@ -896,12 +912,12 @@ fn agregar_fragmento(state: &mut EditorApp) -> Task<MensajeEditor> {
     };
     state.editor.agregar(caption);
     refrescar_preview(state);
-    Task::none()
+    Tarea::Ninguna
 }
 
-fn dividir_en_playhead(state: &mut EditorApp) -> Task<MensajeEditor> {
+fn dividir_en_playhead(state: &mut EditorApp) -> Tarea {
     let Some(id) = state.editor.seleccion.first().cloned() else {
-        return Task::none();
+        return Tarea::Ninguna;
     };
     let Some(caption) = state
         .editor
@@ -911,13 +927,13 @@ fn dividir_en_playhead(state: &mut EditorApp) -> Task<MensajeEditor> {
         .find(|caption| caption.id == id)
         .cloned()
     else {
-        return Task::none();
+        return Tarea::Ninguna;
     };
     let corte = state
         .position
         .clamp(caption.inicio + 0.05, caption.fin - 0.05);
     if corte <= caption.inicio || corte >= caption.fin {
-        return Task::none();
+        return Tarea::Ninguna;
     }
     state
         .editor
@@ -931,13 +947,13 @@ fn dividir_en_playhead(state: &mut EditorApp) -> Task<MensajeEditor> {
     };
     state.editor.agregar(segunda);
     refrescar_preview(state);
-    Task::none()
+    Tarea::Ninguna
 }
 
-fn ciclar_caption(state: &mut EditorApp, paso: i32) -> Task<MensajeEditor> {
+fn ciclar_caption(state: &mut EditorApp, paso: i32) -> Tarea {
     let captions = &state.editor.proyecto().captions;
     if captions.is_empty() {
-        return Task::none();
+        return Tarea::Ninguna;
     }
     let seleccionada = state
         .editor
@@ -958,10 +974,10 @@ fn ciclar_caption(state: &mut EditorApp, paso: i32) -> Task<MensajeEditor> {
     };
     let id = captions[indice].id.clone();
     state.editor.seleccionar_uno(&id);
-    Task::none()
+    Tarea::Ninguna
 }
 
-fn ciclar_simultaneo(state: &mut EditorApp, paso: i32) -> Task<MensajeEditor> {
+fn ciclar_simultaneo(state: &mut EditorApp, paso: i32) -> Tarea {
     let simultaneos: Vec<String> = state
         .editor
         .proyecto()
@@ -985,10 +1001,10 @@ fn ciclar_simultaneo(state: &mut EditorApp, paso: i32) -> Task<MensajeEditor> {
         None => 0,
     };
     state.editor.seleccionar_uno(&simultaneos[indice]);
-    Task::none()
+    Tarea::Ninguna
 }
 
-fn copiar(state: &mut EditorApp) -> Task<MensajeEditor> {
+fn copiar(state: &mut EditorApp) -> Tarea {
     if let Some(id) = state.editor.seleccion.first()
         && let Some(caption) = state
             .editor
@@ -1004,37 +1020,41 @@ fn copiar(state: &mut EditorApp) -> Task<MensajeEditor> {
             caption.texto
         );
     }
-    Task::none()
+    Tarea::Ninguna
 }
 
-fn pegar(state: &mut EditorApp) -> Task<MensajeEditor> {
+fn pegar(state: &mut EditorApp) -> Tarea {
     if state.portapapeles.trim().is_empty() {
-        return Task::none();
+        return Tarea::Ninguna;
     }
     // Insertar fragmentos, nunca reconstruir el editor: `EstadoEditor::nuevo`
     // reinicia el historial y `limpio`, y un Ctrl+V con el portapapeles vacío
     // borraría el proyecto sin posibilidad de deshacer.
     let Ok(documento) = crate::project_io::cargar(&state.portapapeles, &state.video_path) else {
-        return Task::none();
+        return Tarea::Ninguna;
     };
     for caption in documento.proyecto.captions {
         state.editor.agregar(caption);
     }
     refrescar_preview(state);
-    Task::none()
+    Tarea::Ninguna
 }
 
-fn cargar_subtitulos(state: &mut EditorApp, ass: bool) -> Task<MensajeEditor> {
-    let filtro = if ass { "ass" } else { "srt" };
-    let Some(ruta) = rfd::FileDialog::new()
-        .add_filter("Subtítulos", &[filtro])
-        .pick_file()
-    else {
-        return Task::none();
+fn cargar_subtitulos(_state: &mut EditorApp, ass: bool) -> Tarea {
+    if ass {
+        Tarea::CargarAss
+    } else {
+        Tarea::CargarSrt
+    }
+}
+
+fn aplicar_subtitulos_cargados(state: &mut EditorApp, ruta: Option<PathBuf>) -> Tarea {
+    let Some(ruta) = ruta else {
+        return Tarea::Ninguna;
     };
     let Ok(texto) = std::fs::read_to_string(ruta) else {
         state.mensaje = Some("No se pudo leer el archivo de subtítulos".into());
-        return Task::none();
+        return Tarea::Ninguna;
     };
     match crate::project_io::cargar(&texto, &state.video_path) {
         Ok(documento) => {
@@ -1046,10 +1066,83 @@ fn cargar_subtitulos(state: &mut EditorApp, ass: bool) -> Task<MensajeEditor> {
             state.mensaje = Some(format!("No se pudieron cargar los subtítulos: {error}"))
         }
     }
-    Task::none()
+    Tarea::Ninguna
 }
 
-pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEditor> {
+fn guardar_en(state: &mut EditorApp, ruta: PathBuf) {
+    // El playhead no es parte de la edición (vive fuera del editor y del
+    // historial), pero sí del proyecto: se escribe al guardar y se restaura al
+    // abrir.
+    let mut proyecto = state.editor.proyecto().clone();
+    proyecto.playhead = state.position;
+    match guardar_proyecto(&ruta, &proyecto) {
+        Ok(()) => {
+            if let Err(error) = recientes::registrar_guardado(
+                &ruta,
+                &recientes::ruta_indice(),
+                &thumbnail::carpeta_cache(),
+                &state.pixels,
+                WIDTH as u32,
+                HEIGHT as u32,
+            ) {
+                state.mensaje = Some(format!(
+                    "Proyecto guardado, pero no se pudo registrar en recientes: {error}"
+                ));
+            }
+            state.miniatura_pendiente = false;
+            state.ruta_proyecto = Some(ruta);
+            state.limpio = proyecto;
+            state.recovery = None;
+            borrar_recovery(state);
+        }
+        Err(error) => eprintln!("no se pudo guardar el proyecto: {error}"),
+    }
+}
+
+fn exportar_srt_en(state: &mut EditorApp, carpeta: PathBuf) {
+    let exportacion = exportar_srt_por_hablante(state.editor.proyecto());
+    let mut escritos = 0;
+    for (nombre, contenido) in &exportacion.archivos {
+        let ruta = carpeta.join(nombre);
+        match std::fs::write(&ruta, contenido) {
+            Ok(()) => escritos += 1,
+            Err(error) => eprintln!("no se pudo escribir '{}': {error}", ruta.display()),
+        }
+    }
+    if let Some(reporte) = &exportacion.reporte_solapes {
+        let ruta = carpeta.join("solapes.txt");
+        if let Err(error) = std::fs::write(&ruta, reporte) {
+            eprintln!("no se pudo escribir '{}': {error}", ruta.display());
+        }
+    }
+    state.mensaje = Some(resumen_srt(&exportacion, escritos));
+}
+
+fn exportar_json_en(state: &mut EditorApp, ruta: PathBuf) {
+    let texto = exportar_json_combinado(state.editor.proyecto());
+    state.mensaje = Some(match std::fs::write(&ruta, texto) {
+        Ok(()) => format!("JSON exportado: {}", ruta.display()),
+        Err(error) => {
+            eprintln!("no se pudo escribir el JSON: {error}");
+            format!("No se pudo exportar el JSON: {error}")
+        }
+    });
+}
+
+fn exportar_ass_en(state: &mut EditorApp, ruta: PathBuf) {
+    // La misma cadena que rasteriza el preview: si el archivo y la imagen
+    // divergieran, sería un bug (invariante del proyecto).
+    let texto = ass_del_proyecto(&state.editor, &state.presets);
+    state.mensaje = Some(match std::fs::write(&ruta, texto) {
+        Ok(()) => format!("ASS exportado: {}", ruta.display()),
+        Err(error) => {
+            eprintln!("no se pudo escribir el .ass: {error}");
+            format!("No se pudo exportar el .ass: {error}")
+        }
+    });
+}
+
+pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
     match message {
         MensajeEditor::Comando(comando) => return ejecutar_comando(state, comando),
         MensajeEditor::Tick => {
@@ -1082,17 +1175,15 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEdit
                 state.regenerar_miniatura_en(&thumbnail::carpeta_cache());
             }
         }
-        MensajeEditor::AbrirVideo => {
-            let Some(path) = rfd::FileDialog::new()
-                .add_filter("Vídeos", &["mp4", "mkv", "webm", "mov", "avi"])
-                .pick_file()
-            else {
-                return Task::none();
+        MensajeEditor::AbrirVideo => return Tarea::AbrirVideoEditor,
+        MensajeEditor::DialogoVideoEditor(path) => {
+            let Some(path) = path else {
+                return Tarea::Ninguna;
             };
 
             let Some(path_text) = path.to_str() else {
                 eprintln!("la ruta seleccionada no es UTF-8");
-                return Task::none();
+                return Tarea::Ninguna;
             };
 
             match rod_player::Player::open(path_text) {
@@ -1102,12 +1193,10 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEdit
                 }
             }
         }
-        MensajeEditor::AbrirProyecto => {
-            let Some(ruta) = rfd::FileDialog::new()
-                .add_filter("Proyecto", &["cdp"])
-                .pick_file()
-            else {
-                return Task::none();
+        MensajeEditor::AbrirProyecto => return Tarea::DialogoProyecto,
+        MensajeEditor::DialogoProyecto(ruta) => {
+            let Some(ruta) = ruta else {
+                return Tarea::Ninguna;
             };
             match abrir_proyecto(&ruta) {
                 Ok(proyecto) => match cargar_proyecto(state, proyecto, Some(ruta)) {
@@ -1124,50 +1213,14 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEdit
         MensajeEditor::GuardarProyecto | MensajeEditor::GuardarProyectoComo => {
             let pedir_ruta = matches!(message, MensajeEditor::GuardarProyectoComo)
                 || state.ruta_proyecto.is_none();
-            let ruta = match state.ruta_proyecto.clone() {
-                Some(ruta) if !pedir_ruta => ruta,
-                _ => {
-                    let Some(ruta) = rfd::FileDialog::new()
-                        .add_filter("Proyecto", &["cdp"])
-                        .set_file_name("proyecto.cdp")
-                        .save_file()
-                    else {
-                        return Task::none();
-                    };
-                    ruta
-                }
-            };
-            // El playhead no es parte de la edición (vive fuera del editor y
-            // del historial), pero sí del proyecto: se escribe al guardar y se
-            // restaura al abrir.
-            let mut proyecto = state.editor.proyecto().clone();
-            proyecto.playhead = state.position;
-            match guardar_proyecto(&ruta, &proyecto) {
-                Ok(()) => {
-                    if let Err(error) = recientes::registrar_guardado(
-                        &ruta,
-                        &recientes::ruta_indice(),
-                        &thumbnail::carpeta_cache(),
-                        &state.pixels,
-                        WIDTH as u32,
-                        HEIGHT as u32,
-                    ) {
-                        state.mensaje = Some(format!(
-                            "Proyecto guardado, pero no se pudo registrar en recientes: {error}"
-                        ));
-                    }
-                    state.miniatura_pendiente = false;
-                    state.ruta_proyecto = Some(ruta);
-                    // Lo que hay en disco es lo que hay en memoria: la línea
-                    // base del «sucio» se mueve aquí.
-                    state.limpio = proyecto;
-                    // Y el seguro ya no hace falta: al arrancar no hay nada
-                    // que ofrecer (el oráculo deja el archivo hasta que
-                    // caduca; borrarlo es más honesto).
-                    state.recovery = None;
-                    borrar_recovery(state);
-                }
-                Err(error) => eprintln!("no se pudo guardar el proyecto: {error}"),
+            match state.ruta_proyecto.clone() {
+                Some(ruta) if !pedir_ruta => guardar_en(state, ruta),
+                _ => return Tarea::DialogoGuardar,
+            }
+        }
+        MensajeEditor::DialogoGuardarProyecto(ruta) => {
+            if let Some(ruta) = ruta {
+                guardar_en(state, ruta);
             }
         }
         MensajeEditor::Recuperar => recuperar(state),
@@ -1175,80 +1228,54 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEdit
         MensajeEditor::ExportarSrtHablantes => {
             if state.editor.proyecto().captions.is_empty() {
                 state.mensaje = Some("No hay subtítulos para exportar.".into());
-                return Task::none();
+                return Tarea::Ninguna;
             }
-            let Some(carpeta) = rfd::FileDialog::new().pick_folder() else {
-                return Task::none();
-            };
-            let exportacion = exportar_srt_por_hablante(state.editor.proyecto());
-            let mut escritos = 0;
-            for (nombre, contenido) in &exportacion.archivos {
-                let ruta = carpeta.join(nombre);
-                match std::fs::write(&ruta, contenido) {
-                    Ok(()) => escritos += 1,
-                    Err(error) => eprintln!("no se pudo escribir '{}': {error}", ruta.display()),
-                }
+            return Tarea::DialogoCarpeta;
+        }
+        MensajeEditor::DialogoCarpetaExportar(carpeta) => {
+            if let Some(carpeta) = carpeta {
+                exportar_srt_en(state, carpeta);
             }
-            // El reporte va aparte porque no es un SRT ni cuenta como archivo
-            // exportado en el resumen, igual que en el oráculo.
-            if let Some(reporte) = &exportacion.reporte_solapes {
-                let ruta = carpeta.join("solapes.txt");
-                if let Err(error) = std::fs::write(&ruta, reporte) {
-                    eprintln!("no se pudo escribir '{}': {error}", ruta.display());
-                }
-            }
-            state.mensaje = Some(resumen_srt(&exportacion, escritos));
         }
         MensajeEditor::ExportarJson => {
             if state.editor.proyecto().captions.is_empty() {
                 state.mensaje = Some("No hay subtítulos para exportar.".into());
-                return Task::none();
+                return Tarea::Ninguna;
             }
-            let Some(ruta) = rfd::FileDialog::new()
-                .add_filter("JSON combinado", &["json"])
-                .set_file_name("subtitulos_combinado.json")
-                .save_file()
-            else {
-                return Task::none();
-            };
-            let texto = exportar_json_combinado(state.editor.proyecto());
-            state.mensaje = Some(match std::fs::write(&ruta, texto) {
-                Ok(()) => format!("JSON exportado: {}", ruta.display()),
-                Err(error) => {
-                    eprintln!("no se pudo escribir el JSON: {error}");
-                    format!("No se pudo exportar el JSON: {error}")
-                }
-            });
+            return Tarea::GuardarJson;
+        }
+        MensajeEditor::DialogoJson(ruta) => {
+            if let Some(ruta) = ruta {
+                exportar_json_en(state, ruta);
+            }
         }
         MensajeEditor::ExportarAss => {
             if state.editor.proyecto().captions.is_empty() {
                 state.mensaje = Some("No hay subtítulos para exportar.".into());
-                return Task::none();
+                return Tarea::Ninguna;
             }
-            let Some(ruta) = rfd::FileDialog::new()
-                .add_filter("Subtítulos ASS", &["ass"])
-                .set_file_name("subtitulos.ass")
-                .save_file()
-            else {
-                return Task::none();
-            };
-            // La misma cadena que rasteriza el preview: si el archivo y la
-            // imagen divergieran, sería un bug (invariante del proyecto).
-            let texto = ass_del_proyecto(&state.editor, &state.presets);
-            state.mensaje = Some(match std::fs::write(&ruta, texto) {
-                Ok(()) => format!("ASS exportado: {}", ruta.display()),
-                Err(error) => {
-                    eprintln!("no se pudo escribir el .ass: {error}");
-                    format!("No se pudo exportar el .ass: {error}")
-                }
-            });
+            return Tarea::GuardarAss;
+        }
+        MensajeEditor::DialogoAssExportar(ruta) => {
+            if let Some(ruta) = ruta {
+                exportar_ass_en(state, ruta);
+            }
+        }
+        MensajeEditor::DialogoSubtitulos(ruta, _ass) => {
+            aplicar_subtitulos_cargados(state, ruta);
+        }
+        MensajeEditor::DialogoAutosubsSrt(ruta) => {
+            importar_autosubs_srt(state, ruta);
+        }
+        MensajeEditor::DialogoAutosubsTxt(ruta) => {
+            importar_autosubs_txt(state, ruta);
         }
         MensajeEditor::PlayPause => {
             let destino = !state.player.paused();
             if destino && state.player.position() >= state.duration - 0.05 {
                 if let Err(error) = state.player.seek(0.0) {
                     eprintln!("no se pudo reiniciar el video: {error}");
-                    return Task::none();
+                    return Tarea::Ninguna;
                 }
                 state.position = 0.0;
             }
@@ -1301,7 +1328,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEdit
             // El botón está apagado sin selección, pero Enter en el `text_input`
             // puede llegar igual: aquí se vuelve a comprobar.
             let Some(id) = state.editor.seleccion.first().cloned() else {
-                return Task::none();
+                return Tarea::Ninguna;
             };
             let texto = state.borrador.clone();
             if state.editor.aplicar_texto(&id, texto) {
@@ -1372,7 +1399,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEdit
                 (_, None) => false,
             };
             if !cambia {
-                return Task::none();
+                return Tarea::Ninguna;
             }
             let clave = (id.clone(), campo.clone());
             if state.editando_hablante.as_ref() != Some(&clave) {
@@ -1424,7 +1451,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEdit
                 .or_else(|| state.presets.first())
                 .cloned();
             let Some(base) = base else {
-                return Task::none();
+                return Tarea::Ninguna;
             };
             let nombres = state
                 .presets
@@ -1439,10 +1466,10 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEdit
         }
         MensajeEditor::BorrarPreset => {
             if state.presets.len() <= 1 {
-                return Task::none();
+                return Tarea::Ninguna;
             }
             let Some(id) = state.preset_seleccionado.clone() else {
-                return Task::none();
+                return Tarea::Ninguna;
             };
             state.presets.retain(|preset| preset.id != id);
             state
@@ -1463,7 +1490,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEdit
                 // Valor a medias: el preset sigue intacto y el `text_input`
                 // muestra este texto hasta que sea aceptable.
                 state.borradores_preset.insert((id, campo), texto);
-                return Task::none();
+                return Tarea::Ninguna;
             }
             state.borradores_preset.remove(&(id.clone(), campo));
             return guardar_presets(state);
@@ -1485,7 +1512,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEdit
                 // playhead, el siguiente frame desharía el gesto.
                 state.seguir = false;
                 state.objetivo_vista = None;
-                if state.modificadores.shift() {
+                if state.modificadores.shift {
                     // Zoom anclado al cursor: el tiempo bajo el ratón no se
                     // mueve. 1.15 por muesca, el mismo paso que el oráculo.
                     let factor = 1.15_f64.powf(f64::from(lineas));
@@ -1552,7 +1579,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEdit
             }
             timeline::Mensaje::Soltar(punto) => {
                 let Some(arrastre) = state.arrastre.take() else {
-                    return Task::none();
+                    return Tarea::Ninguna;
                 };
                 if arrastre.es_marquesina() {
                     let origen = arrastre.origen().unwrap_or(punto);
@@ -1590,7 +1617,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEdit
             state.modificadores = modificadores;
         }
     }
-    Task::none()
+    Tarea::Ninguna
 }
 
 pub fn view(state: &EditorApp) -> Element<'_, MensajeEditor> {
@@ -2390,9 +2417,11 @@ mod tests {
     use image::GenericImageView;
 
     use super::{
-        CampoTiempo, MensajeEditor, VELOCIDADES, Velocidad, duracion_texto, etiqueta_caption,
-        resumen_estado, resumen_srt,
+        CampoTiempo, EditorApp, MensajeEditor, VELOCIDADES, Velocidad, duracion_texto,
+        etiqueta_caption, resumen_estado, resumen_srt, update,
     };
+    use crate::comandos::Comando;
+    use crate::tarea::Tarea;
 
     #[test]
     fn etiqueta_caption_include_indice_tiempo_y_texto() {
@@ -2670,5 +2699,16 @@ mod tests {
         std::fs::write(&ruta, "{roto").expect("escribe");
         assert!(recovery_io::pendiente(&ruta, 1000.0).is_none());
         std::fs::remove_file(&ruta).expect("limpia");
+    }
+
+    #[test]
+    fn guardar_como_pide_dialogo() {
+        let video = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../testdata/clip-15s-2audio.mp4"
+        );
+        let mut editor = EditorApp::desde_video(video).expect("video de prueba");
+        let tarea = update(&mut editor, MensajeEditor::Comando(Comando::GuardarComo));
+        assert_eq!(tarea, Tarea::DialogoGuardar);
     }
 }
