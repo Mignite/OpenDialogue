@@ -2,8 +2,9 @@
 
 use egui::{RichText, Sense, Vec2};
 
-use crate::editor_app::{EditorApp, MensajeEditor};
+use crate::editor_app::{CampoTiempo, EditorApp, MensajeEditor};
 use crate::textos::Textos;
+use crate::ui::kit;
 use crate::ui::tema::{self, Estilo};
 
 /// Solo la lista; el inspector se añade en la tarea siguiente.
@@ -149,5 +150,98 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
                 }
             }
         });
+
+    ui.add_space(tema::ESP_8);
+    ui.separator();
+    mensajes.extend(inspector(ui, state, textos));
+    mensajes
+}
+
+/// Inspector del caption seleccionado, bajo la lista.
+pub fn inspector(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec<MensajeEditor> {
+    let mut mensajes = Vec::new();
+    let Some(id) = state.editor.seleccion.first().cloned() else {
+        kit::recuadro_punteado(ui, 72.0, textos.sin_seleccion);
+        return mensajes;
+    };
+
+    ui.label(
+        RichText::new(textos.nombre)
+            .font(tema::fuente(Estilo::Pequeno))
+            .color(tema::TEXTO_3),
+    );
+    let respuesta = kit::campo_texto(ui, &mut state.borrador, 160.0);
+    if ui
+        .add(
+            egui::Button::new(RichText::new(textos.aplicar).font(tema::fuente(Estilo::Base)))
+                .frame(false),
+        )
+        .clicked()
+        || (respuesta.changed() && ui.input(|entrada| entrada.key_pressed(egui::Key::Enter)))
+    {
+        mensajes.push(MensajeEditor::AplicarTexto);
+    }
+
+    ui.horizontal(|ui| {
+        let hablantes = state.editor.proyecto().hablantes.clone();
+        let actual = state
+            .editor
+            .proyecto()
+            .captions
+            .iter()
+            .find(|caption| caption.id == id)
+            .and_then(|caption| caption.hablante_id.clone());
+        let nombre = actual
+            .as_deref()
+            .and_then(|aid| hablantes.iter().find(|h| h.id == aid))
+            .map(|h| h.nombre.clone())
+            .unwrap_or_else(|| textos.sin_hablante.to_owned());
+        egui::ComboBox::from_id_salt("hablante-inspector")
+            .selected_text(nombre)
+            .show_ui(ui, |ui| {
+                if ui.button(textos.sin_hablante).clicked() {
+                    mensajes.push(MensajeEditor::AsignarHablante(None));
+                }
+                for hablante in &hablantes {
+                    if ui.button(&hablante.nombre).clicked() {
+                        mensajes.push(MensajeEditor::AsignarHablante(Some(hablante.id.clone())));
+                    }
+                }
+            });
+        if ui
+            .add(
+                egui::Button::new(
+                    RichText::new(textos.comando(crate::comandos::Comando::Eliminar))
+                        .font(tema::fuente(Estilo::Base)),
+                )
+                .frame(false),
+            )
+            .clicked()
+        {
+            mensajes.push(MensajeEditor::BorrarSeleccion);
+        }
+    });
+
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = tema::ESP_4;
+        ui.label(RichText::new(textos.entrada).font(tema::fuente(Estilo::Pequeno)));
+        if kit::campo_tiempo(ui, &mut state.borrador_inicio, false).changed() {
+            let valor = state.borrador_inicio.clone();
+            mensajes.push(MensajeEditor::EditarTiempo(
+                id.clone(),
+                CampoTiempo::Entrada,
+                valor,
+            ));
+        }
+        ui.label(RichText::new(textos.salida).font(tema::fuente(Estilo::Pequeno)));
+        if kit::campo_tiempo(ui, &mut state.borrador_fin, false).changed() {
+            let valor = state.borrador_fin.clone();
+            mensajes.push(MensajeEditor::EditarTiempo(
+                id.clone(),
+                CampoTiempo::Salida,
+                valor,
+            ));
+        }
+    });
     mensajes
 }

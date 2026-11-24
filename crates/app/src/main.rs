@@ -34,6 +34,7 @@ struct RustyDialogue {
     gpu: Arc<Mutex<Option<Gpu>>>,
     preferencias: Preferencias,
     ajustes: ui::ajustes::EstadoAjustes,
+    toasts: ui::toast::Toasts,
 }
 
 fn nuevo() -> Pantalla {
@@ -66,6 +67,7 @@ impl RustyDialogue {
             gpu: Arc::new(Mutex::new(None)),
             preferencias: Preferencias::cargar(),
             ajustes: Default::default(),
+            toasts: Default::default(),
         }
     }
 
@@ -365,11 +367,23 @@ impl eframe::App for RustyDialogue {
                 self.despachar_salida(salida);
             }
         }
+        let borro = mensajes_editor
+            .iter()
+            .any(|mensaje| matches!(mensaje, MensajeEditor::BorrarSeleccion));
         for mensaje in mensajes_editor {
             if let Pantalla::Editor(editor) = &mut self.pantalla {
                 let tarea = editor_app::update(editor, mensaje);
                 self.ejecutar_tarea(tarea);
             }
+        }
+        if borro {
+            self.toasts.push(textos.linea_eliminada.to_owned(), true);
+        }
+        if self.toasts.mostrar(ctx, textos)
+            && let Pantalla::Editor(editor) = &mut self.pantalla
+        {
+            let tarea = editor_app::update(editor, MensajeEditor::Deshacer);
+            self.ejecutar_tarea(tarea);
         }
     }
 }

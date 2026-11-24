@@ -71,6 +71,12 @@ pub struct Textos {
     pub tab_subtitulos: &'static str,
     pub tab_hablantes: &'static str,
     pub tab_estilos: &'static str,
+    pub aplicar: &'static str,
+    pub sin_hablante: &'static str,
+    pub entrada: &'static str,
+    pub salida: &'static str,
+    pub sin_seleccion: &'static str,
+    pub linea_eliminada: &'static str,
 }
 
 pub const ES: Textos = Textos {
@@ -114,6 +120,12 @@ pub const ES: Textos = Textos {
     tab_subtitulos: "Subtítulos",
     tab_hablantes: "Hablantes",
     tab_estilos: "Estilos",
+    aplicar: "Aplicar",
+    sin_hablante: "Sin hablante",
+    entrada: "Entrada",
+    salida: "Salida",
+    sin_seleccion: "Selecciona una línea para editarla",
+    linea_eliminada: "Línea eliminada",
 };
 
 pub const EN: Textos = Textos {
@@ -157,6 +169,12 @@ pub const EN: Textos = Textos {
     tab_subtitulos: "Subtitles",
     tab_hablantes: "Speakers",
     tab_estilos: "Styles",
+    aplicar: "Apply",
+    sin_hablante: "No speaker",
+    entrada: "In",
+    salida: "Out",
+    sin_seleccion: "Select a line to edit it",
+    linea_eliminada: "Line deleted",
 };
 
 impl Textos {

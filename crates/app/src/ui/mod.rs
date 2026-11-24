@@ -12,5 +12,6 @@ pub mod repintado;
 pub mod tema;
 pub mod timeline;
 pub mod tipografia;
+pub mod toast;
 pub mod transporte;
 pub mod video;
