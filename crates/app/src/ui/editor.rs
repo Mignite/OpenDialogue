@@ -1,14 +1,23 @@
 //! Vista del editor en egui. Compone el preview, la barra de transporte, los
-//! paneles laterales y la barra de estado. El timeline se enchufa en el task 7.
+//! paneles laterales y la barra de estado. Devuelve **todos** los mensajes del
+//! frame: sobrescribirlos habría dejado los botones inertes.
+
+use std::sync::{Arc, Mutex};
 
 use egui::Ui;
 
 use crate::editor_app::{EditorApp, MensajeEditor, Panel, sucio};
 use crate::ui::paneles::{estilos, hablantes, subtitulos};
 use crate::ui::{tema, transporte};
+use crate::video::Gpu;
 
-pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
-    let mut mensaje = None;
+pub fn mostrar(
+    ui: &mut Ui,
+    state: &mut EditorApp,
+    formato: wgpu::TextureFormat,
+    gpu: Arc<Mutex<Option<Gpu>>>,
+) -> Vec<MensajeEditor> {
+    let mut mensajes = Vec::new();
 
     // Preview real: el mismo pipeline de video + libass que antes, ahora a
     // través de un paint callback de egui_wgpu.
@@ -20,17 +29,15 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
         .rect_filled(rect, egui::CornerRadius::same(6), tema::SUPERFICIE);
     if !state.pixels.is_empty() {
         let frame = crate::video::Frame {
-            pixels: std::sync::Arc::new(state.pixels.clone()),
+            pixels: Arc::new(state.pixels.clone()),
             width: crate::preview::CANVAS.0,
             height: crate::preview::CANVAS.1,
-            capas: std::sync::Arc::clone(&state.layers),
+            capas: Arc::clone(&state.layers),
         };
-        crate::ui::video::pintar(ui, rect, frame);
+        crate::ui::video::pintar(ui, rect, frame, formato, gpu);
     }
 
-    if let Some(mensaje_transporte) = transporte::mostrar(ui, state) {
-        mensaje = Some(mensaje_transporte);
-    }
+    mensajes.extend(transporte::mostrar(ui, state));
 
     ui.separator();
     ui.horizontal_top(|ui| {
@@ -45,7 +52,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
                         .selectable_label(state.panel == panel, etiqueta)
                         .clicked()
                     {
-                        mensaje = Some(MensajeEditor::Panel(panel));
+                        mensajes.push(MensajeEditor::Panel(panel));
                     }
                 }
             });
@@ -55,15 +62,11 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
                 Panel::Estilos => estilos::mostrar(ui, state),
             }
         });
-        if let Some(mensaje_panel) = panel.inner {
-            mensaje = Some(mensaje_panel);
-        }
+        mensajes.extend(panel.inner);
     });
 
     ui.separator();
-    if let Some(mensaje_timeline) = crate::ui::timeline::mostrar(ui, state) {
-        mensaje = Some(mensaje_timeline);
-    }
+    mensajes.extend(crate::ui::timeline::mostrar(ui, state));
 
     ui.separator();
     ui.horizontal(|ui| {
@@ -81,14 +84,16 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
             ui.label(texto);
         }
     });
-    mensaje
+    mensajes
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Mutex};
+
     use egui_kittest::kittest::Queryable;
 
-    use crate::editor_app::{EditorApp, sucio};
+    use crate::editor_app::{EditorApp, MensajeEditor, update};
 
     fn editor() -> EditorApp {
         let video = concat!(
@@ -99,7 +104,7 @@ mod tests {
     }
 
     #[test]
-    fn teclear_texto_y_confirmar_es_un_solo_paso_de_historial() {
+    fn aplicar_texto_cambia_el_caption_y_registra_un_paso() {
         let mut editor = editor();
         editor.editor.agregar(rod_core::Caption {
             id: "cap-prueba".into(),
@@ -111,16 +116,35 @@ mod tests {
         let id = editor.editor.proyecto().captions[0].id.clone();
         editor.editor.seleccionar_uno(&id);
         editor.borrador = "texto nuevo".into();
+        editor.limpio = editor.editor.proyecto().clone();
 
+        let mensajes = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let recolector = std::rc::Rc::clone(&mensajes);
         let mut harness = egui_kittest::Harness::new_ui_state(
-            |ui, editor: &mut EditorApp| {
-                super::mostrar(ui, editor);
+            move |ui: &mut egui::Ui, editor: &mut EditorApp| {
+                recolector.borrow_mut().extend(super::mostrar(
+                    ui,
+                    editor,
+                    wgpu::TextureFormat::Bgra8Unorm,
+                    Arc::new(Mutex::new(None)),
+                ));
             },
             editor,
         );
         harness.get_by_label("Aplicar texto").click();
         harness.run();
+        let mensajes = mensajes.borrow().clone();
+        assert!(
+            mensajes
+                .iter()
+                .any(|mensaje| matches!(mensaje, MensajeEditor::AplicarTexto))
+        );
 
-        assert!(sucio(harness.state()));
+        for mensaje in mensajes {
+            update(harness.state_mut(), mensaje);
+        }
+        let editor = harness.state();
+        assert_eq!(editor.editor.texto_de("cap-prueba"), Some("texto nuevo"));
+        assert!(editor.editor.puede_deshacer());
     }
 }

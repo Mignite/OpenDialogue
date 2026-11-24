@@ -4,54 +4,41 @@ use crate::editor::MAX_HABLANTES;
 use crate::editor_app::{CampoHablante, EditorApp, MensajeEditor};
 use crate::ui::tema;
 
-pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
-    let mut mensaje = None;
+pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
+    let mut mensajes = Vec::new();
     ui.label(egui::RichText::new("Hablantes").strong());
 
     let hablantes = state.editor.proyecto().hablantes.clone();
     for hablante in &hablantes {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("●").color(tema::color_de_hex(&hablante.color)));
-            let respuesta = ui.text_edit_singleline(
-                &mut state
-                    .editor
-                    .proyecto_mut()
-                    .hablantes
-                    .iter_mut()
-                    .find(|candidato| candidato.id == hablante.id)
-                    .expect("el hablante sigue ahí")
-                    .nombre,
-            );
+            let borrador = state
+                .borradores_hablante
+                .entry(hablante.id.clone())
+                .or_insert_with(|| hablante.nombre.clone());
+            let respuesta = ui.text_edit_singleline(borrador);
             if respuesta.lost_focus() {
-                mensaje = Some(MensajeEditor::EditarHablante(
+                mensajes.push(MensajeEditor::EditarHablante(
                     hablante.id.clone(),
                     CampoHablante::Nombre,
-                    respuesta_lost(&state.editor.proyecto().hablantes, &hablante.id),
+                    borrador.clone(),
                 ));
             }
             if ui.button("Asignar").clicked() {
-                mensaje = Some(MensajeEditor::AsignarHablante(Some(hablante.id.clone())));
+                mensajes.push(MensajeEditor::AsignarHablante(Some(hablante.id.clone())));
             }
             if ui.button("✕").clicked() {
-                mensaje = Some(MensajeEditor::BorrarHablante(hablante.id.clone()));
+                mensajes.push(MensajeEditor::BorrarHablante(hablante.id.clone()));
             }
         });
     }
     if state.editor.proyecto().hablantes.len() < MAX_HABLANTES
         && ui.button("Añadir hablante").clicked()
     {
-        mensaje = Some(MensajeEditor::AgregarHablante);
+        mensajes.push(MensajeEditor::AgregarHablante);
     }
     if ui.button("Quitar hablante de la selección").clicked() {
-        mensaje = Some(MensajeEditor::AsignarHablante(None));
+        mensajes.push(MensajeEditor::AsignarHablante(None));
     }
-    mensaje
-}
-
-fn respuesta_lost(hablantes: &[rod_core::Hablante], id: &str) -> String {
-    hablantes
-        .iter()
-        .find(|hablante| hablante.id == id)
-        .map(|hablante| hablante.nombre.clone())
-        .unwrap_or_default()
+    mensajes
 }

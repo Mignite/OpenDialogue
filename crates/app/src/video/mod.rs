@@ -311,6 +311,16 @@ impl Gpu {
         escala: (f32, f32),
     ) {
         self.ensure_texture(device, frame.width, frame.height);
+        // El quad se encoge con este uniform. Sin escribirlo el buffer queda a
+        // ceros y el frame desaparece (subtítulos sobre negro).
+        queue.write_buffer(
+            &self.uniforms,
+            0,
+            &[escala.0, escala.1, 0.0, 0.0]
+                .into_iter()
+                .flat_map(|valor| valor.to_le_bytes())
+                .collect::<Vec<_>>(),
+        );
         let Some(texture) = self.texture.as_ref() else {
             return;
         };

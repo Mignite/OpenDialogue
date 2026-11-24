@@ -230,6 +230,9 @@ pub struct EditorApp {
     pub(crate) portapapeles: String,
     /// Contenido del SRT leído mientras se pide el TXT gemelo del autosubs.
     pub(crate) pendiente_srt: Option<String>,
+    /// Borradores de nombre de hablante: la vista no muta el proyecto antes del
+    /// historial, así que renombrar sigue siendo deshacible en un paso.
+    pub(crate) borradores_hablante: HashMap<String, String>,
 }
 
 impl EditorApp {
@@ -324,6 +327,7 @@ impl EditorApp {
             miniatura_pendiente,
             portapapeles: String::new(),
             pendiente_srt: None,
+            borradores_hablante: HashMap::new(),
         };
         // El playhead del `.cdp` no se copia solo al estado: mpv sigue en 0.
         // Sin este seek, el primer `Tick` sobreescribe `position` con 0 y la
@@ -1236,7 +1240,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             aplicar_subtitulos_cargados(state, ruta);
         }
         MensajeEditor::DialogoAutosubsSrt(ruta) => {
-            importar_autosubs_srt(state, ruta);
+            return importar_autosubs_srt(state, ruta);
         }
         MensajeEditor::DialogoAutosubsTxt(ruta) => {
             importar_autosubs_txt(state, ruta);

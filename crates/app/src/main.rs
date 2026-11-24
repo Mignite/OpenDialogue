@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::mpsc::{Receiver, Sender};
 
 use rod_app::comandos::{self, Comando};
@@ -9,6 +11,7 @@ use rod_app::editor_app::{self, EditorApp, MensajeEditor};
 use rod_app::inicio::{self, EstadoInicio, MensajeInicio, Salida};
 use rod_app::project_io::abrir_proyecto;
 use rod_app::tarea::Tarea;
+use rod_app::video::Gpu;
 use rod_app::{recientes, recovery_io, ui};
 
 /// Las dos pantallas. El editor solo existe cuando se abrió un video o un
@@ -22,6 +25,10 @@ struct RustyDialogue {
     pantalla: Pantalla,
     tx_dialogos: Sender<RespuestaDialogo>,
     rx_dialogos: Receiver<RespuestaDialogo>,
+    /// Formato real del framebuffer, tomado del `CreationContext`.
+    formato: wgpu::TextureFormat,
+    /// Un único pipeline de composición para toda la sesión.
+    gpu: Arc<Mutex<Option<Gpu>>>,
 }
 
 fn nuevo() -> Pantalla {
@@ -44,12 +51,14 @@ fn nuevo_con(ruta_indice: &Path, ruta_recovery: &Path) -> Pantalla {
 }
 
 impl RustyDialogue {
-    fn nuevo() -> Self {
+    fn nuevo(formato: wgpu::TextureFormat) -> Self {
         let (tx_dialogos, rx_dialogos) = std::sync::mpsc::channel();
         Self {
             pantalla: nuevo(),
             tx_dialogos,
             rx_dialogos,
+            formato,
+            gpu: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -289,10 +298,14 @@ impl eframe::App for RustyDialogue {
         }
 
         let mut mensaje_inicio = None;
-        let mut mensaje_editor = None;
+        let mut mensajes_editor = Vec::new();
+        let formato = self.formato;
+        let gpu = Arc::clone(&self.gpu);
         egui::CentralPanel::default().show(ctx, |ui| match &mut self.pantalla {
             Pantalla::Inicio(estado) => mensaje_inicio = ui::inicio::mostrar(ui, estado),
-            Pantalla::Editor(editor) => mensaje_editor = ui::editor::mostrar(ui, editor),
+            Pantalla::Editor(editor) => {
+                mensajes_editor = ui::editor::mostrar(ui, editor, formato, gpu);
+            }
         });
         if let Some(mensaje) = mensaje_inicio {
             let (tarea, salida) = match &mut self.pantalla {
@@ -304,11 +317,11 @@ impl eframe::App for RustyDialogue {
                 self.despachar_salida(salida);
             }
         }
-        if let Some(mensaje) = mensaje_editor
-            && let Pantalla::Editor(editor) = &mut self.pantalla
-        {
-            let tarea = editor_app::update(editor, mensaje);
-            self.ejecutar_tarea(tarea);
+        for mensaje in mensajes_editor {
+            if let Pantalla::Editor(editor) = &mut self.pantalla {
+                let tarea = editor_app::update(editor, mensaje);
+                self.ejecutar_tarea(tarea);
+            }
         }
     }
 }
@@ -323,7 +336,12 @@ fn main() -> eframe::Result<()> {
         opciones,
         Box::new(|cc| {
             cc.egui_ctx.set_style(ui::tema::estilo());
-            Ok(Box::new(RustyDialogue::nuevo()))
+            let formato = cc
+                .wgpu_render_state
+                .as_ref()
+                .map(|estado| estado.target_format)
+                .unwrap_or(wgpu::TextureFormat::Bgra8Unorm);
+            Ok(Box::new(RustyDialogue::nuevo(formato)))
         }),
     )
 }
@@ -334,7 +352,7 @@ mod tests {
     use rod_app::inicio::Salida;
 
     fn app_de_prueba() -> RustyDialogue {
-        let mut app = RustyDialogue::nuevo();
+        let mut app = RustyDialogue::nuevo(wgpu::TextureFormat::Bgra8Unorm);
         app.pantalla = super::nuevo_con(
             &std::env::temp_dir().join(format!("rod-router-{}", std::process::id())),
             &std::env::temp_dir().join(format!("rod-recovery-{}", std::process::id())),

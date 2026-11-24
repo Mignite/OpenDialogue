@@ -2,8 +2,8 @@ use egui::Ui;
 
 use crate::editor_app::{EditorApp, MensajeEditor, etiqueta_caption};
 
-pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
-    let mut mensaje = None;
+pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
+    let mut mensaje = Vec::new();
     ui.label(egui::RichText::new("Subtítulos").strong());
 
     let seleccion = state.editor.seleccion.clone();
@@ -13,7 +13,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
             .selectable_label(seleccion.contains(&caption.id), etiqueta)
             .clicked()
         {
-            mensaje = Some(MensajeEditor::Seleccionar(caption.id.clone()));
+            mensaje.push(MensajeEditor::Seleccionar(caption.id.clone()));
         }
     }
 
@@ -22,14 +22,14 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
     if ui.button("Aplicar texto").clicked()
         || (respuesta.changed() && ui.input(|entrada| entrada.key_pressed(egui::Key::Enter)))
     {
-        mensaje = Some(MensajeEditor::AplicarTexto);
+        mensaje.push(MensajeEditor::AplicarTexto);
     }
     ui.horizontal(|ui| {
         ui.label("Entrada");
         let respuesta = ui.text_edit_singleline(&mut state.borrador_inicio);
         if respuesta.lost_focus() || ui.input(|entrada| entrada.key_pressed(egui::Key::Enter)) {
             let valor = state.borrador_inicio.clone();
-            mensaje = Some(MensajeEditor::EditarTiempo(
+            mensaje.push(MensajeEditor::EditarTiempo(
                 seleccion.first().cloned().unwrap_or_default(),
                 crate::editor_app::CampoTiempo::Entrada,
                 valor,
@@ -41,7 +41,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
         let respuesta = ui.text_edit_singleline(&mut state.borrador_fin);
         if respuesta.lost_focus() || ui.input(|entrada| entrada.key_pressed(egui::Key::Enter)) {
             let valor = state.borrador_fin.clone();
-            mensaje = Some(MensajeEditor::EditarTiempo(
+            mensaje.push(MensajeEditor::EditarTiempo(
                 seleccion.first().cloned().unwrap_or_default(),
                 crate::editor_app::CampoTiempo::Salida,
                 valor,
@@ -49,7 +49,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
         }
     });
     if ui.button("Borrar selección").clicked() {
-        mensaje = Some(MensajeEditor::BorrarSeleccion);
+        mensaje.push(MensajeEditor::BorrarSeleccion);
     }
     mensaje
 }

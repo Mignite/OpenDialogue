@@ -20,7 +20,7 @@ pub fn playhead(state: &EditorApp) -> f64 {
     }
 }
 
-pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
+pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
     let (rect, respuesta) = ui.allocate_exact_size(
         Vec2::new(ui.available_width(), ALTO_REGLA + ALTO_CARRIL * 3.0),
         egui::Sense::click_and_drag(),
@@ -28,8 +28,12 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
     let painter = ui.painter();
     painter.rect_filled(rect, egui::CornerRadius::same(0), tema::SUPERFICIE);
 
-    // Ancho real para que la app sepa cuántos segundos caben.
-    let mensaje = Some(MensajeEditor::Timeline(Mensaje::Ancho(rect.width())));
+    // Ancho real para que la app sepa cuántos segundos caben. Solo se envía
+    // cuando cambia: si no, sustituiría cualquier otro mensaje del frame.
+    let mut mensajes = Vec::new();
+    if (state.ancho_timeline - rect.width()).abs() > 0.5 {
+        mensajes.push(MensajeEditor::Timeline(Mensaje::Ancho(rect.width())));
+    }
 
     // Regla y carriles.
     for fila in 0..3 {
@@ -81,30 +85,30 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
     if respuesta.drag_started()
         && let Some(pos) = respuesta.interact_pointer_pos()
     {
-        return Some(MensajeEditor::Timeline(Mensaje::Pulsar(punto(rect, pos))));
+        mensajes.push(MensajeEditor::Timeline(Mensaje::Pulsar(punto(rect, pos))));
     }
     if respuesta.dragged()
         && let Some(pos) = respuesta.interact_pointer_pos()
     {
-        return Some(MensajeEditor::Timeline(Mensaje::Arrastrar(punto(
+        mensajes.push(MensajeEditor::Timeline(Mensaje::Arrastrar(punto(
             rect, pos,
         ))));
     }
     if respuesta.drag_stopped()
         && let Some(pos) = respuesta.interact_pointer_pos()
     {
-        return Some(MensajeEditor::Timeline(Mensaje::Soltar(punto(rect, pos))));
+        mensajes.push(MensajeEditor::Timeline(Mensaje::Soltar(punto(rect, pos))));
     }
     // Una muesca de rueda equivale a ~40 px en el registro del oráculo.
     let lineas = ui.input(|entrada| entrada.raw_scroll_delta.y) / 40.0;
     if lineas != 0.0 {
-        return Some(MensajeEditor::Timeline(Mensaje::Rueda {
+        mensajes.push(MensajeEditor::Timeline(Mensaje::Rueda {
             lineas,
             punto: punto(rect, rect.min + Vec2::new(rect.width() / 2.0, ALTO_REGLA)),
         }));
     }
     let _ = timeline::UMBRAL_CLIC;
-    mensaje
+    mensajes
 }
 
 #[cfg(test)]

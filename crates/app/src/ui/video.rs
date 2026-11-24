@@ -13,7 +13,8 @@ use crate::video::{Frame, Gpu, geometria};
 struct Dibujo {
     frame: Frame,
     rect: Rect,
-    /// El pipeline se crea una vez con el `device` del renderer.
+    formato: wgpu::TextureFormat,
+    /// El pipeline se crea una vez y se comparte entre frames.
     gpu: Arc<Mutex<Option<Gpu>>>,
 }
 
@@ -34,8 +35,7 @@ impl CallbackTrait for Dibujo {
             .gpu
             .lock()
             .expect("el mutex del pipeline no está envenenado");
-        let formato = eframe::egui_wgpu::preferred_framebuffer_format(&[])
-            .expect("egui_wgpu devuelve un formato de framebuffer");
+        let formato = self.formato;
         let pipeline = gpu.get_or_insert_with(|| Gpu::nuevo(device, formato));
         let _ = pantalla;
         pipeline.subir(device, queue, &self.frame, escala);
@@ -51,7 +51,7 @@ impl CallbackTrait for Dibujo {
         let viewport = info.viewport_in_pixels();
         render_pass.set_viewport(
             viewport.left_px as f32,
-            viewport.from_bottom_px as f32,
+            viewport.top_px as f32,
             viewport.width_px as f32,
             viewport.height_px as f32,
             0.0,
@@ -68,13 +68,20 @@ impl CallbackTrait for Dibujo {
     }
 }
 
-pub fn pintar(ui: &mut Ui, rect: Rect, frame: Frame) {
+pub fn pintar(
+    ui: &mut Ui,
+    rect: Rect,
+    frame: Frame,
+    formato: wgpu::TextureFormat,
+    gpu: Arc<Mutex<Option<Gpu>>>,
+) {
     ui.painter().add(Callback::new_paint_callback(
         rect,
         Dibujo {
             frame,
             rect,
-            gpu: Arc::new(Mutex::new(None)),
+            formato,
+            gpu,
         },
     ));
 }

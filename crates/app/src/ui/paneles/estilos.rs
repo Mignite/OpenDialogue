@@ -3,8 +3,8 @@ use egui::Ui;
 use crate::editor_app::{EditorApp, MensajeEditor};
 use crate::presets_edicion::{CampoPreset, valor_campo};
 
-pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
-    let mut mensaje = None;
+pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
+    let mut mensaje = Vec::new();
     ui.label(egui::RichText::new("Estilos").strong());
 
     let presets = state.presets.clone();
@@ -20,7 +20,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
                 let borrador = state.borradores_preset.entry(clave).or_insert(valor);
                 let respuesta = ui.text_edit_singleline(borrador);
                 if respuesta.lost_focus() {
-                    mensaje = Some(MensajeEditor::EditarPreset(
+                    mensaje.push(MensajeEditor::EditarPreset(
                         preset.id.clone(),
                         campo,
                         borrador.clone(),
@@ -28,7 +28,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
                 }
             }
             if ui.button("Asignar a la selección").clicked() {
-                mensaje = Some(MensajeEditor::AsignarPreset(
+                mensaje.push(MensajeEditor::AsignarPreset(
                     preset.id.clone(),
                     Some(preset.id.clone()),
                 ));
@@ -36,7 +36,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
         });
     }
     if ui.button("Nuevo preset").clicked() {
-        mensaje = Some(MensajeEditor::NuevoPreset);
+        mensaje.push(MensajeEditor::NuevoPreset);
     }
     mensaje
 }
