@@ -22,9 +22,9 @@ use rod_core::{Caption, Proyecto, agrupar_captions_por_carril};
 use crate::tema;
 
 /// Altura de la regla de tiempo (arriba del todo).
-pub const ALTO_REGLA: f32 = 22.0;
+pub const ALTO_REGLA: f32 = 26.0;
 /// Altura de cada carril.
-pub const ALTO_CARRIL: f32 = 34.0;
+pub const ALTO_CARRIL: f32 = 46.0;
 /// Separación mínima entre marcas de la regla, en píxeles.
 const PASO_MINIMO_PX: f32 = 70.0;
 
@@ -43,18 +43,14 @@ pub const LERP: f64 = 0.12;
 const FONDO: Color = tema::SUPERFICIE;
 const SEPARADOR: Color = tema::HAIRLINE;
 const TEXTO: Color = tema::SECUNDARIO;
-const PLAYHEAD: Color = tema::MOSTAZA;
+const PLAYHEAD: Color = tema::ACENTO;
 const CARRIL_VACIO: Color = Color::from_rgb(0.28, 0.30, 0.34);
-/// Paleta de carriles mientras no hay presets: el color del `.ass` es del
-/// hablante (slice 7), aquí es solo una ayuda para distinguir carriles.
-const PALETA: [Color; 6] = [
-    Color::from_rgb(0.31, 0.49, 0.91),
-    Color::from_rgb(0.91, 0.63, 0.31),
-    Color::from_rgb(0.31, 0.91, 0.63),
-    Color::from_rgb(0.91, 0.36, 0.31),
-    Color::from_rgb(0.63, 0.31, 0.91),
-    Color::from_rgb(0.31, 0.80, 0.91),
-];
+
+/// El borde del clip es el color semántico del hablante; el azul de la chrome
+/// solo aparece cuando el clip está seleccionado.
+pub fn color_clip(color: Color, seleccionado: bool) -> Color {
+    if seleccionado { tema::ACENTO } else { color }
+}
 
 /// Qué ve el usuario del eje de tiempo: dónde empieza y cuánto abarca.
 ///
@@ -272,7 +268,7 @@ impl Linea<'_> {
             color: CARRIL_VACIO,
             captions: agrupacion.sin_asignar,
         }];
-        for (indice, hablante) in self.proyecto.hablantes.iter().enumerate() {
+        for hablante in &self.proyecto.hablantes {
             let etiqueta = if hablante.nombre.is_empty() {
                 hablante.tecla.clone()
             } else {
@@ -280,7 +276,7 @@ impl Linea<'_> {
             };
             carriles.push(Carril {
                 etiqueta,
-                color: PALETA[indice % PALETA.len()],
+                color: tema::color_de_hex(&hablante.color),
                 captions: agrupacion
                     .por_hablante
                     .get(&hablante.id)
@@ -420,6 +416,21 @@ impl Linea<'_> {
             Size::new(tamano.width, 1.0),
             SEPARADOR,
         );
+
+        // Chip del playhead en la regla: el tiempo exacto, no solo la línea.
+        let x = self.vista.x_de(self.position);
+        if (0.0..=tamano.width).contains(&x) {
+            let ancho = 76.0;
+            let izquierda = (x - ancho / 2.0).clamp(0.0, tamano.width - ancho);
+            frame.fill_rectangle(Point::new(izquierda, 1.0), Size::new(ancho, 12.0), PLAYHEAD);
+            frame.fill_text(Text {
+                content: rod_core::format_time(self.position),
+                position: Point::new(izquierda + 4.0, 2.0),
+                color: tema::SUPERFICIE,
+                size: iced::Pixels(9.0),
+                ..Text::default()
+            });
+        }
     }
 
     fn pintar_carriles(&self, frame: &mut Frame, tamano: Size) {
@@ -428,20 +439,33 @@ impl Linea<'_> {
             if y > tamano.height {
                 break;
             }
-            // Fondo del carril y su nombre, fijo a la izquierda.
             frame.fill_rectangle(
                 Point::new(0.0, y),
                 Size::new(tamano.width, ALTO_CARRIL - 1.0),
                 Color {
-                    a: 0.04,
+                    a: 0.10,
                     ..carril.color
                 },
             );
+            // Rejilla de 112 px: ayuda a leer distancias sin dibujar marcas
+            // nuevas sobre la regla de tiempo.
+            let mut x = -self.vista.inicio.rem_euclid(112.0 * self.vista.escala) as f32;
+            while x < tamano.width {
+                frame.fill_rectangle(
+                    Point::new(x, y),
+                    Size::new(1.0, ALTO_CARRIL - 1.0),
+                    Color {
+                        a: 0.06,
+                        ..SEPARADOR
+                    },
+                );
+                x += 112.0;
+            }
             frame.fill_text(Text {
                 content: carril.etiqueta.clone(),
                 position: Point::new(5.0, y + 9.0),
-                color: carril.color,
-                size: iced::Pixels(12.0),
+                color: TEXTO,
+                size: iced::Pixels(11.0),
                 ..Text::default()
             });
 
@@ -452,25 +476,43 @@ impl Linea<'_> {
                     continue;
                 }
                 let seleccionado = self.seleccion.iter().any(|id| id == &caption.id);
-                let color = if seleccionado {
-                    Color::WHITE
-                } else {
-                    carril.color
-                };
                 let rect = Rectangle {
                     x: x0,
-                    y: y + 4.0,
+                    y: y + 5.0,
                     width: (x1 - x0).max(2.0),
-                    height: ALTO_CARRIL - 9.0,
+                    height: ALTO_CARRIL - 11.0,
                 };
-                frame.fill_rectangle(rect.position(), rect.size(), color);
+                frame.fill_rectangle(
+                    rect.position(),
+                    rect.size(),
+                    Color {
+                        a: 0.22,
+                        ..carril.color
+                    },
+                );
+                frame.stroke_rectangle(
+                    rect.position(),
+                    rect.size(),
+                    canvas::Stroke::default()
+                        .with_color(color_clip(carril.color, seleccionado))
+                        .with_width(1.0),
+                );
                 frame.fill_text(Text {
                     content: caption.texto.clone(),
-                    position: Point::new(rect.x + 4.0, rect.y + 3.0),
-                    color: Color::from_rgb(0.05, 0.06, 0.08),
+                    position: Point::new(rect.x + 5.0, rect.y + 3.0),
+                    color: TEXTO,
                     size: iced::Pixels(11.0),
                     ..Text::default()
                 });
+                if seleccionado {
+                    for x in [rect.x, rect.x + rect.width - 3.0] {
+                        frame.fill_rectangle(
+                            Point::new(x, rect.y),
+                            Size::new(3.0, rect.height),
+                            color_clip(carril.color, true),
+                        );
+                    }
+                }
             }
 
             frame.fill_rectangle(
@@ -566,11 +608,25 @@ pub fn widget<'a>(linea: Linea<'a>) -> Canvas<Linea<'a>, Mensaje> {
 mod tests {
     use super::{
         ALTO_CARRIL, ALTO_REGLA, Arrastre, EDGE_TRIGGER, Linea, Mensaje, Modo, NEW_MARGIN, Vista,
-        acercar, carril_en, clip_en, fila_de_carril, objetivo_de_seguimiento, paso_regla,
+        acercar, carril_en, clip_en, color_clip, fila_de_carril, objetivo_de_seguimiento,
+        paso_regla, y_de_carril,
     };
     use iced::widget::canvas;
-    use iced::{Point, Rectangle, Size, mouse};
+    use iced::{Color, Point, Rectangle, Size, mouse};
     use rod_core::{Caption, Hablante, Proyecto};
+
+    #[test]
+    fn color_clip_mantiene_el_semantico_y_el_acento_solo_marca_seleccion() {
+        let hablante = Color::from_rgb(0.298, 0.553, 1.0);
+        assert_eq!(color_clip(hablante, false), hablante);
+        assert_eq!(color_clip(hablante, true), crate::tema::ACENTO);
+    }
+
+    #[test]
+    fn altura_de_carril_coincide_con_y_de_carril() {
+        assert!((y_de_carril(1) - y_de_carril(0) - ALTO_CARRIL).abs() < 0.001);
+        assert_eq!(carril_en(y_de_carril(2) + 1.0), Some(2));
+    }
 
     fn proyecto() -> Proyecto {
         let mut proyecto = Proyecto::nuevo("video.mp4");

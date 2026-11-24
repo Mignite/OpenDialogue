@@ -352,3 +352,29 @@ cara.
 - **Dónde quedó:** `docs/checklists/slice-9-arranque.md` (evidencia y nota de
   alcance), commit `861042f`.
 
+---
+
+## 2026-11-23 — giro visual: minimalismo corporativo tipo Adobe
+
+- **Decisión del autor:** después de ver el mockup brutalista terminado, pidió un
+  estilo «más profesional, algo como Adobe» y pasó dos capturas de PhotoCraft
+  (arranque y editor). En la elección guiada eligió **gris Adobe + azul
+  corporativo** e **inspector híbrido de 440 px con timeline abajo**.
+- **Qué cambia:** la chrome deja de ser casi negra y mostaza; pasa a gris medio
+  neutro con acento azul `#1473E6`. La zona de video sigue siendo casi negra.
+  El titular display de 58 px, las marcas de registro y el crosshair del
+  dropzone desaparecen: el arranque se parece al `Reciente` de PhotoCraft
+  (barra lateral estrecha + rejilla de tarjetas `.cdp`).
+- **Alternativa descartada:** conservar el mostaza. Era fiel a la spec anterior,
+  pero el autor pidió explícitamente el registro corporativo con azul.
+- **Riesgo conocido:** el azul de chrome puede confundirse con el color del
+  hablante 1 (`#4C8DFF`). Mitigación: el azul de chrome solo aparece en CTA,
+  foco y pestaña activa; los colores de hablante siguen mandando en carril,
+  punto de la lista y `.ass`, y se mantienen literals.
+- **Qué NO cambia:** el flujo (drop → proyecto en memoria → `.cdp`),
+  el preview = `.ass` exportado, los seis apartados del menú, el copy funcional
+  de `arranque-ux.md`, sin sombras, radios ≤ 3 px y cero emojis.
+- **Dónde queda:** plan revisado en
+  `docs/superpowers/plans/2026-11-23-port-mockup-inicio-editor.md` y capturas en
+  `docs/checklists/slice-12-*`.
+

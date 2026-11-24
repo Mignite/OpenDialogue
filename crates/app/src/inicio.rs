@@ -167,7 +167,7 @@ pub fn miniatura_en(base: &Path, reciente: &Reciente) -> Option<PathBuf> {
 
 fn vista_recientes(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
     let cantidad = cantidad_visible(estado.recientes.len(), estado.expandido);
-    let entries = estado
+    let mut tarjetas = estado
         .recientes
         .iter()
         .take(cantidad)
@@ -176,84 +176,103 @@ fn vista_recientes(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
                 match miniatura_en(&thumbnail::carpeta_cache(), reciente) {
                     Some(ruta) => container(
                         image(iced::widget::image::Handle::from_path(ruta))
-                            .width(96)
-                            .height(54),
+                            .width(196)
+                            .height(110),
                     )
-                    .width(96)
-                    .height(54)
+                    .width(196)
+                    .height(110)
                     .style(tema::sunk)
                     .into(),
-                    None => container(text("[ > ]").font(tema::MONO).size(18))
-                        .width(96)
-                        .height(54)
+                    None => container(text("[ > ]").font(tema::MONO).size(20))
+                        .width(196)
+                        .height(110)
                         .style(tema::sunk)
-                        .center_x(Length::Fill)
-                        .center_y(Length::Fill)
+                        .align_x(Horizontal::Center)
+                        .align_y(Vertical::Center)
                         .into(),
                 };
-            button(
+            let ruta = reciente.ruta.display().to_string();
+            let ruta = if ruta.chars().count() > 30 {
+                format!("{}…", ruta.chars().take(29).collect::<String>())
+            } else {
+                ruta
+            };
+            button(column![
+                miniatura,
                 container(
-                    row![
-                        miniatura,
-                        column![
-                            text(
-                                reciente
-                                    .ruta
-                                    .file_name()
-                                    .unwrap_or_default()
-                                    .to_string_lossy()
-                            ),
-                            text(resumen_reciente(reciente))
-                                .font(tema::MONO)
-                                .size(10)
-                                .color(tema::SECUNDARIO),
-                        ]
-                        .spacing(4),
+                    column![
+                        text(
+                            reciente
+                                .ruta
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                                .to_string()
+                        )
+                        .size(12),
+                        text(ruta).font(tema::MONO).size(9).color(tema::DIM),
+                        text(resumen_reciente(reciente))
+                            .font(tema::MONO)
+                            .size(9)
+                            .color(tema::SECUNDARIO),
                     ]
-                    .spacing(8),
+                    .spacing(4),
                 )
-                .width(Length::Fill),
-            )
+                .padding([8, 10]),
+            ])
             .style(tema::boton_secundario)
             .on_press(MensajeInicio::AbrirReciente(reciente.ruta.clone()))
-            .width(Length::Fill)
+            .width(196)
             .into()
         })
         .collect::<Vec<Element<'_, MensajeInicio>>>();
 
-    let titulo = text("Recientes")
-        .font(tema::MONO)
-        .size(12)
-        .width(Length::Fill);
-    let contador = text(format!("{:02}", estado.recientes.len()))
-        .font(tema::MONO)
-        .size(10)
-        .color(tema::MOSTAZA);
-    let cabecera = if mostrar_ver_todos(&estado.recientes) {
-        row![
-            titulo,
-            contador,
-            button(if estado.expandido {
-                "Ver menos"
-            } else {
-                "Ver todos"
-            })
-            .style(tema::boton_secundario)
-            .on_press(MensajeInicio::VerTodos),
-        ]
-        .spacing(9)
-        .align_y(Vertical::Bottom)
-    } else {
-        row![titulo, contador].spacing(9).align_y(Vertical::Bottom)
-    };
-
-    let mut columna = column![cabecera];
-    if entries.is_empty() {
-        columna = columna.push(text(texto_vacio_recientes()));
-    } else {
-        columna = columna.push(scrollable(column(entries).spacing(6)));
+    if tarjetas.is_empty() {
+        return column![text(texto_vacio_recientes())].spacing(10).into();
     }
-    columna.spacing(10).into()
+
+    tarjetas.push(
+        button(
+            container(
+                column![
+                    text("+").size(22).color(tema::SECUNDARIO),
+                    text("Suelta un video en cualquier lugar para abrirlo")
+                        .size(11)
+                        .color(tema::SECUNDARIO),
+                    text("MP4 · MKV · MOV · WEBM")
+                        .font(tema::MONO)
+                        .size(9)
+                        .color(tema::DIM),
+                ]
+                .spacing(10)
+                .align_x(Horizontal::Center),
+            )
+            .width(196)
+            .height(196)
+            .align_x(Horizontal::Center)
+            .align_y(Vertical::Center),
+        )
+        .style(tema::boton_secundario)
+        .on_press(MensajeInicio::AbrirVideo)
+        .width(196)
+        .into(),
+    );
+
+    let mut filas: Vec<Element<'_, MensajeInicio>> = Vec::new();
+    let mut actual: Vec<Element<'_, MensajeInicio>> = Vec::new();
+    for tarjeta in tarjetas {
+        actual.push(tarjeta);
+        if actual.len() == 4 {
+            filas.push(row(actual).spacing(12).into());
+            actual = Vec::new();
+        }
+    }
+    if !actual.is_empty() {
+        filas.push(row(actual).spacing(12).into());
+    }
+    scrollable(column(filas).spacing(12))
+        .height(Length::Fill)
+        .into()
 }
 
 /// `Ver todos` aparece solo cuando la lista supera las tres entradas que se
@@ -264,87 +283,93 @@ pub fn mostrar_ver_todos(recientes: &[Reciente]) -> bool {
 
 fn vista_aviso(aviso: &AvisoRecovery) -> Element<'_, MensajeInicio> {
     container(
-        column![
-            row![
-                text("QUEDÓ SIN GUARDAR")
+        row![
+            container("").width(7).height(7).style(tema::marca_solida),
+            column![
+                text(aviso.texto.clone()).size(12),
+                text("Descartar borra la copia de recuperación.")
                     .font(tema::MONO)
                     .size(9)
-                    .color(tema::MOSTAZA),
-                container(text("RECOVERY").font(tema::MONO).size(9).color(tema::DIM))
-                    .width(Length::Fill)
-                    .align_x(Horizontal::Right),
-            ],
-            text(aviso.texto.clone()).size(12),
-            row![
-                button("Recuperar")
-                    .style(tema::boton_primario)
-                    .on_press(MensajeInicio::Recuperar),
-                button("Descartar")
-                    .style(tema::boton_secundario)
-                    .on_press(MensajeInicio::DescartarRecovery),
+                    .color(tema::DIM),
             ]
-            .spacing(7),
-            text("Descartar borra la copia de recuperación.")
+            .spacing(3),
+            container("").width(Length::Fill),
+            button("Recuperar")
+                .style(tema::boton_primario)
+                .on_press(MensajeInicio::Recuperar),
+            button("Descartar")
+                .style(tema::boton_secundario)
+                .on_press(MensajeInicio::DescartarRecovery),
+        ]
+        .spacing(14)
+        .align_y(Vertical::Center),
+    )
+    .style(tema::wash)
+    .width(Length::Fill)
+    .padding([12, 14])
+    .into()
+}
+
+pub fn view(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
+    let lateral = container(
+        column![
+            button("＋  Nuevo archivo")
+                .style(tema::boton_primario)
+                .on_press(MensajeInicio::AbrirVideo)
+                .width(Length::Fill)
+                .height(38),
+            button("Abrir...")
+                .style(tema::boton_secundario)
+                .on_press(MensajeInicio::AbrirProyecto)
+                .width(Length::Fill)
+                .height(34),
+            container("")
+                .height(1)
+                .width(Length::Fill)
+                .style(tema::hairline),
+            text("ESPACIO").font(tema::MONO).size(9).color(tema::DIM),
+            container(text("Inicio").size(12))
+                .width(Length::Fill)
+                .padding([8, 10])
+                .style(tema::sunk),
+            text("El espacio de trabajo se abre al soltar un video.")
+                .size(10)
+                .color(tema::DIM),
+            container("").height(Length::Fill),
+            container("")
+                .height(1)
+                .width(Length::Fill)
+                .style(tema::hairline),
+            text("Sitio web · GitHub")
                 .font(tema::MONO)
                 .size(9)
                 .color(tema::DIM),
         ]
-        .spacing(9),
+        .spacing(10),
     )
-    .style(tema::wash)
-    .width(Length::Fill)
-    .padding([12, 13])
-    .into()
-}
+    .width(216)
+    .height(Length::Fill)
+    .padding(iced::Padding {
+        top: 20.0,
+        right: 14.0,
+        bottom: 16.0,
+        left: 14.0,
+    })
+    .style(tema::lateral);
 
-fn vista_flujo() -> Element<'static, MensajeInicio> {
-    let paso = |numero: &'static str, titulo: &'static str, detalle: &'static str| {
-        row![
-            text(numero).font(tema::MONO).size(9).color(tema::MOSTAZA),
-            column![
-                text(titulo).size(11.5),
-                text(detalle)
-                    .font(tema::MONO)
-                    .size(9)
-                    .color(tema::SECUNDARIO),
-            ]
-            .spacing(1),
-        ]
-        .spacing(8)
-    };
-    column![
-        text("FLUJO").font(tema::MONO).size(9).color(tema::DIM),
-        paso("01", "Suelta el video", "MP4, MKV, MOV o WebM"),
-        paso(
-            "02",
-            "Marca y sincroniza",
-            "una línea por caption en el timeline"
-        ),
-        paso(
-            "03",
-            "Exporta el .ass",
-            "el preview es el archivo, no una aproximación"
-        ),
-    ]
-    .spacing(8)
-    .into()
-}
-
-fn marca_registro() -> Element<'static, MensajeInicio> {
-    container("").width(18).height(18).style(tema::marca).into()
-}
-
-pub fn view(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
     let cabecera = row![
-        text("01 / ABRIR")
-            .font(tema::MONO)
-            .size(10)
-            .color(tema::MOSTAZA),
+        container(text("01").font(tema::MONO).size(11))
+            .width(24)
+            .height(24)
+            .align_x(Horizontal::Center)
+            .align_y(Vertical::Center)
+            .style(tema::marca_solida),
+        text("Rusty Open Dialogue").size(18),
         container("")
             .height(1)
             .width(Length::Fill)
             .style(tema::hairline),
-        text("Proyecto nuevo en memoria")
+        text("v0.9 · 1600×900")
             .font(tema::MONO)
             .size(9)
             .color(tema::DIM),
@@ -352,203 +377,63 @@ pub fn view(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
     .spacing(12)
     .align_y(Vertical::Center);
 
-    let titular = column![
-        text("Empezar")
-            .font(tema::DISPLAY)
-            .size(58)
-            .line_height(0.86),
-        text("CON UN VIDEO")
-            .font(tema::DISPLAY)
-            .size(58)
-            .line_height(0.86)
-            .color(tema::SECUNDARIO),
-    ];
-    let ayuda = text(
-        "Suelta el archivo o ábrelo desde el disco. Nada se escribe hasta el primer Ctrl+S, así que puedes probar sin miedo.",
-    )
-    .size(12.5)
-    .line_height(1.5)
-    .color(tema::SECUNDARIO);
-    let cabeza = row![titular, ayuda.width(290)]
-        .spacing(48)
-        .align_y(Vertical::Bottom);
-
-    let meta_superior = row![
-        marca_registro(),
-        text("TOMA 001 / SIN PROYECTO")
-            .font(tema::MONO)
-            .size(9)
-            .color(tema::DIM),
-        container(
-            text("00:00:00:00")
-                .font(tema::MONO)
-                .size(9)
-                .color(tema::MOSTAZA)
-        )
-        .width(Length::Fill)
-        .align_x(Horizontal::Right),
-        marca_registro(),
-    ]
-    .spacing(12)
-    .align_y(Vertical::Center);
-
-    let meta_inferior = row![
-        marca_registro(),
-        text("1920 × 1080 · 25 FPS")
-            .font(tema::MONO)
-            .size(9)
-            .color(tema::DIM),
-        container(
-            text("PREVIEW = .ASS EXPORTADO")
-                .font(tema::MONO)
-                .size(9)
-                .color(tema::MOSTAZA)
-        )
-        .width(Length::Fill)
-        .align_x(Horizontal::Right),
-        marca_registro(),
-    ]
-    .spacing(12)
-    .align_y(Vertical::Center);
-
-    let centro = column![
-        text("+").size(46).color(tema::MOSTAZA),
-        text("ARRASTRA UN VIDEO AQUÍ")
-            .font(tema::DISPLAY)
-            .size(24)
-            .color(tema::TEXTO),
-        text("MP4, MKV, MOV o WebM")
+    let mut principal = column![cabecera].spacing(0);
+    if let Some(aviso) = estado.aviso.as_ref() {
+        principal = principal.push(container(vista_aviso(aviso)).padding([16, 0]));
+    }
+    if let Some(mensaje) = estado.mensaje.as_ref() {
+        principal = principal
+            .push(container(text(mensaje.clone()).size(11).color(tema::ACENTO)).padding([12, 0]));
+    }
+    let titulo = row![
+        text("Reciente").size(15),
+        text(format!("{:02}", estado.recientes.len()))
             .font(tema::MONO)
             .size(10)
-            .color(tema::MOSTAZA),
-        // El error ocupa el sitio de la ayuda: nunca hay dos líneas.
-        text(
-            estado
-                .mensaje
-                .clone()
-                .unwrap_or_else(|| "o abre un proyecto .cdp guardado".into())
+            .color(tema::DIM),
+        button(
+            text(if estado.expandido {
+                "Ver menos"
+            } else {
+                "Ver todos"
+            })
+            .size(11)
+            .color(tema::ACENTO)
         )
-        .size(11.5)
-        .color(if estado.mensaje.is_some() {
-            tema::MOSTAZA
-        } else {
-            tema::SECUNDARIO
-        }),
+        .style(tema::boton_menu)
+        .on_press_maybe(mostrar_ver_todos(&estado.recientes).then_some(MensajeInicio::VerTodos)),
     ]
     .spacing(9)
-    .align_x(Horizontal::Center);
-
-    let zona = container(
-        column![
-            meta_superior,
-            container(centro)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .center_x(Length::Fill)
-                .center_y(Length::Fill),
-            meta_inferior,
-        ]
-        .spacing(12)
-        .padding(20),
-    )
-    .style(tema::sunk)
-    .width(Length::Fill)
-    .height(Length::Fill);
-
-    let acciones = row![
-        button("ABRIR VIDEO  →")
-            .style(tema::boton_primario)
-            .on_press(MensajeInicio::AbrirVideo)
-            .height(50),
-        button(
-            row![
-                text("ABRIR PROYECTO").font(tema::MONO).size(11),
-                text("Ctrl+O")
+    .align_y(Vertical::Bottom);
+    principal = principal
+        .push(container(titulo).padding(iced::Padding {
+            top: 24.0,
+            right: 0.0,
+            bottom: 12.0,
+            left: 0.0,
+        }))
+        .push(vista_recientes(estado))
+        .push(
+            container(
+                text("Los recientes son rutas .cdp. La miniatura se guarda con el proyecto.")
                     .font(tema::MONO)
                     .size(9)
-                    .color(tema::SECUNDARIO),
-            ]
-            .spacing(12)
-        )
-        .style(tema::boton_secundario)
-        .on_press(MensajeInicio::AbrirProyecto)
-        .height(50),
-        container(
-            text("El primer Ctrl+S pide dónde guardar\nO suelta un .cdp")
-                .font(tema::MONO)
-                .size(9)
-                .color(tema::DIM)
-        )
+                    .color(tema::DIM),
+            )
+            .padding([12, 0]),
+        );
+
+    let main = container(principal)
         .width(Length::Fill)
-        .align_x(Horizontal::Right),
-    ]
-    .spacing(10)
-    .align_y(Vertical::Center);
-
-    let principal = container(
-        column![cabecera, cabeza, zona, acciones]
-            .spacing(14)
-            .padding(iced::Padding {
-                top: 26.0,
-                right: 32.0,
-                bottom: 20.0,
-                left: 32.0,
-            }),
-    )
-    .width(Length::Fill)
-    .height(Length::Fill);
-
-    let mut lateral = column![];
-    if let Some(aviso) = estado.aviso.as_ref() {
-        lateral = lateral.push(vista_aviso(aviso));
-    }
-    lateral = lateral
-        .push(container(vista_recientes(estado)).height(Length::Fill))
-        .push(
-            text("La miniatura es el frame del playhead al guardar")
-                .font(tema::MONO)
-                .size(9)
-                .color(tema::DIM),
-        )
-        .push(vista_flujo());
-    let lateral = container(lateral.spacing(16))
-        .width(460)
         .height(Length::Fill)
         .padding(iced::Padding {
-            top: 20.0,
-            right: 24.0,
-            bottom: 16.0,
-            left: 24.0,
+            top: 30.0,
+            right: 38.0,
+            bottom: 20.0,
+            left: 38.0,
         });
 
-    let rail = container(
-        row![
-            text("● LISTO · ningún proyecto abierto"),
-            text("Suelta un video en cualquier punto de la ventana"),
-            text("MPV · LIBASS · ICED 0.14")
-                .width(Length::Fill)
-                .align_x(Horizontal::Right),
-        ]
-        .spacing(26)
-        .align_y(Vertical::Center)
-        .padding([10, 18]),
-    )
-    .height(60)
-    .style(tema::panel);
-
-    column![
-        row![
-            principal,
-            container("")
-                .width(1)
-                .height(Length::Fill)
-                .style(tema::hairline),
-            lateral
-        ]
-        .height(Length::Fill),
-        rail,
-    ]
-    .into()
+    row![lateral, main].height(Length::Fill).into()
 }
 
 #[cfg(test)]

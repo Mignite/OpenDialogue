@@ -19,6 +19,28 @@
 - Medidas del mockup a 1600×900: menú 46, sidebar inicio 460, sidebar editor 620, transporte 82, pestañas 44, timeline 196, barra de estado 30, rail 60.
 - Verificación de cada tarea: `cargo build`, `cargo fmt --all -- --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test --workspace`, y una captura o salida observable.
 
+## Cambio de dirección del autor (23-nov, después de las Tareas 1–2)
+
+El autor sustituye el brutalismo suizo por **minimalismo corporativo tipo
+Adobe/PhotoCraft** (capturas aportadas en la conversación). Decisiones
+seleccionadas: **gris Adobe + azul corporativo `#1473E6`** e **inspector
+híbrido de 440 px con timeline abajo**. El motivo y los riesgos están en
+`BITACORA.md`. Esta nota prevalece sobre el mockup y las tokens anteriores:
+
+- Chrome gris medio (`#3A3A3A` barras, `#2C2C2C` paneles, `#242424` lateral),
+  preview casi negro, texto `#E8E8E8`/`#B8B8B8`/`#8C8C8C`, acento azul
+  `#1473E6` (hover `#2B82E8`, wash azul al 12 %). Hairlines blancas al 10/18 %.
+- Arranque: barra lateral estrecha con `Nuevo archivo` (azul) y `Abrir...`,
+  cabecera `01  Rusty Open Dialogue`, rejilla de tarjetas `.cdp` con miniatura
+  16:9, nombre y ruta, tarjeta de drop al final y recovery como aviso compacto.
+  Desaparecen el titular display, las marcas de registro y el crosshair.
+- Editor: inspector 440 px, timeline 196 px abajo, paneles densos con fuente
+  pequeña y separadores finos. El azul solo tiñe CTA, foco y selección; los
+  colores de hablante siguen siendo semánticos en carriles, lista y `.ass`.
+- Se conservan todas las interfaces puras ya implementadas
+  (`cantidad_visible`, `resumen_reciente`, `color_de_hex`, `resumen_estado`) y
+  sus tests; solo cambia el color por defecto y el orden de los widgets.
+
 ## Review Focus
 
 1. **Hablante con color hexadecimal inválido o vacío:** no puede caer en mostaza (el mostaza es chrome). → test `color_de_hex_invalido_no_devuelve_mostaza` (Tarea 1).

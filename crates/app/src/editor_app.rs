@@ -73,6 +73,13 @@ pub enum CampoHablante {
     Tecla,
 }
 
+/// Campo de tiempo editable en el inspector de subtítulos.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CampoTiempo {
+    Entrada,
+    Salida,
+}
+
 /// Las tres pestañas de la columna derecha, como en el oráculo (`PanelTabs`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Panel {
@@ -104,6 +111,11 @@ pub enum MensajeEditor {
     /// así un Ctrl+Z deshace el texto confirmado, no cada tecla.
     Borrador(String),
     AplicarTexto,
+    /// Entrada/salida del caption seleccionado. Se aplica al confirmar; un
+    /// valor inválido o invertido se descarta sin tocar el proyecto.
+    EditarTiempo(String, CampoTiempo, String),
+    BorradorInicio(String),
+    BorradorFin(String),
     AgregarHablante,
     /// Edición en vivo de un hablante: el campo decide qué se toca.
     EditarHablante(String, CampoHablante, String),
@@ -163,6 +175,9 @@ pub struct EditorApp {
     velocidad: Velocidad,
     /// Lo que hay en el `text_input` del caption seleccionado.
     borrador: String,
+    /// Borradores de entrada y salida del caption seleccionado.
+    borrador_inicio: String,
+    borrador_fin: String,
     /// Pestaña visible de la columna derecha.
     panel: Panel,
     /// Campo de hablante que está recibiendo teclas. iced no da un evento de
@@ -304,6 +319,8 @@ impl EditorApp {
             selected_audio,
             velocidad,
             borrador: String::new(),
+            borrador_inicio: String::new(),
+            borrador_fin: String::new(),
             panel: Panel::Subtitulos,
             editando_hablante: None,
             arrastre: None,
@@ -606,13 +623,43 @@ fn guardar_presets(state: &mut EditorApp) -> Task<MensajeEditor> {
 
 /// El `text_input` muestra el texto del caption seleccionado. Sin selección
 /// (o con varios) queda vacío: no hay un texto único que editar.
+/// Fila compacta de la lista de captions: índice, tiempos y texto.
+pub fn etiqueta_caption(indice: usize, inicio: f64, fin: f64, texto: &str) -> String {
+    format!(
+        "{indice:02}  {} → {}  {texto}",
+        rod_core::format_time(inicio),
+        rod_core::format_time(fin)
+    )
+}
+
+/// Duración en segundos con dos decimales, como la muestra el inspector.
+pub fn duracion_texto(inicio: f64, fin: f64) -> String {
+    format!("{:.2} s", (fin - inicio).max(0.0))
+}
+
 fn sincronizar_borrador(state: &mut EditorApp) {
     let id = match state.editor.seleccion.as_slice() {
         [id] => Some(id.clone()),
         _ => None,
     };
     state.borrador = id
-        .and_then(|id| state.editor.texto_de(&id).map(str::to_owned))
+        .as_deref()
+        .and_then(|id| state.editor.texto_de(id).map(str::to_owned))
+        .unwrap_or_default();
+    let tiempos = id.and_then(|id| {
+        state
+            .editor
+            .proyecto()
+            .captions
+            .iter()
+            .find(|caption| caption.id == id)
+            .map(|caption| (caption.inicio, caption.fin))
+    });
+    state.borrador_inicio = tiempos
+        .map(|(inicio, _)| rod_core::format_time(inicio))
+        .unwrap_or_default();
+    state.borrador_fin = tiempos
+        .map(|(_, fin)| rod_core::format_time(fin))
         .unwrap_or_default();
 }
 
@@ -1247,6 +1294,8 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEdit
             sincronizar_borrador(state);
         }
         MensajeEditor::Borrador(texto) => state.borrador = texto,
+        MensajeEditor::BorradorInicio(texto) => state.borrador_inicio = texto,
+        MensajeEditor::BorradorFin(texto) => state.borrador_fin = texto,
         MensajeEditor::AplicarTexto => {
             // El botón está apagado sin selección, pero Enter en el `text_input`
             // puede llegar igual: aquí se vuelve a comprobar.
@@ -1257,6 +1306,31 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Task<MensajeEdit
             if state.editor.aplicar_texto(&id, texto) {
                 refrescar_preview(state);
             }
+        }
+        MensajeEditor::EditarTiempo(id, campo, valor) => {
+            let tiempo = rod_core::parse_time_input(&valor);
+            let actuales = state
+                .editor
+                .proyecto()
+                .captions
+                .iter()
+                .find(|caption| caption.id == id)
+                .map(|caption| (caption.inicio, caption.fin));
+            if let (Some(nuevo), Some((inicio, fin))) = (tiempo, actuales) {
+                let (inicio, fin) = match campo {
+                    CampoTiempo::Entrada if nuevo >= 0.0 && nuevo < fin => (nuevo, fin),
+                    CampoTiempo::Salida if nuevo > inicio => (inicio, nuevo),
+                    _ => (inicio, fin),
+                };
+                if (inicio, fin) != actuales.unwrap() {
+                    state
+                        .editor
+                        .editar_tiempos(&id, inicio, fin, state.duration);
+                    refrescar_preview(state);
+                }
+            }
+            // Válido o no, el campo vuelve a mostrar el valor del proyecto.
+            sincronizar_borrador(state);
         }
         MensajeEditor::BorrarSeleccion => {
             // Sin selección no hay paso de historial: un Ctrl+Z vacío es peor
@@ -1538,9 +1612,11 @@ pub fn view(state: &EditorApp) -> Element<'_, MensajeEditor> {
             row![
                 // Ancho fijo: si no, el botón cambia de tamaño al alternar y la
                 // fila entera se corre bajo el cursor.
-                button(if state.paused { "▶" } else { "❚❚" })
+                button(if state.paused { ">" } else { "||" })
                     .on_press(MensajeEditor::PlayPause)
-                    .width(44),
+                    .style(tema::boton_primario)
+                    .width(36)
+                    .height(36),
                 button("−5 s")
                     .style(tema::boton_secundario)
                     .on_press(MensajeEditor::Step(-5.0)),
@@ -1558,7 +1634,9 @@ pub fn view(state: &EditorApp) -> Element<'_, MensajeEditor> {
                     "{} / {}",
                     rod_core::format_time(state.position),
                     rod_core::format_time(state.duration)
-                )),
+                ))
+                .font(tema::MONO)
+                .size(18),
             ]
             .spacing(8),
             slider(
@@ -1569,30 +1647,48 @@ pub fn view(state: &EditorApp) -> Element<'_, MensajeEditor> {
             .on_release(MensajeEditor::Soltar)
             .step(0.01_f32),
         ]
-        .spacing(6)
-        .padding(8),
+        .spacing(8)
+        .padding(iced::Padding {
+            top: 8.0,
+            right: 14.0,
+            bottom: 8.0,
+            left: 14.0,
+        }),
     )
     .width(Length::Fill)
+    .height(82)
     .style(panel);
 
     let left = column![video, transport]
-        .width(Length::FillPortion(3))
+        .width(Length::Fill)
         .height(Length::Fill);
     let pestanas = row![
-        pestana("Subtítulos", Panel::Subtitulos, state.panel),
-        pestana("Hablantes", Panel::Hablantes, state.panel),
-        pestana("Estilos", Panel::Estilos, state.panel),
+        pestana(
+            "Subtítulos",
+            &state.editor.proyecto().captions.len().to_string(),
+            Panel::Subtitulos,
+            state.panel
+        ),
+        pestana(
+            "Hablantes",
+            &state.editor.proyecto().hablantes.len().to_string(),
+            Panel::Hablantes,
+            state.panel
+        ),
+        pestana(
+            "Estilos",
+            &state.presets.len().to_string(),
+            Panel::Estilos,
+            state.panel
+        ),
     ]
-    .spacing(4)
-    .padding(4);
+    .height(44);
     let contenido = match state.panel {
         Panel::Subtitulos => subtitle_panel(state),
         Panel::Hablantes => speakers_panel(state),
         Panel::Estilos => styles_panel(state),
     };
-    let right = column![pestanas, contenido]
-        .width(Length::FillPortion(2))
-        .height(Length::Fill);
+    let right = column![pestanas, contenido].width(440).height(Length::Fill);
     let timeline = container(
         row![
             Element::from(
@@ -1628,7 +1724,7 @@ pub fn view(state: &EditorApp) -> Element<'_, MensajeEditor> {
         .spacing(4),
     )
     .width(Length::Fill)
-    .height(200)
+    .height(196)
     .style(panel);
 
     column![
@@ -1642,18 +1738,24 @@ pub fn view(state: &EditorApp) -> Element<'_, MensajeEditor> {
 
 fn pestana(
     etiqueta: &'static str,
+    conteo: &str,
     destino: Panel,
     actual: Panel,
 ) -> Element<'static, MensajeEditor> {
-    button(etiqueta)
-        .style(tema::boton_secundario)
+    let activa = actual == destino;
+    let rotulo = text(format!("{etiqueta}  {conteo}"))
+        .font(tema::MONO)
+        .size(9.5)
+        .color(if activa {
+            iced::Color::WHITE
+        } else {
+            tema::TEXTO
+        });
+    button(rotulo)
+        .style(if activa { boton_activo } else { boton })
         .on_press(MensajeEditor::Panel(destino))
         .width(Length::Fill)
-        .style(if actual == destino {
-            boton_activo
-        } else {
-            boton
-        })
+        .height(44)
         .into()
 }
 
@@ -1686,77 +1788,190 @@ fn banner_recovery(state: &EditorApp) -> Option<Element<'_, MensajeEditor>> {
 }
 
 fn subtitle_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
-    let rows = state
-        .editor
-        .proyecto()
+    let proyecto = state.editor.proyecto();
+    let id = state.editor.seleccion.first().cloned().unwrap_or_default();
+    let indice = proyecto
         .captions
         .iter()
-        .map(|caption| {
-            let selected = state.editor.seleccion.iter().any(|id| id == &caption.id);
-            let label = format!(
-                "{} {} -> {}\n{}",
-                if selected { ">" } else { " " },
-                rod_core::format_time(caption.inicio),
-                rod_core::format_time(caption.fin),
-                caption.texto
-            );
-            button(text(label))
-                .style(tema::boton_secundario)
-                .on_press(MensajeEditor::Seleccionar(caption.id.clone()))
-                .width(Length::Fill)
-                .into()
+        .position(|caption| caption.id == id)
+        .map(|posicion| posicion + 1)
+        .unwrap_or(0);
+    let caption = proyecto.captions.iter().find(|caption| caption.id == id);
+    let duracion = caption
+        .map(|caption| duracion_texto(caption.inicio, caption.fin))
+        .unwrap_or_default();
+    let hablante = caption
+        .and_then(|caption| caption.hablante_id.as_deref())
+        .and_then(|id| proyecto.hablantes.iter().find(|hablante| hablante.id == id));
+    let color_hablante = hablante
+        .map(|hablante| tema::color_de_hex(&hablante.color))
+        .unwrap_or(tema::SECUNDARIO);
+
+    let color_clip = move |color: iced::Color| {
+        container("")
+            .width(7)
+            .height(7)
+            .style(move |_: &iced::Theme| iced::widget::container::Style {
+                background: Some(Background::Color(color)),
+                ..Default::default()
+            })
+    };
+
+    let rows = proyecto
+        .captions
+        .iter()
+        .enumerate()
+        .map(|(posicion, caption)| {
+            let seleccionado = state.editor.seleccion.iter().any(|id| id == &caption.id);
+            let color = caption
+                .hablante_id
+                .as_deref()
+                .and_then(|id| proyecto.hablantes.iter().find(|hablante| hablante.id == id))
+                .map(|hablante| tema::color_de_hex(&hablante.color))
+                .unwrap_or(tema::SECUNDARIO);
+            button(
+                column![
+                    row![
+                        color_clip(color),
+                        text(etiqueta_caption(
+                            posicion + 1,
+                            caption.inicio,
+                            caption.fin,
+                            ""
+                        ))
+                        .font(tema::MONO)
+                        .size(9)
+                        .color(tema::SECUNDARIO),
+                    ]
+                    .spacing(6),
+                    text(caption.texto.clone()).size(11.5),
+                ]
+                .spacing(3),
+            )
+            .style(if seleccionado { boton_activo } else { boton })
+            .on_press(MensajeEditor::Seleccionar(caption.id.clone()))
+            .width(Length::Fill)
+            .into()
         })
         .collect::<Vec<Element<'_, MensajeEditor>>>();
 
+    let id_entrada = id.clone();
+    let id_salida = id.clone();
     container(
         column![
             row![
-                text("Subtitles").size(20),
+                text("Subtítulos").size(15),
                 space::horizontal(),
                 button("↶")
-                    .style(tema::boton_secundario)
+                    .style(tema::boton_menu)
                     .on_press_maybe(
                         state
                             .editor
                             .puede_deshacer()
                             .then_some(MensajeEditor::Deshacer)
                     )
-                    .width(44),
+                    .width(24),
                 button("↷")
-                    .style(tema::boton_secundario)
+                    .style(tema::boton_menu)
                     .on_press_maybe(
                         state
                             .editor
                             .puede_rehacer()
                             .then_some(MensajeEditor::Rehacer)
                     )
-                    .width(44),
-                button("Borrar")
-                    .style(tema::boton_secundario)
+                    .width(24),
+                button("×")
+                    .style(tema::boton_menu)
                     .on_press_maybe(
                         (!state.editor.seleccion.is_empty())
                             .then_some(MensajeEditor::BorrarSeleccion)
-                    ),
+                    )
+                    .width(24),
             ]
-            .spacing(12),
+            .spacing(4),
+            text(format!(
+                "Caption {:02} / {}",
+                indice,
+                proyecto.captions.len()
+            ))
+            .font(tema::MONO)
+            .size(10)
+            .color(tema::DIM),
             row![
+                column![
+                    text("Entrada").font(tema::MONO).size(9).color(tema::DIM),
+                    text_input("00:00:00.00", &state.borrador_inicio)
+                        .style(tema::entrada)
+                        .on_input(MensajeEditor::BorradorInicio)
+                        .on_submit(MensajeEditor::EditarTiempo(
+                            id_entrada,
+                            CampoTiempo::Entrada,
+                            state.borrador_inicio.clone()
+                        )),
+                ]
+                .spacing(3),
+                column![
+                    text("Salida").font(tema::MONO).size(9).color(tema::DIM),
+                    text_input("00:00:00.00", &state.borrador_fin)
+                        .style(tema::entrada)
+                        .on_input(MensajeEditor::BorradorFin)
+                        .on_submit(MensajeEditor::EditarTiempo(
+                            id_salida,
+                            CampoTiempo::Salida,
+                            state.borrador_fin.clone()
+                        )),
+                ]
+                .spacing(3),
+                column![
+                    text("Duración").font(tema::MONO).size(9).color(tema::DIM),
+                    container(text(duracion).font(tema::MONO).size(12))
+                        .height(30)
+                        .align_y(iced::alignment::Vertical::Center),
+                ]
+                .spacing(3),
+            ]
+            .spacing(6),
+            row![
+                text("Hablante").font(tema::MONO).size(9).color(tema::DIM),
+                color_clip(color_hablante),
+                text(
+                    hablante
+                        .map(|hablante| hablante.nombre.as_str())
+                        .unwrap_or("Sin hablante")
+                )
+                .size(11),
+            ]
+            .spacing(6),
+            container(
                 text_input("Texto del subtítulo", &state.borrador)
                     .id(ID_TEXTO_SUBTITULO)
                     .style(tema::entrada)
                     .on_input(MensajeEditor::Borrador)
-                    .on_submit(MensajeEditor::AplicarTexto),
+                    .on_submit(MensajeEditor::AplicarTexto)
+            )
+            .height(54),
+            row![
                 button("Aplicar")
-                    .style(tema::boton_secundario)
+                    .style(tema::boton_primario)
                     .on_press_maybe(
                         (state.editor.seleccion.len() == 1).then_some(MensajeEditor::AplicarTexto)
                     ),
+                button("Dividir")
+                    .style(tema::boton_secundario)
+                    .on_press_maybe(
+                        (!state.editor.seleccion.is_empty())
+                            .then_some(MensajeEditor::Comando(Comando::Dividir))
+                    ),
             ]
-            .spacing(8),
-            text("CAPTIONS").size(14),
-            scrollable(column(rows).spacing(8)),
+            .spacing(6),
+            text("Todas las líneas")
+                .font(tema::MONO)
+                .size(9)
+                .color(tema::DIM),
+            scrollable(column(rows).spacing(2)).height(Length::Fill),
         ]
-        .spacing(14)
-        .padding(14),
+        .spacing(9)
+        .padding(12),
     )
     .width(Length::Fill)
     .height(Length::Fill)
@@ -1789,7 +2004,15 @@ fn speakers_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                 .iter()
                 .find(|opcion| opcion.id == hablante.preset_id)
                 .cloned();
+            let color = tema::color_de_hex(&hablante.color);
             row![
+                container("")
+                    .width(6)
+                    .height(22)
+                    .style(move |_: &iced::Theme| iced::widget::container::Style {
+                        background: Some(Background::Color(color)),
+                        ..Default::default()
+                    }),
                 text_input("Nombre", &hablante.nombre).on_input(move |texto| {
                     MensajeEditor::EditarHablante(id_nombre.clone(), CampoHablante::Nombre, texto)
                 }),
@@ -1828,7 +2051,12 @@ fn speakers_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
     container(
         column![
             row![
-                text("Speakers").size(20),
+                text(format!(
+                    "Hablantes {} de {}",
+                    hablantes.len(),
+                    MAX_HABLANTES
+                ))
+                .size(15),
                 space::horizontal(),
                 button("Sin hablante")
                     .style(tema::boton_secundario)
@@ -1841,9 +2069,11 @@ fn speakers_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                 ),
             ]
             .spacing(12),
-            // El oráculo pinta aquí el dot con el color del preset `.ass`; aquí
-            // el selector de estilo hace visible qué preset usa cada hablante.
-            text("SPEAKERS").size(14),
+            // El color del hablante es semántico: identifica carril y `.ass`.
+            text("El color es semántico: carril en el timeline y color en el .ass.")
+                .font(tema::MONO)
+                .size(9)
+                .color(tema::DIM),
             scrollable(column(rows).spacing(6)),
         ]
         .spacing(10)
@@ -1908,7 +2138,6 @@ fn styles_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                 text(otro.nombre.clone()),
             ])
             .on_press(MensajeEditor::SeleccionarPreset(otro.id.clone()))
-            .width(Length::Fill)
             .style(if activo { boton_activo } else { boton })
             .into()
         })
@@ -1930,7 +2159,7 @@ fn styles_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                         CampoPreset::Alignment,
                         valor.to_string(),
                     ))
-                    .width(38)
+                    .width(30)
                     .style(if preset.alignment == valor {
                         boton_activo
                     } else {
@@ -1947,7 +2176,7 @@ fn styles_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
     container(scrollable(
         column![
             row![
-                text("Styles").size(20),
+                text(format!("Estilos {} presets", state.presets.len())).size(15),
                 // Sin `space::horizontal()`: dentro de un `scrollable` el
                 // espacio elástico crece sin límite y empuja los botones
                 // fuera del viewport.
@@ -1962,9 +2191,9 @@ fn styles_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                     ),
             ]
             .spacing(8),
-            text("PRESETS").size(14),
-            column(lista).spacing(4),
-            text("ESTILO").size(14),
+            text("Presets").font(tema::MONO).size(9).color(tema::DIM),
+            row(lista).spacing(5),
+            text("Estilo").font(tema::MONO).size(9).color(tema::DIM),
             campo_texto(preset, CampoPreset::Nombre, "Nombre", borradores),
             campo_texto(preset, CampoPreset::Fontname, "Fuente", borradores),
             campo_texto(preset, CampoPreset::Fontsize, "Tamaño", borradores),
@@ -1990,7 +2219,7 @@ fn styles_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                         CampoPreset::Bold,
                         (!preset.bold).to_string(),
                     ))
-                    .width(38)
+                    .width(30)
                     .style(if preset.bold { boton_activo } else { boton }),
                 button("I")
                     .style(tema::boton_secundario)
@@ -1999,11 +2228,29 @@ fn styles_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                         CampoPreset::Italic,
                         (!preset.italic).to_string(),
                     ))
-                    .width(38)
+                    .width(30)
                     .style(if preset.italic { boton_activo } else { boton }),
             ]
             .spacing(8),
-            text("Cada cambio se guarda y se aplica al preview.").size(11),
+            container(
+                text(
+                    state
+                        .editor
+                        .seleccion
+                        .first()
+                        .and_then(|id| state.editor.texto_de(id))
+                        .unwrap_or("Vista previa del estilo")
+                        .to_owned()
+                )
+                .size(16),
+            )
+            .width(Length::Fill)
+            .padding(10)
+            .style(tema::sunk),
+            text("Cada cambio se guarda y se aplica al preview.")
+                .font(tema::MONO)
+                .size(9)
+                .color(tema::DIM),
         ]
         .spacing(8)
         .padding(14),
@@ -2014,34 +2261,57 @@ fn styles_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
     .into()
 }
 
+/// Una sola línea para lo que el usuario necesita saber del proyecto abierto.
+/// El zoom se calcula aparte porque la vista guarda segundos por píxel.
+pub fn resumen_estado(
+    captions: usize,
+    hablantes: usize,
+    capas: usize,
+    ventana: f64,
+    zoom: f64,
+) -> String {
+    format!(
+        "{captions} captions · {hablantes} hablantes · {capas} capas libass · Ventana {ventana:.1} s · zoom {zoom:.2}×"
+    )
+}
+
 fn status_bar(state: &EditorApp) -> Element<'_, MensajeEditor> {
     let proyecto = match &state.ruta_proyecto {
         Some(ruta) => ruta.display().to_string(),
         None => "sin guardar".to_owned(),
     };
-    container(
-        row![
-            text("● RUSTYOPENDIALOGUE"),
-            text(state.video_path.clone()),
-            text(proyecto),
-            // Último resultado de exportar (o nada). Va aquí y no en un modal
-            // porque iced no tiene toasts y la barra de estado ya es el lugar
-            // donde el usuario mira qué pasó.
-            state.mensaje.clone().map(text),
-            space::horizontal(),
-            text(format!(
-                "ventana {:.1} s · {} captions · {} capas libass",
-                state.vista.ancho_visible(state.ancho_timeline),
-                state.editor.proyecto().captions.len(),
-                state.layers.len()
-            )),
-        ]
-        .spacing(16)
-        .padding([6, 12]),
-    )
-    .width(Length::Fill)
-    .style(panel)
-    .into()
+    let proyecto = text(proyecto).font(tema::MONO).size(9).color(tema::DIM);
+    let mensaje = state
+        .mensaje
+        .clone()
+        .map(|mensaje| text(mensaje).font(tema::MONO).size(9).color(tema::ACENTO));
+    let resumen = text(resumen_estado(
+        state.editor.proyecto().captions.len(),
+        state.editor.proyecto().hablantes.len(),
+        state.layers.len(),
+        state.vista.ancho_visible(state.ancho_timeline),
+        0.02 / state.vista.escala.max(0.002),
+    ))
+    .font(tema::MONO)
+    .size(9)
+    .color(tema::SECUNDARIO);
+    let mut fila = row![
+        text("● RUSTYOPENDIALOGUE").font(tema::MONO).size(9),
+        text(state.video_path.clone()).font(tema::MONO).size(9),
+        proyecto,
+    ]
+    .spacing(16);
+    // Último resultado de exportar (o nada). Va aquí y no en un modal porque
+    // iced no tiene toasts y la barra ya es donde el usuario mira qué pasó.
+    if let Some(mensaje) = mensaje {
+        fila = fila.push(mensaje);
+    }
+    fila = fila.push(space::horizontal()).push(resumen);
+    container(fila.spacing(16).padding([6, 12]))
+        .width(Length::Fill)
+        .height(30)
+        .style(panel)
+        .into()
 }
 
 fn black_panel(theme: &iced::Theme) -> container::Style {
@@ -2075,7 +2345,83 @@ fn boton(theme: &iced::Theme, status: button::Status) -> button::Style {
 mod tests {
     use image::GenericImageView;
 
-    use super::{VELOCIDADES, Velocidad, resumen_srt};
+    use super::{
+        CampoTiempo, MensajeEditor, VELOCIDADES, Velocidad, duracion_texto, etiqueta_caption,
+        resumen_estado, resumen_srt,
+    };
+
+    #[test]
+    fn etiqueta_caption_include_indice_tiempo_y_texto() {
+        assert_eq!(
+            etiqueta_caption(7, 72.5, 75.25, "No, eso es lo que cambia todo."),
+            "07  00:01:12.50 → 00:01:15.25  No, eso es lo que cambia todo."
+        );
+    }
+
+    #[test]
+    fn duracion_texto_es_segundos_con_dos_decimales() {
+        assert_eq!(duracion_texto(72.5, 75.25), "2.75 s");
+    }
+
+    fn editor_con_caption() -> super::EditorApp {
+        let proyecto = Proyecto {
+            ruta_video: format!(
+                "{}/../../testdata/clip-15s-2audio.mp4",
+                env!("CARGO_MANIFEST_DIR")
+            ),
+            hablantes: Vec::new(),
+            captions: vec![Caption {
+                id: "c1".into(),
+                inicio: 1.0,
+                fin: 2.0,
+                texto: "hola".into(),
+                hablante_id: None,
+            }],
+            playhead: 0.0,
+        };
+        let mut app =
+            super::EditorApp::desde_proyecto(proyecto, None, 0.0).expect("abre el video de prueba");
+        let _ = super::update(&mut app, MensajeEditor::Seleccionar("c1".into()));
+        app
+    }
+
+    #[test]
+    fn editar_tiempo_rechaza_valor_invalido() {
+        let mut app = editor_con_caption();
+        let _ = super::update(
+            &mut app,
+            MensajeEditor::EditarTiempo("c1".into(), CampoTiempo::Entrada, "basura".into()),
+        );
+        assert_eq!(app.editor.proyecto().captions[0].inicio, 1.0);
+    }
+
+    #[test]
+    fn editar_tiempo_rechaza_salida_anterior_a_entrada() {
+        let mut app = editor_con_caption();
+        let _ = super::update(
+            &mut app,
+            MensajeEditor::EditarTiempo("c1".into(), CampoTiempo::Salida, "0.5".into()),
+        );
+        assert_eq!(app.editor.proyecto().captions[0].fin, 2.0);
+    }
+
+    #[test]
+    fn editar_tiempo_acepta_entrada_valida() {
+        let mut app = editor_con_caption();
+        let _ = super::update(
+            &mut app,
+            MensajeEditor::EditarTiempo("c1".into(), CampoTiempo::Entrada, "1.5".into()),
+        );
+        assert_eq!(app.editor.proyecto().captions[0].inicio, 1.5);
+    }
+
+    #[test]
+    fn resumen_estado_incluye_hablantes_y_zoom() {
+        assert_eq!(
+            resumen_estado(42, 3, 6, 24.0, 1.0),
+            "42 captions · 3 hablantes · 6 capas libass · Ventana 24.0 s · zoom 1.00×"
+        );
+    }
 
     #[test]
     fn aplicar_autosubs_asigna_hablantes_y_produce_ids() {

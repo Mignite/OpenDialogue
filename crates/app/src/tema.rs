@@ -1,26 +1,31 @@
-//! Sistema visual swiss/brutalista: negro, hairlines, un solo acento mostaza.
+//! Minimalismo corporativo tipo PhotoCraft: gris medio, hairlines y un solo
+//! acento azul para CTA, foco y selección.
 //!
 //! Los colores de los hablantes NO viven aquí: son semánticos (identifican el
 //! carril en el timeline y el color en el `.ass`) y se respetan donde significan
-//! algo. El mostaza tiñe solo la chrome.
+//! algo. El azul tiñe solo la chrome.
 
 use iced::font::{Family, Weight};
 use iced::widget::button;
 use iced::{Background, Border, Color, Font, Shadow};
 
-pub const SUPERFICIE: Color = Color::from_rgb(0.047, 0.047, 0.051); // #0C0C0D
-pub const PANEL: Color = Color::from_rgb(0.078, 0.078, 0.086); // #141416
-pub const RAISED: Color = Color::from_rgb(0.102, 0.102, 0.114); // #1A1A1D
-pub const SUNK: Color = Color::from_rgb(0.063, 0.063, 0.071); // #101012
-pub const HAIRLINE: Color = Color::from_rgba(1.0, 1.0, 1.0, 0.15);
-pub const LINE2: Color = Color::from_rgba(1.0, 1.0, 1.0, 0.32);
-pub const TEXTO: Color = Color::from_rgb(0.953, 0.953, 0.953); // #F3F3F3
-pub const SECUNDARIO: Color = Color::from_rgb(154.0 / 255.0, 154.0 / 255.0, 154.0 / 255.0); // #9A9A9A
-pub const DIM: Color = Color::from_rgb(107.0 / 255.0, 107.0 / 255.0, 109.0 / 255.0); // #6B6B6D
-pub const MOSTAZA: Color = Color::from_rgb(0.851, 0.643, 0.255); // #D9A441
-pub const MOSTAZA_HI: Color = Color::from_rgb(0.949, 0.757, 0.373); // #F2C15F
-pub const MOSTAZA_LINE: Color = Color::from_rgba(0.851, 0.643, 0.255, 0.55);
-pub const MOSTAZA_WASH: Color = Color::from_rgb(0.090, 0.071, 0.027); // #171207
+/// Barra de menú y fondo de la aplicación.
+pub const CHROME: Color = Color::from_rgb(74.0 / 255.0, 74.0 / 255.0, 74.0 / 255.0); // #4A4A4A
+/// Preview de video: lo más oscuro de la interfaz.
+pub const SUPERFICIE: Color = Color::from_rgb(14.0 / 255.0, 14.0 / 255.0, 15.0 / 255.0); // #0E0E0F
+pub const PANEL: Color = Color::from_rgb(44.0 / 255.0, 44.0 / 255.0, 44.0 / 255.0); // #2C2C2C
+pub const LATERAL: Color = Color::from_rgb(41.0 / 255.0, 41.0 / 255.0, 41.0 / 255.0); // #292929
+pub const RAISED: Color = Color::from_rgb(64.0 / 255.0, 64.0 / 255.0, 64.0 / 255.0); // #404040
+pub const SUNK: Color = Color::from_rgb(35.0 / 255.0, 35.0 / 255.0, 35.0 / 255.0); // #232323
+pub const HAIRLINE: Color = Color::from_rgba(1.0, 1.0, 1.0, 0.10);
+pub const LINE2: Color = Color::from_rgba(1.0, 1.0, 1.0, 0.18);
+pub const TEXTO: Color = Color::from_rgb(232.0 / 255.0, 232.0 / 255.0, 232.0 / 255.0); // #E8E8E8
+pub const SECUNDARIO: Color = Color::from_rgb(184.0 / 255.0, 184.0 / 255.0, 184.0 / 255.0); // #B8B8B8
+pub const DIM: Color = Color::from_rgb(140.0 / 255.0, 140.0 / 255.0, 140.0 / 255.0); // #8C8C8C
+pub const ACENTO: Color = Color::from_rgb(20.0 / 255.0, 115.0 / 255.0, 230.0 / 255.0); // #1473E6
+pub const ACENTO_HI: Color = Color::from_rgb(43.0 / 255.0, 130.0 / 255.0, 232.0 / 255.0); // #2B82E8
+pub const ACENTO_LINE: Color = Color::from_rgba(20.0 / 255.0, 115.0 / 255.0, 230.0 / 255.0, 0.42);
+pub const ACENTO_WASH: Color = Color::from_rgba(20.0 / 255.0, 115.0 / 255.0, 230.0 / 255.0, 0.11);
 
 /// Display apretado y monospace para etiquetas: no se carga ningún archivo,
 /// así que funciona igual en Windows y en el CI de Ubuntu.
@@ -34,7 +39,7 @@ pub const MONO: Font = Font::MONOSPACE;
 const RADIO: f32 = 3.0;
 
 /// Color semántico del `.ass` de un hablante. Un valor ausente o mal escrito
-/// cae al gris secundario, nunca al mostaza: el mostaza es de la chrome.
+/// cae al gris secundario, nunca al azul: el azul es de la chrome.
 pub fn color_de_hex(valor: &str) -> Color {
     let hexadecimal = valor.strip_prefix('#').unwrap_or(valor);
     if hexadecimal.len() != 6 {
@@ -55,7 +60,7 @@ pub fn color_de_hex(valor: &str) -> Color {
 
 pub fn fondo(_theme: &iced::Theme) -> iced::widget::container::Style {
     iced::widget::container::Style {
-        background: Some(Background::Color(SUPERFICIE)),
+        background: Some(Background::Color(CHROME)),
         text_color: Some(TEXTO),
         ..Default::default()
     }
@@ -69,6 +74,20 @@ pub fn panel(_theme: &iced::Theme) -> iced::widget::container::Style {
             color: HAIRLINE,
             width: 1.0,
             radius: RADIO.into(),
+        },
+        ..Default::default()
+    }
+}
+
+/// Columna estrecha de navegación del arranque.
+pub fn lateral(_theme: &iced::Theme) -> iced::widget::container::Style {
+    iced::widget::container::Style {
+        background: Some(Background::Color(LATERAL)),
+        text_color: Some(TEXTO),
+        border: Border {
+            color: HAIRLINE,
+            width: 1.0,
+            ..Default::default()
         },
         ..Default::default()
     }
@@ -91,13 +110,22 @@ pub fn sunk(_theme: &iced::Theme) -> iced::widget::container::Style {
 /// Aviso con fondo mostaza muy diluido: tarjeta de recuperación.
 pub fn wash(_theme: &iced::Theme) -> iced::widget::container::Style {
     iced::widget::container::Style {
-        background: Some(Background::Color(MOSTAZA_WASH)),
+        background: Some(Background::Color(ACENTO_WASH)),
         text_color: Some(TEXTO),
         border: Border {
-            color: MOSTAZA_LINE,
+            color: ACENTO_LINE,
             width: 1.0,
             ..Default::default()
         },
+        ..Default::default()
+    }
+}
+
+/// Marca de la barra de menú: cuadrado mostaza con la R en negro.
+pub fn marca_solida(_theme: &iced::Theme) -> iced::widget::container::Style {
+    iced::widget::container::Style {
+        background: Some(Background::Color(ACENTO)),
+        text_color: Some(Color::WHITE),
         ..Default::default()
     }
 }
@@ -106,7 +134,7 @@ pub fn wash(_theme: &iced::Theme) -> iced::widget::container::Style {
 pub fn marca(_theme: &iced::Theme) -> iced::widget::container::Style {
     iced::widget::container::Style {
         border: Border {
-            color: MOSTAZA_LINE,
+            color: ACENTO_LINE,
             width: 1.0,
             ..Default::default()
         },
@@ -125,11 +153,11 @@ pub fn hairline(_theme: &iced::Theme) -> iced::widget::container::Style {
 pub fn boton_primario(_theme: &iced::Theme, status: button::Status) -> button::Style {
     button::Style {
         background: Some(Background::Color(if status == button::Status::Hovered {
-            MOSTAZA_HI
+            ACENTO_HI
         } else {
-            MOSTAZA
+            ACENTO
         })),
-        text_color: SUPERFICIE,
+        text_color: Color::WHITE,
         border: Border {
             radius: RADIO.into(),
             ..Default::default()
@@ -172,7 +200,7 @@ pub fn entrada(
     _status: iced::widget::text_input::Status,
 ) -> iced::widget::text_input::Style {
     iced::widget::text_input::Style {
-        background: Background::Color(PANEL),
+        background: Background::Color(SUNK),
         border: Border {
             color: HAIRLINE,
             width: 1.0,
@@ -181,16 +209,16 @@ pub fn entrada(
         icon: SECUNDARIO,
         placeholder: SECUNDARIO,
         value: TEXTO,
-        selection: MOSTAZA,
+        selection: ACENTO,
     }
 }
 
 pub fn aviso(_theme: &iced::Theme) -> iced::widget::container::Style {
     iced::widget::container::Style {
-        background: Some(Background::Color(MOSTAZA_WASH)),
-        text_color: Some(MOSTAZA),
+        background: Some(Background::Color(ACENTO_WASH)),
+        text_color: Some(ACENTO),
         border: Border {
-            color: MOSTAZA_LINE,
+            color: ACENTO_LINE,
             width: 1.0,
             radius: RADIO.into(),
         },
@@ -203,7 +231,7 @@ pub fn barra_menu(
     _status: iced_aw::style::Status,
 ) -> iced_aw::style::menu_bar::Style {
     iced_aw::style::menu_bar::Style {
-        bar_background: Background::Color(SUPERFICIE),
+        bar_background: Background::Color(CHROME),
         bar_border: Border {
             color: HAIRLINE,
             width: 0.0,
@@ -217,7 +245,7 @@ pub fn barra_menu(
             radius: RADIO.into(),
         },
         menu_shadow: Shadow::default(),
-        path: Background::Color(MOSTAZA),
+        path: Background::Color(ACENTO),
         path_border: Border {
             radius: RADIO.into(),
             ..Default::default()
@@ -230,20 +258,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn el_acento_es_mostaza_y_la_superficie_es_casi_negra() {
+    fn el_acento_es_azul_y_el_preview_es_casi_negro() {
         const {
-            assert!(MOSTAZA.r > MOSTAZA.b);
-            assert!(MOSTAZA.g > MOSTAZA.b);
+            assert!(ACENTO.b > ACENTO.r);
+            assert!(ACENTO.b > ACENTO.g);
             assert!(SUPERFICIE.r < 0.1 && SUPERFICIE.g < 0.1 && SUPERFICIE.b < 0.1);
         }
     }
 
     #[test]
-    fn secundario_es_el_gris_exacto_de_la_spec() {
-        // 0.60 era una aproximación; la spec fija #9A9A9A = 154/255.
-        assert!((SECUNDARIO.r - 154.0 / 255.0).abs() < 0.001);
-        assert!((SECUNDARIO.g - 154.0 / 255.0).abs() < 0.001);
-        assert!((SECUNDARIO.b - 154.0 / 255.0).abs() < 0.001);
+    fn secundario_es_el_gris_del_registro_corporativo() {
+        // Registro Adobe/PhotoCraft: #B8B8B8 = 184/255.
+        assert!((SECUNDARIO.r - 184.0 / 255.0).abs() < 0.001);
+        assert!((SECUNDARIO.g - 184.0 / 255.0).abs() < 0.001);
+        assert!((SECUNDARIO.b - 184.0 / 255.0).abs() < 0.001);
     }
 
     fn radio_valido(radio: iced::border::Radius) -> bool {
@@ -267,10 +295,10 @@ mod tests {
     }
 
     #[test]
-    fn color_de_hex_invalido_no_devuelve_mostaza() {
+    fn color_de_hex_invalido_no_devuelve_el_acento() {
         for entrada in ["", "rojo", "#123", "#GGGGGG", "#1234567"] {
             assert_eq!(color_de_hex(entrada), SECUNDARIO, "{entrada}");
-            assert_ne!(color_de_hex(entrada), MOSTAZA);
+            assert_ne!(color_de_hex(entrada), ACENTO);
         }
     }
 
@@ -283,6 +311,9 @@ mod tests {
             aviso(&tema),
             sunk(&tema),
             wash(&tema),
+            lateral(&tema),
+            marca_solida(&tema),
+            marca(&tema),
         ] {
             assert_eq!(estilo.shadow, Shadow::default());
             assert!(radio_valido(estilo.border.radius));
@@ -308,6 +339,8 @@ mod tests {
     fn el_color_de_los_hablantes_no_es_el_acento() {
         // Los presets del oráculo usan azul, rojo, etc. El mostaza no debe
         // sustituirlos: solo tiñe la chrome.
-        assert_ne!(MOSTAZA, Color::from_rgb(0.231, 0.510, 0.965));
+        assert_ne!(ACENTO, Color::from_rgb(0.298, 0.553, 1.0));
+        assert_ne!(ACENTO, Color::from_rgb(0.851, 0.333, 0.247));
+        assert_ne!(ACENTO, Color::from_rgb(0.247, 0.647, 0.478));
     }
 }

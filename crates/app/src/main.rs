@@ -2,8 +2,9 @@
 
 use std::path::{Path, PathBuf};
 
-use iced::widget::{column, container};
-use iced::{Element, Subscription, Task};
+use iced::alignment::{Horizontal, Vertical};
+use iced::widget::{column, container, row, text};
+use iced::{Element, Length, Subscription, Task};
 
 use rod_app::comandos::{self, Comando};
 use rod_app::editor_app::{self, EditorApp, MensajeEditor};
@@ -191,14 +192,45 @@ fn actualizar(pantalla: &mut Pantalla, mensaje: Mensaje) -> Task<Mensaje> {
 }
 
 fn vista(pantalla: &Pantalla) -> Element<'_, Mensaje> {
-    let (en_inicio, contenido) = match pantalla {
-        Pantalla::Inicio(estado) => (true, inicio::view(estado).map(Mensaje::Inicio)),
-        Pantalla::Editor(editor) => (false, editor_app::view(editor).map(Mensaje::Editor)),
+    let (en_inicio, estado, contenido) = match pantalla {
+        Pantalla::Inicio(estado) => (
+            true,
+            "Sin proyecto · v0.9",
+            inicio::view(estado).map(Mensaje::Inicio),
+        ),
+        Pantalla::Editor(editor) => (
+            false,
+            "Proyecto abierto",
+            editor_app::view(editor).map(Mensaje::Editor),
+        ),
     };
-    container(column![menu::barra(en_inicio, Mensaje::Comando), contenido])
+    let barra = container(
+        row![
+            container(text("R").font(tema::DISPLAY).size(11))
+                .width(18)
+                .height(18)
+                .align_x(Horizontal::Center)
+                .align_y(Vertical::Center)
+                .style(tema::marca_solida),
+            text("RUSTY OPEN DIALOGUE")
+                .font(tema::MONO)
+                .size(9)
+                .color(tema::SECUNDARIO),
+            menu::barra(en_inicio, Mensaje::Comando),
+            container(text(estado).font(tema::MONO).size(9).color(tema::DIM))
+                .width(Length::Fill)
+                .align_x(Horizontal::Right),
+        ]
+        .spacing(10)
+        .align_y(Vertical::Center),
+    )
+    .height(30)
+    .style(tema::fondo);
+
+    container(column![barra, contenido])
         .style(tema::fondo)
-        .width(iced::Length::Fill)
-        .height(iced::Length::Fill)
+        .width(Length::Fill)
+        .height(Length::Fill)
         .into()
 }
 
