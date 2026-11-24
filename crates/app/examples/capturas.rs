@@ -177,6 +177,48 @@ fn main() {
     );
 
     if fase == "diagnostico" {
+        let estado = (
+            inicio::nuevo(vec![reciente("RobloxTerror.cdp", 543, 7)], None),
+            false,
+        );
+        let mut h = Harness::builder()
+            .wgpu()
+            .with_size(egui::vec2(1914.0, 1015.0))
+            .build_state(
+                |ctx, (inicio, abrir): &mut (EstadoInicio, bool)| {
+                    let abrir_chrome = rod_app::ui::chrome::mostrar(
+                        ctx,
+                        &rod_app::textos::EN,
+                        &rod_app::comandos::MapaAtajos::por_defecto(),
+                        rod_app::ui::chrome::EstadoCabecera {
+                            en_inicio: true,
+                            proyecto: Some("RobloxTerror.cdp"),
+                            sucio: false,
+                        },
+                    );
+                    if abrir_chrome.is_some() {
+                        *abrir = true;
+                    }
+                    egui::CentralPanel::default()
+                        .frame(rod_app::ui::tema::panel(rod_app::ui::tema::FONDO))
+                        .show(ctx, |ui| {
+                            let (_, abrir_ajustes) = rod_app::ui::inicio::mostrar(
+                                ui,
+                                inicio,
+                                &rod_app::textos::EN,
+                                &mut rod_app::preferencias::Preferencias::default(),
+                            );
+                            if abrir_ajustes {
+                                *abrir = true;
+                            }
+                        });
+                },
+                estado,
+            );
+        rod_app::ui::tema::aplicar(&h.ctx);
+        h.run();
+        guardar(&mut h, "diagnostico-cabecera-1914");
+
         capturar(
             "diagnostico-inicio-1914",
             1914.0,

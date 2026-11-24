@@ -21,15 +21,25 @@ pub fn mostrar(
     let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
     ui.painter().rect_filled(rect, 0.0, tema::FONDO);
 
-    let ancho_riel = 220.0;
-    let riel = egui::Rect::from_min_size(rect.min, Vec2::new(ancho_riel, rect.height()));
-    // Margen lateral real: sin él el título y las tarjetas se pegan al riel.
+    // Sin riel: una sola columna centrada, con margen a los lados.
+    let ancho_columna = (rect.width() - tema::ESP_48 * 2.0).clamp(320.0, 960.0);
+    let centro_x = rect.center().x;
     let contenido = egui::Rect::from_min_max(
-        egui::pos2(rect.min.x + ancho_riel + tema::ESP_48, rect.min.y),
-        egui::pos2(rect.max.x - tema::ESP_48, rect.max.y),
+        egui::pos2(centro_x - ancho_columna / 2.0, rect.min.y),
+        egui::pos2(centro_x + ancho_columna / 2.0, rect.max.y),
     );
 
-    let abrir_ajustes = riel_de_navegacion(ui, riel, textos);
+    // Preferences vive en la vista principal, arriba a la derecha.
+    let mut abrir_ajustes = false;
+    let zona_ajustes = egui::Rect::from_min_max(
+        egui::pos2(contenido.max.x - 140.0, contenido.min.y + tema::ESP_16),
+        egui::pos2(contenido.max.x, contenido.min.y + tema::ESP_48),
+    );
+    ui.scope_builder(egui::UiBuilder::new().max_rect(zona_ajustes), |ui| {
+        if ui.button(textos.ajustes).clicked() {
+            abrir_ajustes = true;
+        }
+    });
 
     let mut intencion = None;
     ui.scope_builder(egui::UiBuilder::new().max_rect(contenido), |ui| {
@@ -167,74 +177,6 @@ pub fn mostrar(
 
     (intencion, abrir_ajustes)
 }
-
-fn riel_de_navegacion(ui: &mut egui::Ui, riel: egui::Rect, textos: &Textos) -> bool {
-    let painter = ui.painter();
-    painter.rect_filled(riel, 0.0, tema::RIEL);
-    painter.line_segment(
-        [
-            egui::pos2(riel.max.x, riel.min.y),
-            egui::pos2(riel.max.x, riel.max.y),
-        ],
-        Stroke::new(1.0_f32, tema::BORDE),
-    );
-
-    let mut abrir_ajustes = false;
-    ui.scope_builder(
-        egui::UiBuilder::new().max_rect(riel.shrink(tema::ESP_12)),
-        |ui| {
-            ui.vertical(|ui| {
-                ui.add_space(tema::ESP_32);
-                for (etiqueta, icono, activo) in [
-                    (textos.inicio, Icono::Inicio2, true),
-                    (textos.recientes, Icono::Reloj, false),
-                ] {
-                    let respuesta = ui.add(
-                        egui::Button::new(
-                            RichText::new(format!("{}  {etiqueta}", kit::glifo(icono)))
-                                .font(tema::fuente(Estilo::Base))
-                                .color(if activo { tema::TEXTO } else { tema::TEXTO_2 }),
-                        )
-                        .frame(false)
-                        .min_size(Vec2::new(ui.available_width(), tema::ALTO_NAV)),
-                    );
-                    if activo {
-                        let barra = egui::Rect::from_min_max(
-                            egui::pos2(respuesta.rect.min.x - 6.0, respuesta.rect.min.y + 6.0),
-                            egui::pos2(respuesta.rect.min.x - 4.0, respuesta.rect.max.y - 6.0),
-                        );
-                        ui.painter().rect_filled(barra, 0.0, tema::ACENTO);
-                    }
-                }
-                ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                    // En bottom_up el primer widget va abajo del todo: la
-                    // versión queda al pie y Ajustes justo encima.
-                    ui.label(
-                        RichText::new("v0.9")
-                            .font(tema::fuente(Estilo::Mono))
-                            .color(tema::TEXTO_3),
-                    );
-                    if ui
-                        .add(
-                            egui::Button::new(
-                                RichText::new(textos.ajustes)
-                                    .font(tema::fuente(Estilo::Base))
-                                    .color(tema::TEXTO_2),
-                            )
-                            .frame(false)
-                            .min_size(Vec2::new(ui.available_width(), tema::ALTO_NAV)),
-                        )
-                        .clicked()
-                    {
-                        abrir_ajustes = true;
-                    }
-                });
-            });
-        },
-    );
-    abrir_ajustes
-}
-
 fn zona_de_arrastre(ui: &mut egui::Ui, textos: &Textos) {
     let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 104.0), Sense::hover());
     let sobre = ui.ctx().input(|entrada| {

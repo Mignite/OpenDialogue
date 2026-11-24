@@ -96,15 +96,17 @@ pub fn mostrar(
     use crate::ui::tema;
 
     let mut elegido = None;
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = tema::ESP_2;
+    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+        ui.spacing_mut().item_spacing.x = tema::ESP_12;
         for seccion in SECCIONES {
             let nombre = nombre_seccion(seccion, textos);
             let etiqueta = egui::RichText::new(nombre)
                 .font(tema::fuente(tema::Estilo::Pequeno))
                 .color(tema::TEXTO_MENU);
             let _ = egui::containers::menu::MenuButton::from_button(
-                egui::Button::new(etiqueta).frame(false),
+                egui::Button::new(etiqueta)
+                    .frame(false)
+                    .min_size(egui::vec2(0.0, 24.0)),
             )
             .ui(ui, |ui| {
                 ui.set_min_width(226.0);

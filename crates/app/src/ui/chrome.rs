@@ -39,8 +39,10 @@ pub fn mostrar(
         .exact_height(tema::ALTO_CABECERA)
         .frame(marco)
         .show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = tema::ESP_8;
+            // Align::Center: la marca, los menús y los botones comparten el
+            // centro vertical de la cabecera (FilmCraft header.rs).
+            ui.horizontal_centered(|ui| {
+                ui.spacing_mut().item_spacing.x = tema::ESP_12;
 
                 monograma(ui);
                 ui.label(
@@ -51,13 +53,15 @@ pub fn mostrar(
                         .color(tema::TEXTO),
                 );
 
+                ui.add_space(tema::ESP_16);
                 elegido = menu::mostrar(ui, estado.en_inicio, textos, atajos);
+                ui.add_space(tema::ESP_16);
 
                 // Reservar primero el sitio de los controles: si la franja de
                 // arrastre toma todo el ancho, los botones se salen del rect.
                 let ancho_botones = 3.0 * tema::ANCHO_BOTON_VENTANA;
                 let ancho_arrastre = (ui.available_width() - ancho_botones).max(4.0);
-                let (franja, respuesta) = ui.allocate_exact_size(
+                let (_franja, respuesta) = ui.allocate_exact_size(
                     egui::vec2(ancho_arrastre, tema::ALTO_CABECERA - 8.0),
                     egui::Sense::click_and_drag(),
                 );
@@ -75,8 +79,11 @@ pub fn mostrar(
                     } else {
                         format!("{} · {}", tema::acortar(proyecto, 40), textos.guardado)
                     };
+                    // Centro real de la ventana, no de la franja de arrastre:
+                    // la franja empieza tras los menús y acababa desplazando
+                    // el título hacia la derecha.
                     ui.painter().text(
-                        franja.center(),
+                        ui.max_rect().center(),
                         egui::Align2::CENTER_CENTER,
                         texto,
                         tema::fuente(Estilo::Pequeno),

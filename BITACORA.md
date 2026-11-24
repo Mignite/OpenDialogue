@@ -13,6 +13,11 @@
 - kittest no ejecuta el `PaintCallback` de mpv: las capturas finales del editor
   son headless con el monitor vacío. El «antes» real con video quedó en
   `docs/checklists/rediseno/antes-editor-1440.png`.
+- Cabecera: el usuario aclaró que el problema era el centrado **vertical**, no
+  el horizontal. Se usa `horizontal_centered` y la referencia de FilmCraft
+  (`storytold/filmcraft`, `crates/ui-egui/src/header.rs`): menú en
+  `Align::Center`, 12 px entre menús y 16 px entre marca y menú. La sidebar se
+  retiró y Preferences pasó a la vista principal.
 - Ajustes de layout tras captura del usuario: margen lateral de 48 px en el
   contenido, rejilla con `horizontal_wrapped` (el `Grid` apilaba las tarjetas
   en la app real), más aire entre bloques y Ajustes al pie sobre la versión.
