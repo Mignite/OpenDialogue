@@ -15,7 +15,7 @@
 
 use std::collections::BTreeMap;
 
-use iced::Point;
+use crate::timeline::Punto;
 use rod_core::{
     Caption, DURACION_MINIMA, Hablante, Instantanea, Proyecto, RectMarquee, caption_row_index,
     clamp_delta_bloque, filas_destino_relativas, filtrar_por_marquee, find_snap_block_delta,
@@ -69,11 +69,11 @@ pub enum Modo {
         originales: Vec<Original>,
         /// Punto donde se pulsó: el delta se mide contra él, no contra el frame
         /// anterior.
-        origen: Point,
+        origen: Punto,
         fila_origen: i32,
     },
     Marquesina {
-        origen: Point,
+        origen: Punto,
     },
 }
 
@@ -93,13 +93,13 @@ pub struct Arrastre {
 #[derive(Debug, Clone, Copy)]
 pub struct Marco {
     pub vista: Vista,
-    pub punto: Point,
+    pub punto: Punto,
     pub duracion: f64,
     pub playhead: f64,
 }
 
 impl Marco {
-    pub fn nuevo(vista: Vista, punto: Point, duracion: f64, playhead: f64) -> Self {
+    pub fn nuevo(vista: Vista, punto: Punto, duracion: f64, playhead: f64) -> Self {
         Self {
             vista,
             punto,
@@ -114,7 +114,7 @@ impl Arrastre {
         matches!(self.modo, Modo::Marquesina { .. })
     }
 
-    pub fn origen(&self) -> Option<Point> {
+    pub fn origen(&self) -> Option<Punto> {
         match &self.modo {
             Modo::Bloque { origen, .. } | Modo::Marquesina { origen } => Some(*origen),
             Modo::Borde { .. } => None,
@@ -168,7 +168,7 @@ pub enum Respuesta {
     },
 }
 
-pub fn pulsar(proyecto: &Proyecto, vista: Vista, punto: Point, seleccion: &[String]) -> Respuesta {
+pub fn pulsar(proyecto: &Proyecto, vista: Vista, punto: Punto, seleccion: &[String]) -> Respuesta {
     let Some(carril) = carril_en(punto.y) else {
         return Respuesta::Buscar(vista.tiempo_de(punto.x).max(0.0));
     };
@@ -312,7 +312,7 @@ fn aplicar_bloque(
     proyecto: &mut Proyecto,
     marco: Marco,
     originales: &[Original],
-    origen: Point,
+    origen: Punto,
     fila_origen: i32,
 ) -> bool {
     let Some(inicio_min) = originales.iter().map(|o| o.inicio).reduce(f64::min) else {
@@ -389,8 +389,8 @@ fn a_milisegundos(tiempo: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::{AGARRE_BORDE, Arrastre, Asa, Marco, Modo, Respuesta, pulsar};
+    use crate::timeline::Punto;
     use crate::timeline::{ALTO_CARRIL, ALTO_REGLA, Vista};
-    use iced::Point;
     use rod_core::{Caption, Hablante, Proyecto};
 
     fn proyecto() -> Proyecto {
@@ -442,10 +442,10 @@ mod tests {
     /// Un frame del arrastre con el ratón en (x, y), sobre 15 s de video y el
     /// playhead en 9 s (fuera del alcance de estos tests salvo el de snap).
     fn marco(x: f32, y: f32) -> Marco {
-        Marco::nuevo(vista(), Point::new(x, y), 15.0, 9.0)
+        Marco::nuevo(vista(), Punto::new(x, y), 15.0, 9.0)
     }
 
-    fn empezar(proyecto: &Proyecto, p: Point, seleccion: &[String]) -> (Arrastre, Vec<String>) {
+    fn empezar(proyecto: &Proyecto, p: Punto, seleccion: &[String]) -> (Arrastre, Vec<String>) {
         match pulsar(proyecto, vista(), p, seleccion) {
             Respuesta::Empezar {
                 arrastre,
@@ -466,7 +466,7 @@ mod tests {
 
     #[test]
     fn pulsar_en_la_regla_pide_buscar() {
-        match pulsar(&proyecto(), vista(), Point::new(100.0, 4.0), &[]) {
+        match pulsar(&proyecto(), vista(), Punto::new(100.0, 4.0), &[]) {
             Respuesta::Buscar(t) => assert!((t - 2.0).abs() < 1e-9),
             otro => panic!("se esperaba Buscar, llegó {otro:?}"),
         }
@@ -475,7 +475,7 @@ mod tests {
     #[test]
     fn pulsar_el_cuerpo_de_un_clip_prepara_un_bloque() {
         let proyecto = proyecto();
-        let (arrastre, seleccion) = empezar(&proyecto, Point::new(100.0, y_de(0)), &[]);
+        let (arrastre, seleccion) = empezar(&proyecto, Punto::new(100.0, y_de(0)), &[]);
         assert!(matches!(arrastre.modo, Modo::Bloque { .. }));
         assert_eq!(seleccion, vec!["cap-1".to_string()]);
         assert!(
@@ -489,7 +489,7 @@ mod tests {
         let proyecto = proyecto();
         let (izquierdo, _) = empezar(
             &proyecto,
-            Point::new(50.0 + AGARRE_BORDE - 1.0, y_de(0)),
+            Punto::new(50.0 + AGARRE_BORDE - 1.0, y_de(0)),
             &[],
         );
         match izquierdo.modo {
@@ -499,7 +499,7 @@ mod tests {
 
         let (derecho, _) = empezar(
             &proyecto,
-            Point::new(150.0 - AGARRE_BORDE + 1.0, y_de(0)),
+            Punto::new(150.0 - AGARRE_BORDE + 1.0, y_de(0)),
             &[],
         );
         match derecho.modo {
@@ -512,7 +512,7 @@ mod tests {
     fn pulsar_un_clip_ya_seleccionado_mueve_toda_la_seleccion() {
         let proyecto = proyecto();
         let seleccion = vec!["cap-1".to_string(), "cap-2".to_string()];
-        let (arrastre, ids) = empezar(&proyecto, Point::new(100.0, y_de(0)), &seleccion);
+        let (arrastre, ids) = empezar(&proyecto, Punto::new(100.0, y_de(0)), &seleccion);
         match arrastre.modo {
             Modo::Bloque { originales, .. } => assert_eq!(originales.len(), 2),
             otro => panic!("se esperaba un bloque, llegó {otro:?}"),
@@ -523,7 +523,7 @@ mod tests {
     #[test]
     fn arrastrar_el_borde_derecho_alarga_sin_tocar_el_inicio() {
         let mut proyecto = proyecto();
-        let (arrastre, _) = empezar(&proyecto, Point::new(150.0, y_de(0)), &[]);
+        let (arrastre, _) = empezar(&proyecto, Punto::new(150.0, y_de(0)), &[]);
 
         // Hasta x=250 -> 5 s.
         assert!(arrastre.aplicar(&mut proyecto, marco(250.0, y_de(0))));
@@ -535,7 +535,7 @@ mod tests {
     #[test]
     fn el_borde_no_puede_cruzar_el_borde_contrario() {
         let mut proyecto = proyecto();
-        let (arrastre, _) = empezar(&proyecto, Point::new(50.0, y_de(0)), &[]);
+        let (arrastre, _) = empezar(&proyecto, Punto::new(50.0, y_de(0)), &[]);
 
         // Muy a la derecha: el inicio se queda a DURACION_MINIMA del fin.
         assert!(arrastre.aplicar(&mut proyecto, marco(400.0, y_de(0))));
@@ -548,7 +548,7 @@ mod tests {
     fn soltar_donde_se_pulso_no_cambia_nada() {
         let mut proyecto = proyecto();
         let antes = proyecto.clone();
-        let (arrastre, _) = empezar(&proyecto, Point::new(100.0, y_de(0)), &[]);
+        let (arrastre, _) = empezar(&proyecto, Punto::new(100.0, y_de(0)), &[]);
         assert!(!arrastre.aplicar(&mut proyecto, marco(100.0, y_de(0))));
         assert_eq!(proyecto.captions, antes.captions);
     }
@@ -557,7 +557,7 @@ mod tests {
     fn el_bloque_se_mueve_sin_deformarse() {
         let mut proyecto = proyecto();
         let seleccion = vec!["cap-1".to_string(), "cap-2".to_string()];
-        let (arrastre, _) = empezar(&proyecto, Point::new(100.0, y_de(0)), &seleccion);
+        let (arrastre, _) = empezar(&proyecto, Punto::new(100.0, y_de(0)), &seleccion);
 
         // +50 px = +1 s.
         assert!(arrastre.aplicar(&mut proyecto, marco(150.0, y_de(0))));
@@ -575,7 +575,7 @@ mod tests {
     #[test]
     fn el_bloque_no_puede_irse_a_tiempo_negativo() {
         let mut proyecto = proyecto();
-        let (arrastre, _) = empezar(&proyecto, Point::new(100.0, y_de(0)), &[]);
+        let (arrastre, _) = empezar(&proyecto, Punto::new(100.0, y_de(0)), &[]);
 
         assert!(arrastre.aplicar(&mut proyecto, marco(0.0, y_de(0))));
         assert!(caption(&proyecto, "cap-1").inicio >= 0.0);
@@ -585,7 +585,7 @@ mod tests {
     #[test]
     fn arrastrar_en_vertical_cambia_de_carril() {
         let mut proyecto = proyecto();
-        let (arrastre, _) = empezar(&proyecto, Point::new(100.0, y_de(0)), &[]);
+        let (arrastre, _) = empezar(&proyecto, Punto::new(100.0, y_de(0)), &[]);
 
         // Del carril `—` al carril de Beto (fila 2).
         assert!(arrastre.aplicar(&mut proyecto, marco(100.0, y_de(2))));
@@ -602,7 +602,7 @@ mod tests {
         let mut proyecto = proyecto();
         let seleccion = vec!["cap-1".to_string(), "cap-2".to_string()];
         // Se agarra cap-2 (fila 1, de x=200 a 250) con los dos seleccionados.
-        let (arrastre, _) = empezar(&proyecto, Point::new(225.0, y_de(1)), &seleccion);
+        let (arrastre, _) = empezar(&proyecto, Punto::new(225.0, y_de(1)), &seleccion);
 
         // Subir al carril `—`: cap-1 ya está en la fila 0, así que se queda y
         // cap-2 baja a la 0; el desfase relativo se conserva.
@@ -617,7 +617,7 @@ mod tests {
     #[test]
     fn el_snap_pega_el_bloque_al_vecino() {
         let mut proyecto = proyecto();
-        let (arrastre, _) = empezar(&proyecto, Point::new(100.0, y_de(0)), &[]);
+        let (arrastre, _) = empezar(&proyecto, Punto::new(100.0, y_de(0)), &[]);
 
         // cap-1 acaba en 2-4 s y cap-2 empieza en 4 s: el fin del bloque queda
         // a 0.03 s del vecino y el imán lo pega.
@@ -635,7 +635,7 @@ mod tests {
     #[test]
     fn la_marquesina_devuelve_los_captions_que_toca() {
         let proyecto = proyecto();
-        let (arrastre, _) = empezar(&proyecto, Point::new(40.0, y_de(0)), &[]);
+        let (arrastre, _) = empezar(&proyecto, Punto::new(40.0, y_de(0)), &[]);
         assert!(arrastre.es_marquesina());
 
         // De 0.8 s a 4.5 s cubre cap-1 (1-3) y el arranque de cap-2 (4-5), pero
@@ -650,7 +650,7 @@ mod tests {
     #[test]
     fn un_clic_sin_moverse_no_es_una_marquesina() {
         let proyecto = proyecto();
-        let (arrastre, _) = empezar(&proyecto, Point::new(40.0, y_de(0)), &[]);
+        let (arrastre, _) = empezar(&proyecto, Punto::new(40.0, y_de(0)), &[]);
         let origen = arrastre.origen().expect("la marquesina guarda su origen");
         assert!((origen.x - 40.0).abs() < 1e-6);
         // La app decide clic vs marquesina comparando el punto de soltar con

@@ -15,23 +15,26 @@ mod arrastre;
 
 pub use arrastre::{Arrastre, Asa, Marco, Modo, Original, Respuesta, UMBRAL_CLIC, pulsar};
 
-use iced::widget::canvas::{self, Canvas, Frame, Geometry, Path, Program, Text};
-use iced::{Color, Point, Rectangle, Renderer, Size, Theme, mouse};
-use rod_core::{Caption, Proyecto, agrupar_captions_por_carril};
+use rod_core::Caption;
 
-use crate::tema;
+/// Punto local del widget. Antes era `iced::Point`; lo definimos aquí para que
+/// el front-end no arrastre el crate de iced solo por un tipo de dos f32.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Punto {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl Punto {
+    pub fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
+}
 
 /// Altura de la regla de tiempo (arriba del todo).
 pub const ALTO_REGLA: f32 = 26.0;
 /// Altura de cada carril.
 pub const ALTO_CARRIL: f32 = 46.0;
-/// Separación mínima entre marcas de la regla, en píxeles.
-const PASO_MINIMO_PX: f32 = 70.0;
-
-/// Cuánto se desplaza un `ScrollDelta::Pixels`: en Windows el wheel entrega
-/// líneas, pero un trackpad entrega píxeles y hay que homogeneizarlos.
-const PX_POR_LINEA: f32 = 40.0;
-
 // Los tres números del seguimiento vienen del oráculo (`utils/constants.ts`):
 // cuando el playhead cruza el 92 % de la ventana, la ventana se recoloca para
 // dejarlo al 8 % del borde izquierdo, y el desplazamiento se interpola un 12 %
@@ -39,18 +42,6 @@ const PX_POR_LINEA: f32 = 40.0;
 pub const EDGE_TRIGGER: f64 = 0.92;
 pub const NEW_MARGIN: f64 = 0.08;
 pub const LERP: f64 = 0.12;
-
-const FONDO: Color = tema::SUPERFICIE;
-const SEPARADOR: Color = tema::HAIRLINE;
-const TEXTO: Color = tema::SECUNDARIO;
-const PLAYHEAD: Color = tema::ACENTO;
-const CARRIL_VACIO: Color = Color::from_rgb(0.28, 0.30, 0.34);
-
-/// El borde del clip es el color semántico del hablante; el azul de la chrome
-/// solo aparece cuando el clip está seleccionado.
-pub fn color_clip(color: Color, seleccionado: bool) -> Color {
-    if seleccionado { tema::ACENTO } else { color }
-}
 
 /// Qué ve el usuario del eje de tiempo: dónde empieza y cuánto abarca.
 ///
@@ -197,36 +188,18 @@ pub fn acercar(vista: &mut Vista, objetivo: f64, duracion: f64, ancho_px: f32) -
 /// app, que es la única que sabe si el usuario tiene Shift pulsado.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Mensaje {
-    Pulsar(Point),
-    Arrastrar(Point),
-    Soltar(Point),
+    Pulsar(Punto),
+    Arrastrar(Punto),
+    Soltar(Punto),
     /// La rueda giró `lineas` sobre `punto`: desplazar o acercar lo decide la
     /// app (Shift = zoom).
     Rueda {
         lineas: f32,
-        punto: Point,
+        punto: Punto,
     },
     /// El widget cambió de ancho. La app lo necesita para saber cuántos
     /// segundos caben y hasta dónde puede desplazar la ventana.
     Ancho(f32),
-}
-
-pub struct Linea<'a> {
-    pub proyecto: &'a Proyecto,
-    pub vista: Vista,
-    pub duracion: f64,
-    pub position: f64,
-    pub seleccion: &'a [String],
-    /// El arrastre en curso, solo para pintar la marquesina: el resto del
-    /// arrastre ya está aplicado al proyecto.
-    pub arrastre: Option<&'a Arrastre>,
-}
-
-/// Un carril listo para pintar: su etiqueta y sus clips.
-struct Carril {
-    etiqueta: String,
-    color: Color,
-    captions: Vec<Caption>,
 }
 
 /// Y de la primera fila del carril (el borde superior).
@@ -257,370 +230,15 @@ pub fn clip_en(captions: &[Caption], vista: Vista, x: f32) -> Option<&Caption> {
     })
 }
 
-impl Linea<'_> {
-    /// Carril 0 = `—` (sin hablante); después, un carril por hablante en el
-    /// orden del proyecto, igual que `caption_row_index`.
-    fn carriles(&self) -> Vec<Carril> {
-        let agrupacion =
-            agrupar_captions_por_carril(&self.proyecto.captions, &self.proyecto.hablantes);
-        let mut carriles = vec![Carril {
-            etiqueta: "—".into(),
-            color: CARRIL_VACIO,
-            captions: agrupacion.sin_asignar,
-        }];
-        for hablante in &self.proyecto.hablantes {
-            let etiqueta = if hablante.nombre.is_empty() {
-                hablante.tecla.clone()
-            } else {
-                hablante.nombre.clone()
-            };
-            carriles.push(Carril {
-                etiqueta,
-                color: tema::color_de_hex(&hablante.color),
-                captions: agrupacion
-                    .por_hablante
-                    .get(&hablante.id)
-                    .cloned()
-                    .unwrap_or_default(),
-            });
-        }
-        carriles
-    }
-}
-
-impl Program<Mensaje> for Linea<'_> {
-    /// Último ancho publicado. El widget sabe cuánto mide en cada layout; la
-    /// app necesita ese número para el pan y el seguimiento, y aquí solo se
-    /// avisa cuando cambia (si no, sería un mensaje por frame).
-    type State = Option<f32>;
-
-    fn update(
-        &self,
-        state: &mut Self::State,
-        event: &canvas::Event,
-        bounds: Rectangle,
-        cursor: mouse::Cursor,
-    ) -> Option<canvas::Action<Mensaje>> {
-        // Los eventos de ventana (incluido el redibujado) no traen ratón: son
-        // el único sitio donde el widget se entera de que cambió de tamaño sin
-        // esperar a que el usuario lo toque.
-        if matches!(event, canvas::Event::Window(_)) {
-            let ancho = bounds.width;
-            if *state != Some(ancho) {
-                *state = Some(ancho);
-                return Some(canvas::Action::publish(Mensaje::Ancho(ancho)));
-            }
-            return None;
-        }
-
-        let canvas::Event::Mouse(evento) = event else {
-            return None;
-        };
-
-        match evento {
-            mouse::Event::ButtonPressed(mouse::Button::Left) => {
-                let punto = cursor.position_in(bounds)?;
-                Some(canvas::Action::publish(Mensaje::Pulsar(punto)).and_capture())
-            }
-            mouse::Event::ButtonReleased(mouse::Button::Left) => {
-                let punto = cursor.position_in(bounds)?;
-                Some(canvas::Action::publish(Mensaje::Soltar(punto)).and_capture())
-            }
-            // Sin arrastre en curso, mover el ratón no le importa a nadie; con
-            // uno, cada movimiento es un frame del arrastre.
-            mouse::Event::CursorMoved { .. } => {
-                self.arrastre?;
-                let punto = cursor.position_in(bounds)?;
-                Some(canvas::Action::publish(Mensaje::Arrastrar(punto)))
-            }
-            // Fuera del widget no hay nada que desplazar: el `?` es la
-            // diferencia entre girar la rueda sobre el timeline y girarla
-            // encima de los paneles.
-            mouse::Event::WheelScrolled { delta } => {
-                let lineas = match delta {
-                    mouse::ScrollDelta::Lines { y, .. } => *y,
-                    mouse::ScrollDelta::Pixels { y, .. } => *y / PX_POR_LINEA,
-                };
-                let punto = cursor.position_in(bounds)?;
-                Some(canvas::Action::publish(Mensaje::Rueda { lineas, punto }).and_capture())
-            }
-            _ => None,
-        }
-    }
-
-    fn draw(
-        &self,
-        _state: &Self::State,
-        renderer: &Renderer,
-        _theme: &Theme,
-        bounds: Rectangle,
-        cursor: mouse::Cursor,
-    ) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
-        frame.fill_rectangle(Point::ORIGIN, bounds.size(), FONDO);
-
-        self.pintar_regla(&mut frame, bounds.size());
-        self.pintar_carriles(&mut frame, bounds.size());
-        self.pintar_fin(&mut frame, bounds.size());
-        self.pintar_playhead(&mut frame, bounds.size());
-        self.pintar_marquesina(&mut frame, bounds, cursor);
-
-        vec![frame.into_geometry()]
-    }
-
-    fn mouse_interaction(
-        &self,
-        _state: &Self::State,
-        bounds: Rectangle,
-        cursor: mouse::Cursor,
-    ) -> mouse::Interaction {
-        let Some(punto) = cursor.position_in(bounds) else {
-            return mouse::Interaction::default();
-        };
-        let carriles = self.carriles();
-        let sobre_clip = carril_en(punto.y)
-            .and_then(|carril| carriles.get(carril))
-            .is_some_and(|carril| clip_en(&carril.captions, self.vista, punto.x).is_some());
-        if sobre_clip {
-            mouse::Interaction::Pointer
-        } else {
-            mouse::Interaction::Crosshair
-        }
-    }
-}
-
-impl Linea<'_> {
-    fn pintar_regla(&self, frame: &mut Frame, tamano: Size) {
-        let paso = paso_regla(self.vista.escala);
-        let desde = (self.vista.inicio / paso).floor() as i64;
-        let hasta = (self.vista.tiempo_de(tamano.width) / paso).ceil() as i64;
-
-        for indice in desde..=hasta {
-            let tiempo = indice as f64 * paso;
-            let x = self.vista.x_de(tiempo);
-            frame.fill_rectangle(
-                Point::new(x, ALTO_REGLA - 6.0),
-                Size::new(1.0, 6.0),
-                SEPARADOR,
-            );
-            frame.fill_text(Text {
-                content: rod_core::format_time(tiempo),
-                position: Point::new(x + 4.0, 2.0),
-                color: TEXTO,
-                size: iced::Pixels(11.0),
-                ..Text::default()
-            });
-        }
-        frame.fill_rectangle(
-            Point::new(0.0, ALTO_REGLA - 1.0),
-            Size::new(tamano.width, 1.0),
-            SEPARADOR,
-        );
-
-        // Chip del playhead en la regla: el tiempo exacto, no solo la línea.
-        let x = self.vista.x_de(self.position);
-        if (0.0..=tamano.width).contains(&x) {
-            let ancho = 76.0;
-            let izquierda = (x - ancho / 2.0).clamp(0.0, tamano.width - ancho);
-            frame.fill_rectangle(Point::new(izquierda, 1.0), Size::new(ancho, 12.0), PLAYHEAD);
-            frame.fill_text(Text {
-                content: rod_core::format_time(self.position),
-                position: Point::new(izquierda + 4.0, 2.0),
-                color: tema::SUPERFICIE,
-                size: iced::Pixels(9.0),
-                ..Text::default()
-            });
-        }
-    }
-
-    fn pintar_carriles(&self, frame: &mut Frame, tamano: Size) {
-        for (indice, carril) in self.carriles().iter().enumerate() {
-            let y = y_de_carril(indice);
-            if y > tamano.height {
-                break;
-            }
-            frame.fill_rectangle(
-                Point::new(0.0, y),
-                Size::new(tamano.width, ALTO_CARRIL - 1.0),
-                Color {
-                    a: 0.10,
-                    ..carril.color
-                },
-            );
-            // Rejilla de 112 px: ayuda a leer distancias sin dibujar marcas
-            // nuevas sobre la regla de tiempo.
-            let mut x = -self.vista.inicio.rem_euclid(112.0 * self.vista.escala) as f32;
-            while x < tamano.width {
-                frame.fill_rectangle(
-                    Point::new(x, y),
-                    Size::new(1.0, ALTO_CARRIL - 1.0),
-                    Color {
-                        a: 0.06,
-                        ..SEPARADOR
-                    },
-                );
-                x += 112.0;
-            }
-            frame.fill_text(Text {
-                content: carril.etiqueta.clone(),
-                position: Point::new(5.0, y + 9.0),
-                color: TEXTO,
-                size: iced::Pixels(11.0),
-                ..Text::default()
-            });
-
-            for caption in &carril.captions {
-                let x0 = self.vista.x_de(caption.inicio);
-                let x1 = self.vista.x_de(caption.fin);
-                if x1 < 0.0 || x0 > tamano.width {
-                    continue;
-                }
-                let seleccionado = self.seleccion.iter().any(|id| id == &caption.id);
-                let rect = Rectangle {
-                    x: x0,
-                    y: y + 5.0,
-                    width: (x1 - x0).max(2.0),
-                    height: ALTO_CARRIL - 11.0,
-                };
-                frame.fill_rectangle(
-                    rect.position(),
-                    rect.size(),
-                    Color {
-                        a: 0.22,
-                        ..carril.color
-                    },
-                );
-                frame.stroke_rectangle(
-                    rect.position(),
-                    rect.size(),
-                    canvas::Stroke::default()
-                        .with_color(color_clip(carril.color, seleccionado))
-                        .with_width(1.0),
-                );
-                frame.fill_text(Text {
-                    content: caption.texto.clone(),
-                    position: Point::new(rect.x + 5.0, rect.y + 3.0),
-                    color: TEXTO,
-                    size: iced::Pixels(11.0),
-                    ..Text::default()
-                });
-                if seleccionado {
-                    for x in [rect.x, rect.x + rect.width - 3.0] {
-                        frame.fill_rectangle(
-                            Point::new(x, rect.y),
-                            Size::new(3.0, rect.height),
-                            color_clip(carril.color, true),
-                        );
-                    }
-                }
-            }
-
-            frame.fill_rectangle(
-                Point::new(0.0, y + ALTO_CARRIL - 1.0),
-                Size::new(tamano.width, 1.0),
-                SEPARADOR,
-            );
-        }
-    }
-
-    fn pintar_fin(&self, frame: &mut Frame, tamano: Size) {
-        let x = self.vista.x_de(self.duracion);
-        if !(0.0..=tamano.width).contains(&x) {
-            return;
-        }
-        frame.fill_rectangle(
-            Point::new(x, ALTO_REGLA),
-            Size::new(1.0, tamano.height - ALTO_REGLA),
-            TEXTO,
-        );
-    }
-
-    /// El rectángulo de la marquesina en curso. Se dibuja del origen al cursor
-    /// de ahora mismo: el `Arrastre` solo guarda el origen, y el cursor lo trae
-    /// `draw`.
-    fn pintar_marquesina(&self, frame: &mut Frame, bounds: Rectangle, cursor: mouse::Cursor) {
-        let Some(Modo::Marquesina { origen }) = self.arrastre.map(|arrastre| &arrastre.modo) else {
-            return;
-        };
-        let Some(actual) = cursor.position_in(bounds) else {
-            return;
-        };
-        let rect = Rectangle::new(
-            Point::new(origen.x.min(actual.x), origen.y.min(actual.y)),
-            Size::new(
-                (actual.x - origen.x).abs().max(1.0),
-                (actual.y - origen.y).abs().max(1.0),
-            ),
-        );
-        frame.fill_rectangle(
-            rect.position(),
-            rect.size(),
-            Color {
-                a: 0.12,
-                ..PLAYHEAD
-            },
-        );
-        frame.stroke_rectangle(
-            rect.position(),
-            rect.size(),
-            canvas::Stroke::default()
-                .with_color(PLAYHEAD)
-                .with_width(1.0),
-        );
-    }
-
-    fn pintar_playhead(&self, frame: &mut Frame, tamano: Size) {
-        let x = self.vista.x_de(self.position);
-        if !(0.0..=tamano.width).contains(&x) {
-            return;
-        }
-        frame.fill_rectangle(Point::new(x, 0.0), Size::new(1.5, tamano.height), PLAYHEAD);
-        let triangulo = Path::new(|builder| {
-            builder.move_to(Point::new(x - 5.0, 0.0));
-            builder.line_to(Point::new(x + 6.5, 0.0));
-            builder.line_to(Point::new(x + 0.75, 6.0));
-            builder.close();
-        });
-        frame.fill(&triangulo, PLAYHEAD);
-    }
-}
-
-/// Paso de la regla en segundos: el menor de una lista "redonda" que deje al
-/// menos [`PASO_MINIMO_PX`] entre marcas. Sin esto, al hacer zoom las marcas se
-/// solaparían o quedarían a un píxel.
-pub fn paso_regla(escala: f64) -> f64 {
-    const PASOS: [f64; 12] = [
-        0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 30.0, 60.0, 120.0, 300.0, 600.0, 1800.0,
-    ];
-    let minimo = f64::from(PASO_MINIMO_PX) * escala;
-    PASOS
-        .into_iter()
-        .find(|paso| *paso >= minimo)
-        .unwrap_or(PASOS[PASOS.len() - 1])
-}
-
-/// Atajo para la app: el widget ya configurado para llenar su contenedor.
-pub fn widget<'a>(linea: Linea<'a>) -> Canvas<Linea<'a>, Mensaje> {
-    Canvas::new(linea)
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        ALTO_CARRIL, ALTO_REGLA, Arrastre, EDGE_TRIGGER, Linea, Mensaje, Modo, NEW_MARGIN, Vista,
-        acercar, carril_en, clip_en, color_clip, fila_de_carril, objetivo_de_seguimiento,
-        paso_regla, y_de_carril,
+        ALTO_CARRIL, ALTO_REGLA, EDGE_TRIGGER, NEW_MARGIN, Vista, acercar, carril_en, clip_en,
+        fila_de_carril, objetivo_de_seguimiento, y_de_carril,
     };
-    use iced::widget::canvas;
-    use iced::{Color, Point, Rectangle, Size, mouse};
-    use rod_core::{Caption, Hablante, Proyecto};
+    use rod_core::{Caption, Hablante, Proyecto, agrupar_captions_por_carril};
 
-    #[test]
-    fn color_clip_mantiene_el_semantico_y_el_acento_solo_marca_seleccion() {
-        let hablante = Color::from_rgb(0.298, 0.553, 1.0);
-        assert_eq!(color_clip(hablante, false), hablante);
-        assert_eq!(color_clip(hablante, true), crate::tema::ACENTO);
-    }
+    const ANCHO: f32 = 800.0;
 
     #[test]
     fn altura_de_carril_coincide_con_y_de_carril() {
@@ -654,17 +272,6 @@ mod tests {
             },
         ];
         proyecto
-    }
-
-    fn linea(proyecto: &Proyecto, vista: Vista) -> Linea<'_> {
-        Linea {
-            proyecto,
-            vista,
-            duracion: 15.0,
-            position: 0.0,
-            seleccion: &[],
-            arrastre: None,
-        }
     }
 
     #[test]
@@ -725,20 +332,6 @@ mod tests {
     }
 
     #[test]
-    fn la_regla_usa_pasos_redondos_y_nunca_amontona_marcas() {
-        for escala in [0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.5] {
-            let paso = paso_regla(escala);
-            let separacion = paso / escala;
-            assert!(
-                separacion >= f64::from(super::PASO_MINIMO_PX),
-                "escala {escala}: {separacion} px entre marcas"
-            );
-        }
-        assert_eq!(paso_regla(0.02), 2.0);
-        assert_eq!(paso_regla(0.002), 0.5);
-    }
-
-    #[test]
     fn el_carril_sale_de_la_y_y_la_regla_no_es_un_carril() {
         assert_eq!(carril_en(ALTO_REGLA - 1.0), None);
         assert_eq!(carril_en(ALTO_REGLA + 1.0), Some(0));
@@ -751,27 +344,23 @@ mod tests {
     #[test]
     fn cada_caption_cae_en_su_carril() {
         let proyecto = proyecto();
-        let linea = linea(&proyecto, Vista::nueva(0.02));
-        let carriles = linea.carriles();
-
-        assert_eq!(carriles.len(), 2, "carril — y el de Ana");
-        assert_eq!(carriles[0].etiqueta, "—");
-        assert_eq!(carriles[0].captions.len(), 1);
-        assert_eq!(carriles[1].etiqueta, "Ana");
-        assert_eq!(carriles[1].captions[0].id, "cap-1");
+        let agrupacion = agrupar_captions_por_carril(&proyecto.captions, &proyecto.hablantes);
+        assert_eq!(agrupacion.sin_asignar.len(), 1);
+        let del_hablante = &agrupacion.por_hablante["sp-1"];
+        assert_eq!(del_hablante[0].id, "cap-1");
     }
 
     #[test]
     fn el_clic_encuentra_el_clip_que_esta_debajo() {
         let proyecto = proyecto();
         let vista = Vista::nueva(0.02);
-        let linea = linea(&proyecto, vista);
-        let carriles = linea.carriles();
+        let agrupacion = agrupar_captions_por_carril(&proyecto.captions, &proyecto.hablantes);
+        let del_hablante = &agrupacion.por_hablante["sp-1"];
 
         // cap-1 va de 1 s a 3 s: en x, de 50 a 150 px.
-        let encontrado = clip_en(&carriles[1].captions, vista, 100.0);
+        let encontrado = clip_en(del_hablante, vista, 100.0);
         assert_eq!(encontrado.map(|caption| caption.id.as_str()), Some("cap-1"));
-        assert!(clip_en(&carriles[1].captions, vista, 10.0).is_none());
+        assert!(clip_en(del_hablante, vista, 10.0).is_none());
     }
 
     #[test]
@@ -787,173 +376,21 @@ mod tests {
         // 0.1 s/px: un clip de 0.5 s mide 5 px, pero el caso que importa es el
         // de 2 px: el mínimo dibujado tiene que seguir siendo clicable.
         let vista = Vista::nueva(0.1);
-        let linea = linea(&proyecto, vista);
-        let carriles = linea.carriles();
-        let diminuto = carriles[0]
-            .captions
+        let agrupacion = agrupar_captions_por_carril(&proyecto.captions, &proyecto.hablantes);
+        let diminuto = agrupacion
+            .sin_asignar
             .iter()
             .find(|caption| caption.id == "cap-3")
             .expect("cap-3 está en el carril —");
         let x0 = vista.x_de(diminuto.inicio);
         assert_eq!(
-            clip_en(&carriles[0].captions, vista, x0).map(|c| c.id.as_str()),
+            clip_en(&agrupacion.sin_asignar, vista, x0).map(|c| c.id.as_str()),
             Some("cap-3")
         );
     }
 
     /// Un evento del canvas, empaquetado como lo hace iced. Así se prueba el
     /// camino evento→mensaje sin GPU y sin robar el escritorio.
-    fn evento(linea: &Linea<'_>, evento: mouse::Event, x: f32, y: f32) -> Option<Mensaje> {
-        use super::Program;
-
-        let mut estado = None;
-        let bounds = Rectangle::new(Point::ORIGIN, Size::new(800.0, 300.0));
-        let cursor = mouse::Cursor::Available(Point::new(x, y));
-        linea
-            .update(&mut estado, &canvas::Event::Mouse(evento), bounds, cursor)
-            .and_then(|accion| accion.into_inner().0)
-    }
-
-    /// Un evento de ventana, que es donde el widget aprende su ancho.
-    fn evento_de_ventana(
-        linea: &Linea<'_>,
-        estado: &mut Option<f32>,
-        ancho: f32,
-    ) -> Option<Mensaje> {
-        use super::Program;
-
-        let bounds = Rectangle::new(Point::ORIGIN, Size::new(ancho, 300.0));
-        let evento = canvas::Event::Window(iced::window::Event::RedrawRequested(
-            std::time::Instant::now(),
-        ));
-        linea
-            .update(estado, &evento, bounds, mouse::Cursor::Unavailable)
-            .and_then(|accion| accion.into_inner().0)
-    }
-
-    #[test]
-    fn el_ancho_se_publica_una_vez_por_cambio() {
-        let proyecto = proyecto();
-        let linea = linea(&proyecto, Vista::nueva(0.02));
-        let mut estado = None;
-
-        // Primera vez: la app no sabía cuánto mide.
-        assert_eq!(
-            evento_de_ventana(&linea, &mut estado, 800.0),
-            Some(Mensaje::Ancho(800.0))
-        );
-        // Sin cambio de ancho no hay mensaje: si no, sería uno por frame.
-        assert_eq!(evento_de_ventana(&linea, &mut estado, 800.0), None);
-        assert_eq!(
-            evento_de_ventana(&linea, &mut estado, 640.0),
-            Some(Mensaje::Ancho(640.0))
-        );
-    }
-
-    #[test]
-    fn la_rueda_llega_con_lineas_y_punto_local() {
-        let proyecto = proyecto();
-        let linea = linea(&proyecto, Vista::nueva(0.02));
-        assert_eq!(
-            evento(
-                &linea,
-                mouse::Event::WheelScrolled {
-                    delta: mouse::ScrollDelta::Lines { x: 0.0, y: 1.0 }
-                },
-                300.0,
-                40.0
-            ),
-            Some(Mensaje::Rueda {
-                lineas: 1.0,
-                punto: Point::new(300.0, 40.0)
-            })
-        );
-        // Un trackpad entrega píxeles; se homogeneizan a líneas.
-        assert_eq!(
-            evento(
-                &linea,
-                mouse::Event::WheelScrolled {
-                    delta: mouse::ScrollDelta::Pixels { x: 0.0, y: 80.0 }
-                },
-                300.0,
-                40.0
-            ),
-            Some(Mensaje::Rueda {
-                lineas: 2.0,
-                punto: Point::new(300.0, 40.0)
-            })
-        );
-    }
-
-    #[test]
-    fn la_pulsacion_llega_a_la_app_como_un_punto_local() {
-        let proyecto = proyecto();
-        let linea = linea(&proyecto, Vista::nueva(0.02));
-        assert_eq!(
-            evento(
-                &linea,
-                mouse::Event::ButtonPressed(mouse::Button::Left),
-                100.0,
-                5.0
-            ),
-            Some(Mensaje::Pulsar(Point::new(100.0, 5.0)))
-        );
-        assert_eq!(
-            evento(
-                &linea,
-                mouse::Event::ButtonReleased(mouse::Button::Left),
-                120.0,
-                5.0
-            ),
-            Some(Mensaje::Soltar(Point::new(120.0, 5.0)))
-        );
-    }
-
-    #[test]
-    fn sin_arrastre_mover_el_raton_no_molesta_a_la_app() {
-        let proyecto = proyecto();
-        let linea = linea(&proyecto, Vista::nueva(0.02));
-        assert_eq!(
-            evento(
-                &linea,
-                mouse::Event::CursorMoved {
-                    position: Point::ORIGIN
-                },
-                50.0,
-                50.0
-            ),
-            None,
-            "sin arrastre en curso no hay nada que contar"
-        );
-    }
-
-    #[test]
-    fn con_arrastre_cada_movimiento_se_publica() {
-        let proyecto = proyecto();
-        let mut linea = linea(&proyecto, Vista::nueva(0.02));
-        let arrastre = Arrastre {
-            modo: Modo::Marquesina {
-                origen: Point::new(40.0, 60.0),
-            },
-            respaldo: None,
-            con_historial: false,
-        };
-        linea.arrastre = Some(&arrastre);
-        assert_eq!(
-            evento(
-                &linea,
-                mouse::Event::CursorMoved {
-                    position: Point::ORIGIN
-                },
-                90.0,
-                70.0
-            ),
-            Some(Mensaje::Arrastrar(Point::new(90.0, 70.0)))
-        );
-    }
-
-    /// 800 px a 0.02 s/px = 16 s de ventana; el clip de prueba dura 15 s.
-    const ANCHO: f32 = 800.0;
 
     #[test]
     fn pan_no_saca_la_ventana_del_video() {

@@ -1,52 +1,39 @@
-//! El widget de video: pinta el buffer de mpv como una textura propia.
-//!
-//! Tres tipos, tres vidas:
-//!
-//! - [`Video`] es el `Program` del widget. Se crea en `view`, uno por frame.
-//! - [`Frame`] es el dato de ese frame: píxeles y tamaño.
-//! - [`Gpu`] es el estado de GPU (pipeline, textura, bind group). Se crea una
-//!   vez por proceso y no depende de cuántos frames pasen.
+//! El buffer de mpv y las capas de libass, listos para el compositor de
+//! `ui::video`. La geometría y la García de letterbox viven en `geometria`.
 
 use std::fmt;
 use std::sync::Arc;
 
-use iced::Rectangle;
-use iced::wgpu;
-use iced::widget::shader;
+use wgpu;
 
 pub mod geometria;
 
 /// Bytes por instancia de capa: 3 atributos `float32x4`.
 const CAPA_BYTES: u64 = 3 * 16;
 
-pub struct Video {
-    pub pixels: Arc<Vec<u8>>,
-    pub width: u32,
-    pub height: u32,
-    /// Capas de subtítulo ya rasterizadas para este instante. Vacío = sin
-    /// subtítulos.
-    pub capas: Arc<Vec<Capa>>,
+/// Frame del video más las capas de subtítulos ya rasterizadas.
+pub struct Frame {
+    pub(crate) pixels: Arc<Vec<u8>>,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+    pub(crate) capas: Arc<Vec<Capa>>,
 }
 
 /// Una capa de subtítulo lista para la GPU: la máscara de libass copiada y su
 /// color. Se copia porque los punteros de libass solo valen hasta el siguiente
-/// render, y el widget tiene que sobrevivir a eso.
+/// render.
 #[derive(Debug, Clone)]
 pub struct Capa {
-    /// Esquina superior izquierda dentro del frame del video.
     pub x: i32,
     pub y: i32,
     pub ancho: u32,
     pub alto: u32,
     pub stride: usize,
-    /// RGB en sRGB y alfa de la capa (0 = transparente).
     pub color: [f32; 4],
     pub mascara: Vec<u8>,
 }
 
 impl Capa {
-    /// Traduce un bitmap de libass. El color viene `0xRRGGBBAA` con el alfa
-    /// invertido: `0` es opaco y `255` invisible.
     pub fn desde(bitmap: &rod_subs::Bitmap) -> Self {
         let color = bitmap.color;
         Self {
@@ -63,105 +50,6 @@ impl Capa {
             ],
             mascara: bitmap.alpha().to_vec(),
         }
-    }
-}
-
-impl<Message> shader::Program<Message> for Video {
-    type State = ();
-    type Primitive = Frame;
-
-    fn draw(&self, _state: &(), _cursor: iced::mouse::Cursor, _bounds: Rectangle) -> Frame {
-        Frame {
-            pixels: Arc::clone(&self.pixels),
-            width: self.width,
-            height: self.height,
-            capas: Arc::clone(&self.capas),
-        }
-    }
-}
-
-pub struct Frame {
-    pub(crate) pixels: Arc<Vec<u8>>,
-    pub(crate) width: u32,
-    pub(crate) height: u32,
-    pub(crate) capas: Arc<Vec<Capa>>,
-}
-
-impl shader::Primitive for Frame {
-    type Pipeline = Gpu;
-
-    fn prepare(
-        &self,
-        gpu: &mut Gpu,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        bounds: &Rectangle,
-        _viewport: &shader::Viewport,
-    ) {
-        gpu.ensure_texture(device, self.width, self.height);
-
-        // Letterbox: el widget puede tener otra forma que el video. Se encoge el
-        // quad en el eje que sobra en vez de deformarlo.
-        //
-        // Solo importa la proporción: iced ya deja el origen del clip space en el
-        // rect del widget (pone un viewport por primitivo), así que el quad
-        // centrado en NDC queda centrado en el widget.
-        let escala =
-            geometria::escala_letterbox((self.width, self.height), (bounds.width, bounds.height));
-
-        let mut uniforms = [0u8; 16];
-        uniforms[0..4].copy_from_slice(&escala.0.to_le_bytes());
-        uniforms[4..8].copy_from_slice(&escala.1.to_le_bytes());
-        queue.write_buffer(&gpu.uniforms, 0, &uniforms);
-
-        let Some(texture) = gpu.texture.as_ref() else {
-            return;
-        };
-
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            &self.pixels,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(self.width * 4),
-                rows_per_image: Some(self.height),
-            },
-            wgpu::Extent3d {
-                width: self.width,
-                height: self.height,
-                depth_or_array_layers: 1,
-            },
-        );
-
-        gpu.subir_capas(device, queue, &self.capas, self.width, self.height, escala);
-    }
-
-    fn draw(&self, gpu: &Gpu, render_pass: &mut wgpu::RenderPass<'_>) -> bool {
-        let Some(bind_group) = gpu.bind_group.as_ref() else {
-            return false;
-        };
-
-        render_pass.set_pipeline(&gpu.pipeline);
-        render_pass.set_bind_group(0, bind_group, &[]);
-        render_pass.draw(0..4, 0..1);
-
-        // Los subtítulos son un segundo draw call en el mismo pase: el pase ya
-        // tiene el video pintado y el blending lo mezcla contra él.
-        if gpu.capas_dibujadas > 0
-            && let Some(capas) = gpu.capas_bind_group.as_ref()
-        {
-            render_pass.set_pipeline(&gpu.capas_pipeline);
-            render_pass.set_bind_group(0, capas, &[]);
-            render_pass.set_vertex_buffer(0, gpu.instancias.slice(..));
-            render_pass.draw(0..6, 0..gpu.capas_dibujadas);
-        }
-
-        true
     }
 }
 
@@ -197,8 +85,8 @@ pub struct Gpu {
     capas_dibujadas: u32,
 }
 
-impl shader::Pipeline for Gpu {
-    fn new(device: &wgpu::Device, _queue: &wgpu::Queue, format: wgpu::TextureFormat) -> Self {
+impl Gpu {
+    pub(crate) fn crear(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("rod-app frame shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("frame.wgsl").into()),
@@ -409,12 +297,8 @@ impl shader::Pipeline for Gpu {
 
 impl Gpu {
     /// Construye el pipeline con el `device`/`queue` del renderer de egui.
-    pub(crate) fn nuevo(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        formato: wgpu::TextureFormat,
-    ) -> Self {
-        <Self as shader::Pipeline>::new(device, queue, formato)
+    pub(crate) fn nuevo(device: &wgpu::Device, formato: wgpu::TextureFormat) -> Self {
+        Self::crear(device, formato)
     }
 
     /// Sube el frame y las capas. Es la misma operación que hacía `prepare`

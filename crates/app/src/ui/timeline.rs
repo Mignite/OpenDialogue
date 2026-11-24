@@ -8,8 +8,8 @@ use crate::editor_app::{EditorApp, MensajeEditor};
 use crate::timeline::{self, ALTO_CARRIL, ALTO_REGLA, Mensaje};
 use crate::ui::tema;
 
-fn punto(rect: egui::Rect, pos: egui::Pos2) -> iced::Point {
-    iced::Point::new(pos.x - rect.min.x, pos.y - rect.min.y)
+fn punto(rect: egui::Rect, pos: egui::Pos2) -> timeline::Punto {
+    timeline::Punto::new(pos.x - rect.min.x, pos.y - rect.min.y)
 }
 
 pub fn playhead(state: &EditorApp) -> f64 {
@@ -109,7 +109,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
 
 #[cfg(test)]
 mod tests {
-    use iced::Point;
+    use crate::timeline::Punto as Point;
 
     use super::playhead;
     use crate::editor_app::{EditorApp, MensajeEditor, update};

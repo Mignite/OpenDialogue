@@ -1,11 +1,7 @@
 //! Barra de menú dibujada por iced, construida desde el registro de comandos.
 //! El menú no decide nada: solo publica el `Comando` que el usuario eligió.
 
-use iced::widget::button;
-use iced_aw::menu::{Item, Menu, MenuBar};
-
 use crate::comandos::{self, Comando, Seccion};
-use crate::tema;
 
 const SECCIONES: [Seccion; 6] = [
     Seccion::Archivo,
@@ -75,28 +71,12 @@ pub fn comandos_de(seccion: Seccion) -> Vec<Comando> {
         .collect()
 }
 
-pub fn barra<'a, Message>(
-    en_inicio: bool,
-    on_comando: impl Fn(Comando) -> Message + 'a,
-) -> MenuBar<'a, Message, iced::Theme, iced::Renderer>
-where
-    Message: Clone + 'a,
-{
-    let raices = SECCIONES
-        .into_iter()
-        .map(|seccion| {
-            let entradas = comandos_de(seccion)
-                .into_iter()
-                .map(|comando| {
-                    let habilitado = !en_inicio || comandos::disponible_en_inicio(comando);
-                    let mut boton =
-                        button(iced::widget::text(texto(comando))).style(tema::boton_menu);
-                    if habilitado {
-                        boton = boton.on_press(on_comando(comando));
-                    }
-                    Item::new(boton)
-                })
-                .collect::<Vec<_>>();
+/// Barra de menú dibujada con egui. Un `MenuButton` por sección, con los
+/// comandos del registro; en el arranque solo aparecen los cuatro válidos.
+pub fn mostrar(ui: &mut egui::Ui, en_inicio: bool) -> Option<Comando> {
+    let mut elegido = None;
+    ui.horizontal(|ui| {
+        for seccion in SECCIONES {
             let nombre = match seccion {
                 Seccion::Archivo => "Archivo",
                 Seccion::Edicion => "Edición",
@@ -105,16 +85,21 @@ where
                 Seccion::Estilos => "Estilos",
                 Seccion::Ayuda => "Ayuda",
             };
-            Item::with_menu(
-                button(nombre).style(tema::boton_menu),
-                Menu::new(entradas)
-                    .max_width(280.0)
-                    .padding(8.0)
-                    .offset(2.0),
-            )
-        })
-        .collect::<Vec<_>>();
-    MenuBar::new(raices).style(tema::barra_menu)
+            ui.menu_button(nombre, |ui| {
+                for comando in comandos_de(seccion) {
+                    let habilitado = !en_inicio || comandos::disponible_en_inicio(comando);
+                    if ui
+                        .add_enabled(habilitado, egui::Button::new(texto(comando)))
+                        .clicked()
+                    {
+                        elegido = Some(comando);
+                        ui.close();
+                    }
+                }
+            });
+        }
+    });
+    elegido
 }
 
 #[cfg(test)]

@@ -36,7 +36,7 @@ impl CallbackTrait for Dibujo {
             .expect("el mutex del pipeline no está envenenado");
         let formato = eframe::egui_wgpu::preferred_framebuffer_format(&[])
             .expect("egui_wgpu devuelve un formato de framebuffer");
-        let pipeline = gpu.get_or_insert_with(|| Gpu::nuevo(device, queue, formato));
+        let pipeline = gpu.get_or_insert_with(|| Gpu::nuevo(device, formato));
         let _ = pantalla;
         pipeline.subir(device, queue, &self.frame, escala);
         Vec::new()
