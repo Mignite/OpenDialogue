@@ -13,6 +13,9 @@
 - kittest no ejecuta el `PaintCallback` de mpv: las capturas finales del editor
   son headless con el monitor vacío. El «antes» real con video quedó en
   `docs/checklists/rediseno/antes-editor-1440.png`.
+- Inicio: el título pasa a ser el nombre de la app con subrayado de acento. El
+  logo se usa también en la cabecera. Las miniaturas ocupan un rect 16:9 y se
+  encajan conservando el aspecto, con barras negras para vídeos no 16:9.
 - Inicio: logo del SVG del usuario dibujado con shapes de egui (sin decoder
   SVG). Miniaturas: mpv rellena RGB con alfa basura; se fuerza alfa 255 al
   guardar y al cargar caches viejas antes de subir la textura. Las tarjetas

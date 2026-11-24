@@ -12,8 +12,8 @@ fn todo_comando_tiene_etiqueta_en_los_dos_idiomas() {
 #[test]
 fn el_idioma_por_defecto_es_ingles() {
     assert_eq!(Idioma::default(), Idioma::En);
-    assert_eq!(EN.inicio_titulo, "Edit subtitles with precision");
-    assert_eq!(ES.inicio_titulo, "Edita subtítulos con precisión");
+    assert_eq!(EN.inicio_titulo, "OpenDialogue");
+    assert_eq!(ES.inicio_titulo, "OpenDialogue");
 }
 
 #[test]

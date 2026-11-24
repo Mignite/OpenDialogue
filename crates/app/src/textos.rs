@@ -84,7 +84,7 @@ pub struct Textos {
 
 pub const ES: Textos = Textos {
     es: true,
-    inicio_titulo: "Edita subtítulos con precisión",
+    inicio_titulo: "OpenDialogue",
     inicio_subtitulo: "Abre un video o continúa un proyecto guardado.",
     abrir_video: "Abrir video",
     abrir_proyecto: "Abrir proyecto",
@@ -136,7 +136,7 @@ pub const ES: Textos = Textos {
 
 pub const EN: Textos = Textos {
     es: false,
-    inicio_titulo: "Edit subtitles with precision",
+    inicio_titulo: "OpenDialogue",
     inicio_subtitulo: "Open a video or continue a saved project.",
     abrir_video: "Open video",
     abrir_proyecto: "Open project",

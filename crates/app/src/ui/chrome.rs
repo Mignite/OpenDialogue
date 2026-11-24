@@ -44,7 +44,7 @@ pub fn mostrar(
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = tema::ESP_12;
 
-                monograma(ui);
+                super::kit::logo(ui, 26.0);
                 ui.label(
                     egui::RichText::new("OpenDialogue")
                         .font(egui::FontId::proportional(
@@ -106,37 +106,6 @@ pub fn mostrar(
             });
         });
     elegido
-}
-
-fn monograma(ui: &mut egui::Ui) {
-    let (rect, _) =
-        ui.allocate_exact_size(egui::Vec2::splat(tema::ALTO_CHIP), egui::Sense::hover());
-    ui.painter().rect_filled(
-        rect,
-        egui::CornerRadius::same(tema::RADIO_CONTROL as u8),
-        tema::PANEL,
-    );
-    ui.painter().rect_stroke(
-        rect,
-        egui::CornerRadius::same(tema::RADIO_CONTROL as u8),
-        egui::Stroke::new(1.0_f32, tema::BORDE_CONTROL),
-        egui::StrokeKind::Inside,
-    );
-    let colores = [
-        tema::color("#F2B84B"),
-        tema::color("#B39BFF"),
-        tema::color("#3FC4B8"),
-    ];
-    for (i, color) in colores.into_iter().enumerate() {
-        let y = rect.min.y + 6.0 + i as f32 * 5.0;
-        ui.painter().line_segment(
-            [
-                egui::pos2(rect.min.x + 5.0, y),
-                egui::pos2(rect.max.x - 5.0, y),
-            ],
-            egui::Stroke::new(2.0_f32, color),
-        );
-    }
 }
 
 fn boton_ventana(

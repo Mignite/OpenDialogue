@@ -50,12 +50,23 @@ pub fn mostrar(
         kit::logo(ui, 48.0);
         ui.add_space(tema::ESP_24);
 
-        ui.label(
-            RichText::new(textos.inicio_titulo)
-                .font(tema::fuente_segura(Estilo::Titulo))
-                .color(tema::TEXTO),
+        let titulo = ui.add(
+            egui::Label::new(
+                RichText::new(textos.inicio_titulo)
+                    .font(egui::FontId::proportional(32.0))
+                    .color(Color32::WHITE),
+            )
+            .selectable(false),
         );
-        ui.add_space(tema::ESP_12);
+        ui.painter().rect_filled(
+            egui::Rect::from_min_max(
+                egui::pos2(titulo.rect.min.x, titulo.rect.max.y + 6.0),
+                egui::pos2(titulo.rect.min.x + 72.0, titulo.rect.max.y + 8.0),
+            ),
+            0.0,
+            tema::ACENTO,
+        );
+        ui.add_space(tema::ESP_16);
         ui.label(
             RichText::new(textos.inicio_subtitulo)
                 .font(tema::fuente_segura(Estilo::Cuerpo))
@@ -267,7 +278,7 @@ fn tarjeta_reciente(
         .unwrap_or(tema::CONTROL);
     // `Frame::show` solo percibe hover: hay que dar a toda la tarjeta un rect
     // con `Sense::click()` para que abra el proyecto.
-    let (rect, respuesta) = ui.allocate_exact_size(Vec2::new(ancho, 176.0), Sense::click());
+    let (rect, respuesta) = ui.allocate_exact_size(Vec2::new(ancho, 210.0), Sense::click());
     ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
         let _ = kit::tarjeta(ui, |ui| {
             // El Grid celda usa layout horizontal: sin este vertical los labels
@@ -276,8 +287,10 @@ fn tarjeta_reciente(
                 // El ancho de la tarjeta ya viene del Grid; forzarlo aquí rompía el
                 // layout y los labels se solapaban con la miniatura.
                 let ancho_util = (ancho - tema::ESP_16 * 2.0).max(120.0);
-                let (miniatura, _) =
-                    ui.allocate_exact_size(Vec2::new(ancho_util, 96.0), Sense::hover());
+                let (miniatura, _) = ui.allocate_exact_size(
+                    Vec2::new(ancho_util, ancho_util * 9.0 / 16.0),
+                    Sense::hover(),
+                );
                 let ruta_miniatura = crate::thumbnail::ruta_cache(&reciente.ruta);
                 if ruta_miniatura.is_file() {
                     let textura = miniaturas.entry(reciente.ruta.clone()).or_insert_with(|| {
@@ -304,9 +317,24 @@ fn tarjeta_reciente(
                             egui::TextureOptions::default(),
                         )
                     });
+                    // Rect 16:9: un vídeo de otro aspecto se encaja sin
+                    // deformar y deja barras negras arriba/abajo o a los lados.
+                    ui.painter().rect_filled(miniatura, 0.0, Color32::BLACK);
+                    let tamaño = textura.size();
+                    let aspecto = tamaño[0] as f32 / tamaño[1].max(1) as f32;
+                    let (ancho_img, alto_img) = if aspecto > miniatura.width() / miniatura.height()
+                    {
+                        (miniatura.width(), miniatura.width() / aspecto)
+                    } else {
+                        (miniatura.height() * aspecto, miniatura.height())
+                    };
+                    let encajado = egui::Rect::from_center_size(
+                        miniatura.center(),
+                        Vec2::new(ancho_img, alto_img),
+                    );
                     ui.painter().image(
                         textura.id(),
-                        miniatura,
+                        encajado,
                         egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                         Color32::WHITE,
                     );
