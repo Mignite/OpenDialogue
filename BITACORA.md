@@ -1,5 +1,29 @@
 # Bitácora
 
+## 2026-11-24 — Rediseño visual (fases 1–5)
+
+- `Hablante.color` pasa a ser identidad de UI (12 muestras fijas); el texto del
+  subtítulo sigue usando el preset con `rod_core::color_hablante`. El `.ass` no
+  cambia. Coste: colores arbitrarios de `.cdp` viejos se respetan hasta que se
+  elija una muestra.
+- Inter y JetBrains Mono se instalan en la app. `tema::fuente_segura` conserva
+  el tamaño del estilo con una familia siempre registrada en las vistas que
+  prueba kittest, que no puede instalar familias con nombre antes del primer
+  paint.
+- kittest no ejecuta el `PaintCallback` de mpv: las capturas finales del editor
+  son headless con el monitor vacío. El «antes» real con video quedó en
+  `docs/checklists/rediseno/antes-editor-1440.png`.
+- Pendiente: marquesina y guía visual de `snapping` en el timeline; se conserva
+  la lógica de arrastre ya probada.
+- Pendiente: errores de `rod-core` y del sistema de archivos siguen en español
+  con prefijo traducido; traducirlos exige un enum de errores.
+- Pendiente: `panel_visible` se persiste pero falta el control para colapsar y
+  reabrir el panel derecho.
+- Evidencia: tests de atajos, ajustes, inicio, editor, subtítulos, inspector,
+  timeline, transporte, rendimiento y waveform; capturas `finales-*.png` a
+  1100/1440/2560 y una pasada ES a 1100. 543 líneas: <8 ms de media en release
+  (23 ms en debug).
+
 Una entrada por tropiezo que costó más de 20 minutos. El valor está en el
 diagnóstico, no en la solución: el mismo malentendido suele repetirse con otra
 cara.

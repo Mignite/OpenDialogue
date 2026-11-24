@@ -20,7 +20,13 @@ fn reciente(nombre: &str, lineas: usize, hablantes: usize) -> Reciente {
     }
 }
 
-fn capturar(nombre: &str, ancho: f32, alto: f32, estado: EstadoInicio) {
+fn capturar(
+    nombre: &str,
+    ancho: f32,
+    alto: f32,
+    estado: EstadoInicio,
+    idioma: rod_app::textos::Idioma,
+) {
     let mut harness = Harness::builder()
         .wgpu()
         .with_size(egui::vec2(ancho, alto))
@@ -32,7 +38,7 @@ fn capturar(nombre: &str, ancho: f32, alto: f32, estado: EstadoInicio) {
                 let fondo = ctx.layer_painter(egui::LayerId::background());
                 fondo.rect_filled(ctx.content_rect(), 0.0, rod_app::ui::tema::FONDO);
                 let mut prefs = rod_app::preferencias::Preferencias::default();
-                rod_app::ui::inicio::mostrar(ui, estado, &rod_app::textos::EN, &mut prefs);
+                rod_app::ui::inicio::mostrar(ui, estado, idioma.textos(), &mut prefs);
             },
             estado,
         );
@@ -85,6 +91,33 @@ fn guardar<S>(harness: &mut Harness<'_, S>, nombre: &str) {
     println!("{}", ruta.display());
 }
 
+fn capturar_editor(nombre: &str, ancho: f32, alto: f32, idioma: rod_app::textos::Idioma) {
+    let video = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../testdata/clip-15s-2audio.mp4"
+    );
+    let app = rod_app::editor_app::EditorApp::desde_video(video).expect("abre el clip de prueba");
+    let mut harness = Harness::builder()
+        .wgpu()
+        .with_size(egui::vec2(ancho, alto))
+        .build_state(
+            |ctx, (editor, medidas)| {
+                rod_app::ui::editor::show(
+                    ctx,
+                    editor,
+                    wgpu::TextureFormat::Rgba8Unorm,
+                    std::sync::Arc::new(std::sync::Mutex::new(None)),
+                    idioma.textos(),
+                    &rod_app::comandos::MapaAtajos::por_defecto(),
+                    medidas,
+                );
+            },
+            (app, rod_app::ui::editor::MedidasEditor::default()),
+        );
+    harness.run();
+    guardar(&mut harness, nombre);
+}
+
 fn main() {
     let fase = std::env::args().nth(1).unwrap_or_else(|| "antes".into());
 
@@ -99,6 +132,7 @@ fn main() {
         1440.0,
         900.0,
         inicio::nuevo(Vec::new(), None),
+        rod_app::textos::Idioma::En,
     );
     capturar(
         &format!("{fase}-inicio-3"),
@@ -112,5 +146,38 @@ fn main() {
             ],
             None,
         ),
+        rod_app::textos::Idioma::En,
     );
+
+    if fase == "finales" {
+        for ancho in [1100.0, 1440.0, 2560.0] {
+            let alto = if ancho == 1100.0 { 700.0 } else { 900.0 };
+            capturar(
+                &format!("finales-inicio-{ancho:.0}"),
+                ancho,
+                alto,
+                inicio::nuevo(
+                    vec![
+                        reciente("presa.cdp", 19, 3),
+                        reciente("RobloxTerror.cdp", 543, 7),
+                    ],
+                    None,
+                ),
+                rod_app::textos::Idioma::En,
+            );
+            capturar_editor(
+                &format!("finales-editor-{ancho:.0}"),
+                ancho,
+                alto,
+                rod_app::textos::Idioma::En,
+            );
+        }
+        capturar(
+            "finales-inicio-es-1100",
+            1100.0,
+            700.0,
+            inicio::nuevo(vec![reciente("RobloxTerror.cdp", 543, 7)], None),
+            rod_app::textos::Idioma::Es,
+        );
+    }
 }
