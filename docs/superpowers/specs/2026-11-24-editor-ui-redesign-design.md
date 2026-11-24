@@ -217,12 +217,11 @@ presets y recovery.
 
 ## 5. Inicio (`ui/inicio.rs`, reescrito)
 
-- Riel de 220 px (`RIEL`, borde derecho `BORDE`): Inicio y Recientes con icono
-  de 16 + etiqueta 12, 32 de alto, activo `ACTIVO` + barra de 2 px `ACENTO`
-  separada 6 px arriba y abajo; versión al pie en mono 11 `TEXTO_3`.
-  El «Ajustes» del mockup no se implementa: no hay nada real que configurar
-  todavía, y un ítem muerto es peor que un riel de dos. Vuelve cuando exista
-  contenido (rutas de caché, restablecer distribución).
+- Riel de 220 px (`RIEL`, borde derecho `BORDE`): Inicio, Recientes y Ajustes
+  con icono de 16 + etiqueta 12, 32 de alto, activo `ACTIVO` + barra de 2 px
+  `ACENTO` separada 6 px arriba y abajo; versión al pie en mono 11 `TEXTO_3`.
+  Ajustes no es una pantalla del enrutador: abre la capa de §11.3 y se marca
+  como activo mientras esté abierta.
 - Contenido: columna de 960 centrada, 72 px de aire arriba.
 - Título 24/32 y subtítulo 13 `TEXTO_2`; botones primario «Abrir video» y
   secundario «Abrir proyecto» con sus iconos; el atajo `Ctrl + O` en mono 11 a
@@ -276,10 +275,11 @@ cabecera 40
 
 `SidePanel` derecho con `resizable`, `TopBottomPanel` inferior con `resizable`,
 las dos colapsables (doble clic en el divisor, o el icono de la cabecera). Las
-medidas se persisten en `%APPDATA%\RustyOpenDialogue\ui.json`
+medidas se persisten en `%APPDATA%\RustyOpenDialogue\preferencias.json`
 (`ui/preferencias.rs`, escritura atómica como `recientes.rs`, lectura tolerante:
 un archivo roto da valores por defecto). Se guarda: ancho del panel, alto del
-timeline, panel visible, `seguir`, zoom y desplazamiento del timeline.
+timeline, panel visible, `seguir`, zoom y desplazamiento del timeline, idioma y
+atajos (§11).
 
 ### 6.2 Panel derecho
 
@@ -350,10 +350,10 @@ calcula `exportar_srt_por_hablante`, sin una segunda implementación.
 `?` (o F1) abre una capa centrada de 560 px sobre el editor: fondo `PANEL`, borde
 `BORDE`, radio 6, dos columnas de filas «acción / atajo en mono», agrupadas por
 contexto (Reproducción, Edición, Selección, Proyecto). `Esc` o clic fuera
-cierra. La lista **no** se escribe a mano: `comandos::describir() -> Vec<(Comando,
-&'static str, &'static str)>` es la fuente, y un test comprueba que todo
-`Comando` que `desde_input` puede producir aparece ahí. Si `?` no está mapeado
-hoy en `comandos.rs`, se registra junto a `F1` y se actualiza su test.
+cierra. Ni la etiqueta ni el atajo se escriben a mano: se leen de `Textos` y de
+`MapaAtajos` (§11), así que el panel muestra los atajos que el usuario tenga
+puestos, no los de fábrica. Un test comprueba que todo `Comando` que
+`MapaAtajos` puede producir aparece en el panel.
 
 ## 7. Timeline (`ui/timeline.rs`, reescrito)
 
@@ -451,19 +451,133 @@ Tests unitarios nuevos:
 - Regresión de tofu: para cada constante de `Icono`, el glifo existe en la
   fuente de Phosphor (comparación contra la tabla `cmap` leída con `ttf-parser`,
   añadido como dev-dependency; ya está en el árbol vía `ab_glyph`).
+- Atajos, idioma y `preferencias.json`: los de §11.4, que son los que sostienen
+  la capa de Ajustes.
 
 Cierre de cada fase: `cargo fmt --check`, `cargo clippy -p rod-app -D warnings`,
 `cargo test --workspace`, el ejemplo de capturas, y las imágenes revisadas por el
 agente antes de decir «listo».
 
-## 11. Fases
+## 11. Ajustes: idioma y atajos
 
-1. **Tokens y tipografía.** `tema.rs` reescrito, `tipografia.rs`, iconos,
-   `kit.rs` mínimo, `preferencias.rs`, política de repintado. Cierre: Inicio
-   actual re-estilizado sin cambiar todavía su distribución + capturas.
-2. **Chrome e Inicio.** `chrome.rs`, menús con atajos alineados, monograma,
-   Inicio completo con riel, drop zone, tarjetas, vacío/error y `Reciente`
-   ampliado.
+Lo que el oráculo tenía y esta versión no portó. Vuelve como capa modal, no como
+pantalla: se abre desde el riel de Inicio y desde el menú Edición del editor, y
+no interrumpe el proyecto abierto.
+
+### 11.1 Textos (`crates/app/src/textos.rs`, nuevo)
+
+Sin dependencia nueva y con el compilador como red:
+
+```rust
+pub struct Textos { pub inicio_titulo: &'static str, /* … */ }
+pub const ES: Textos = Textos { inicio_titulo: "Edita subtítulos con precisión", /* … */ };
+pub const EN: Textos = Textos { inicio_titulo: "Edit subtitles with precision", /* … */ };
+```
+
+Una tabla por idioma, las dos del mismo tipo: si una frase falta en una, no
+compila. No hay claves de cadena (`t("inicio.titulo")`), que admiten erratas
+silenciosas, ni un `match` de 200 brazos en el punto de dibujo.
+
+- `pub enum Idioma { Es, En }` con `fn textos(self) -> &'static Textos`.
+- Los plurales y la interpolación son métodos de `Textos`
+  (`fn lineas(n: usize) -> String`), el único sitio con `format!`.
+- `comandos::etiqueta` se sustituye por `textos.comando(Comando) -> &'static str`:
+  un `match` exhaustivo por tabla, que el compilador obliga a completar.
+- Se pasan por parámetro (`&Textos`) a las vistas; no hay estado global.
+- Qué se traduce: todo lo que dibuja la UI, incluidos menús, tooltips, estados
+  vacíos y las fechas relativas de los recientes. `recientes::fecha_relativa`
+  pasa a devolver `FechaRelativa { dias: u64 }` y el texto lo pone `Textos`; lo
+  mismo con `resumen_reciente`, `texto_vacio_recientes` y
+  `MENSAJE_ARCHIVO_INVALIDO`, que hoy son `String` en español dentro de la capa
+  de lógica.
+- Qué no: captions, nombres de hablante y nombres de preset (son datos), y los
+  mensajes de error que nacen en `rod-core` o en el sistema de archivos. Esos se
+  muestran con un prefijo traducido («No se pudo abrir el proyecto: …»); para
+  traducirlos de verdad habría que convertir los `String` de error en un enum,
+  que no es de esta spec. Queda como deuda anotada.
+- Idioma por defecto: español. `preferencias.idioma` manda desde el primer
+  arranque en que exista el archivo; no se adivina por la configuración de
+  Windows.
+
+### 11.2 Atajos (`comandos.rs` y `atajos.rs`)
+
+Hoy `desde_input` es un `match` fijo y `atajo()` devuelve cadenas sueltas; las
+dos se sustituyen por datos.
+
+- `Atajo { tecla: Key, ctrl: bool, shift: bool, alt: bool }` con `Display` para
+  el chip en mono (`Ctrl+Shift+S`, `Space`, `?`).
+- `MapaAtajos { filas: Vec<(Comando, Atajo)> }` con `por_defecto()`, que
+  reproduce **exactamente** el comportamiento actual (un test recorre la tabla
+  de casos de `desde_input` y compara). Las variantes de flecha son filas
+  distintas (`Retroceder` = `←`, `RetrocederFino` = `Shift+←`), no una fila con
+  modificadores: así el mapa es plano y una tecla nueva nunca cambia el sentido
+  de otra.
+- `Comando::todas() -> &'static [Comando]` alimenta el panel: los comandos sin
+  atajo de fábrica (`NuevoProyecto`, los de panel…) aparecen con «—» y se les
+  puede asignar uno. Un test comprueba que `todas()` cubre el enum.
+- `comando_de(tecla, modificadores, foco_en_texto) -> Option<Comando>`: primer
+  acierto gana; sin duplicados.
+  - **Con foco en un campo de texto, solo pasan los combos con Ctrl o Alt** (y
+    `Escape`). Las teclas desnudas se ignoran mientras se escribe. Hoy no es así
+    y es un bug real: escribir un espacio en el textarea del caption pausa el
+    video, y una `c` divide el caption. Esto se arregla aquí, porque un editor
+    de atajos sobre un mapeo roto no se puede probar.
+- Rebinding en la capa de Ajustes: una fila por comando, agrupadas por
+  `Seccion`, con el atajo actual en mono y un `icon_button` de cambiar. Al
+  pulsarlo la fila entra en «pulsa una tecla»; la siguiente pulsación con
+  modificadores se asigna, `Esc` cancela. Si la tecla ya está tomada se ofrece
+  **intercambiar** o cancelar, nunca dos comandos con la misma. «Restablecer»
+  por fila y «restablecer todo» al pie con confirmación.
+  - Aviso en la fila cuando el atajo es una tecla desnuda: no funcionará
+    mientras se escribe en un campo. No se prohíbe (`E`, `A`, `C` son legítimos).
+  - `Escape` no es asignable: es el cancelar universal.
+  - Los `Hablante(1..9)` son nueve filas normales.
+- Persistencia en `preferencias.json` junto al resto (§6.1), con `serde(default)`
+  por campo: un archivo viejo o roto cae a los valores de fábrica sin perder el
+  resto.
+- Los tooltips y el panel de atajos (§6.5) leen del mapa; `atajo()` desaparece.
+
+### 11.3 La capa (`ui/ajustes.rs`, nuevo)
+
+Modal de 720×560 centrado, fondo `PANEL`, borde `BORDE`, radio 6, sobre un velo
+negro al 45 %. Cabecera con título, `icon_button` de cerrar, y dos pestañas con
+el `tab_bar` del kit: **Atajos** e **Idioma**.
+
+- Idioma: dos filas de radio con el nombre nativo («Español», «English»); el
+  cambio se aplica al siguiente frame, sin reiniciar.
+- Atajos: lista con scroll y buscador por nombre; el contador de conflictos va
+  en la cabecera de la pestaña y bloquea el cierre si quedara alguno (no puede
+  quedar: se resuelven al asignar).
+- Cada cambio se persiste al instante, como el panel de estilos: no hay botón
+  «Guardar».
+- `Esc` cierra; clic fuera cierra; el foco vuelve al widget anterior.
+
+### 11.4 Pruebas
+
+- `MapaAtajos::por_defecto()` reproduce `desde_input` actual, caso por caso.
+- Sin duplicados en los valores por defecto; asignar un atajo tomado exige
+  intercambio y el mapa nunca queda con dos comandos iguales.
+- Round-trip de `preferencias.json`; archivo roto o de una versión anterior da
+  los valores de fábrica.
+- Con `foco_en_texto`: `Space` no pausa, `Ctrl+S` sí guarda.
+- `Textos`: los dos `const` compilan (cobertura garantizada por el tipo) y un
+  test recorre `Comando` comprobando que `comando()` no da cadena vacía en
+  ningún idioma.
+- kittest: abrir Ajustes, cambiar a English, cerrar y ver el título de Inicio en
+  inglés; captura en EN a 1100 px para detectar desbordes (las cadenas inglesas
+  son más cortas, pero los botones dependen del ancho, no del texto).
+
+## 12. Fases
+
+1. **Tokens, tipografía y base de configuración.** `tema.rs` reescrito,
+   `tipografia.rs`, iconos, `kit.rs` mínimo, `preferencias.rs`, política de
+   repintado, `textos.rs` con las frases de Inicio y `comandos.rs` convertido en
+   `MapaAtajos` (mismo comportamiento, con el arreglo del foco en texto). Cierre:
+   Inicio actual re-estilizado sin cambiar todavía su distribución + capturas.
+2. **Chrome, Inicio y Ajustes.** `chrome.rs`, menús con atajos alineados,
+   monograma, Inicio completo con riel, drop zone, tarjetas, vacío/error,
+   `Reciente` ampliado, y la capa de Ajustes con las pestañas de Idioma y
+   Atajos funcionando (es donde el usuario ve por primera vez las dos cosas).
 3. **Lista e inspector.** Filas virtualizadas, edición inline, inspector,
    selección sincronizada con el playhead, panel Hablantes con paleta y enlace a
    Estilos, toasts.
@@ -473,11 +587,13 @@ agente antes de decir «listo».
    panel de atajos con `?`, estados de carga/guardado, 1100–2560 px, y la prueba
    de 543 líneas.
 
-Cada fase es un commit con sus capturas. La fase 4 necesita `symphonia`; si el
-decodificador falla con el mp4 de prueba, la waveform se queda apagada y se
-anota en `BITACORA.md` sin bloquear la fase.
+Cada fase es un commit con sus capturas. **Cada fase añade sus frases a las dos
+tablas de `Textos` en el mismo commit**: traducir al final obligaría a tocar dos
+veces cada vista. La fase 4 necesita `symphonia`; si el decodificador falla con
+el mp4 de prueba, la waveform se queda apagada y se anota en `BITACORA.md` sin
+bloquear la fase.
 
-## 12. Riesgos y migas
+## 13. Riesgos y migas
 
 - **`egui_kittest` con wgpu** necesita adaptador. Si el render falla, el ejemplo
   escribe un aviso y sale con código 0 (no rompe el flujo); las capturas se
@@ -492,19 +608,24 @@ anota en `BITACORA.md` sin bloquear la fase.
   paleta; no se migran datos.
 - **Tests existentes**: `ui/editor.rs` espera la etiqueta «Aplicar texto» y el
   bloque que se elimina; se actualizan en la fase 3 junto con el inspector.
+- **Inglés a medias**: los errores que nacen en `rod-core` y en el sistema de
+  archivos siguen en español con prefijo traducido. Se ve sobre todo al abrir un
+  proyecto roto. Arreglarlo de verdad pide un enum de errores en `rod-core`;
+  queda como deuda, no como sorpresa.
 
-## 13. Archivos
+## 14. Archivos
 
-Nuevos: `ui/tipografia.rs`, `ui/kit.rs`, `ui/chrome.rs`, `ui/atajos.rs`,
-`ui/preferencias.rs`, `ui/toast.rs`, `crates/player/src/waveform.rs`,
-`crates/app/assets/fonts/` (+ OFL), `crates/app/examples/capturas.rs`.
+Nuevos: `textos.rs`, `ui/tipografia.rs`, `ui/kit.rs`, `ui/chrome.rs`,
+`ui/atajos.rs`, `ui/ajustes.rs`, `ui/preferencias.rs`, `ui/toast.rs`,
+`crates/player/src/waveform.rs`, `crates/app/assets/fonts/` (+ OFL),
+`crates/app/examples/capturas.rs`.
 
 Reescritos: `ui/tema.rs`, `ui/iconos.rs`, `ui/inicio.rs`, `ui/editor.rs`,
 `ui/timeline.rs`, `ui/transporte.rs`, `ui/paneles/{subtitulos,hablantes,estilos}.rs`,
-`menu.rs` (presentación), `main.rs` (usa `chrome`, repintado condicional).
+`comandos.rs` (`MapaAtajos` en lugar del `match` fijo), `menu.rs` (presentación y
+etiquetas), `main.rs` (usa `chrome`, repintado condicional).
 
-Tocados: `recientes.rs` (`Reciente` + dos campos), `inicio.rs` (`orden`,
-`destacado`), `comandos.rs` (`describir()` y el atajo `?`),
-`crates/core/src/color_hablante.rs` (paleta e identidad),
-`crates/app/Cargo.toml` (egui-phosphor, dev-deps), `Cargo.toml` (symphonia en
-`rod-player`).
+Tocados: `recientes.rs` (`Reciente` ampliado y `FechaRelativa`), `inicio.rs`
+(`orden`, `destacado`, textos fuera), `crates/core/src/color_hablante.rs` (paleta
+e identidad), `crates/app/Cargo.toml` (egui-phosphor, dev-deps), `Cargo.toml`
+(symphonia en `rod-player`).
