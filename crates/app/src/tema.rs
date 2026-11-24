@@ -27,13 +27,33 @@ pub const ACENTO_HI: Color = Color::from_rgb(43.0 / 255.0, 130.0 / 255.0, 232.0 
 pub const ACENTO_LINE: Color = Color::from_rgba(20.0 / 255.0, 115.0 / 255.0, 230.0 / 255.0, 0.42);
 pub const ACENTO_WASH: Color = Color::from_rgba(20.0 / 255.0, 115.0 / 255.0, 230.0 / 255.0, 0.11);
 
-/// Display apretado y monospace para etiquetas: no se carga ningún archivo,
-/// así que funciona igual en Windows y en el CI de Ubuntu.
+/// Tipografía del sistema. En Windows usamos fuentes variables instaladas;
+/// en otros sistemas iced cae a las fuentes por defecto, así que no hay que
+/// distribuir archivos ni lidiar con licencias.
+#[cfg(windows)]
+const FAMILIA: Family = Family::Name("Segoe UI Variable");
+#[cfg(not(windows))]
+const FAMILIA: Family = Family::SansSerif;
+
+pub const CUERPO: Font = Font {
+    family: FAMILIA,
+    weight: Weight::Normal,
+    ..Font::DEFAULT
+};
 pub const DISPLAY: Font = Font {
-    family: Family::SansSerif,
+    family: FAMILIA,
     weight: Weight::Black,
     ..Font::DEFAULT
 };
+pub const SEMINEGRITA: Font = Font {
+    family: FAMILIA,
+    weight: Weight::Semibold,
+    ..Font::DEFAULT
+};
+
+#[cfg(windows)]
+pub const MONO: Font = Font::with_name("Cascadia Mono");
+#[cfg(not(windows))]
 pub const MONO: Font = Font::MONOSPACE;
 
 /// Controles: botones y campos.

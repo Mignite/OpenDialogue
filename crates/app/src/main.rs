@@ -3,11 +3,13 @@
 use std::path::{Path, PathBuf};
 
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{column, container, row, text};
+use iced::widget::{Stack, button, column, container, mouse_area, row, text};
+use iced::window::Direction;
 use iced::{Element, Length, Subscription, Task};
 
 use rod_app::comandos::{self, Comando};
 use rod_app::editor_app::{self, EditorApp, MensajeEditor};
+use rod_app::iconos::{self, Icono};
 use rod_app::inicio::{self, EstadoInicio, MensajeInicio, Salida};
 use rod_app::menu;
 use rod_app::project_io::abrir_proyecto;
@@ -21,12 +23,35 @@ enum Pantalla {
     Editor(Box<EditorApp>),
 }
 
+/// Estado de la ventana además de la pantalla visible. El id se guarda en el
+/// `boot` para que `window::drag` se pueda pedir en el mismo evento del ratón.
+struct AppState {
+    pantalla: Pantalla,
+    ventana: Option<iced::window::Id>,
+}
+
 #[derive(Debug, Clone)]
 enum Mensaje {
     Inicio(MensajeInicio),
     Editor(MensajeEditor),
     Comando(Comando),
     ArchivoSoltado(PathBuf),
+    VentanaId(Option<iced::window::Id>),
+    ArrastrarVentana,
+    MinimizarVentana,
+    MaximizarVentana,
+    CerrarVentana,
+    Redimensionar(Direction),
+}
+
+fn boot() -> (AppState, Task<Mensaje>) {
+    (
+        AppState {
+            pantalla: nuevo(),
+            ventana: None,
+        },
+        iced::window::latest().map(Mensaje::VentanaId),
+    )
 }
 
 fn nuevo() -> Pantalla {
@@ -120,8 +145,34 @@ fn despachar_salida(pantalla: &mut Pantalla, salida: Salida) -> Task<Mensaje> {
     }
 }
 
-fn actualizar(pantalla: &mut Pantalla, mensaje: Mensaje) -> Task<Mensaje> {
+fn actualizar(state: &mut AppState, mensaje: Mensaje) -> Task<Mensaje> {
+    let pantalla = &mut state.pantalla;
     match mensaje {
+        Mensaje::VentanaId(id) => {
+            state.ventana = id;
+            Task::none()
+        }
+        Mensaje::ArrastrarVentana => match state.ventana {
+            Some(id) => iced::window::drag(id),
+            None => Task::none(),
+        },
+        Mensaje::Redimensionar(direccion) => match state.ventana {
+            Some(id) => iced::window::drag_resize(id, direccion),
+            None => Task::none(),
+        },
+        Mensaje::MinimizarVentana => match state.ventana {
+            Some(id) => iced::window::minimize(id, true),
+            None => Task::none(),
+        },
+        Mensaje::MaximizarVentana => match state.ventana {
+            Some(id) => iced::window::is_maximized(id)
+                .then(move |maximizada| iced::window::maximize(id, !maximizada)),
+            None => Task::none(),
+        },
+        Mensaje::CerrarVentana => match state.ventana {
+            Some(id) => iced::window::close(id),
+            None => Task::none(),
+        },
         Mensaje::Comando(comando) => match pantalla {
             Pantalla::Editor(editor) => match comando {
                 Comando::NuevoProyecto | Comando::AbrirVideo => {
@@ -191,7 +242,42 @@ fn actualizar(pantalla: &mut Pantalla, mensaje: Mensaje) -> Task<Mensaje> {
     }
 }
 
-fn vista(pantalla: &Pantalla) -> Element<'_, Mensaje> {
+/// Franja invisible que redimensiona la ventana sin marco nativo.
+fn borde(direccion: Direction, horizontal: bool, al_final: bool) -> Element<'static, Mensaje> {
+    let area = mouse_area(
+        container("")
+            .width(if horizontal {
+                Length::Fill
+            } else {
+                Length::from(4.0)
+            })
+            .height(if horizontal {
+                Length::from(4.0)
+            } else {
+                Length::Fill
+            }),
+    )
+    .on_press(Mensaje::Redimensionar(direccion));
+    container(area)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_x(if horizontal {
+            iced::alignment::Horizontal::Left
+        } else if al_final {
+            iced::alignment::Horizontal::Right
+        } else {
+            iced::alignment::Horizontal::Left
+        })
+        .align_y(if horizontal && al_final {
+            iced::alignment::Vertical::Bottom
+        } else {
+            iced::alignment::Vertical::Top
+        })
+        .into()
+}
+
+fn vista(state: &AppState) -> Element<'_, Mensaje> {
+    let pantalla = &state.pantalla;
     let (en_inicio, estado, contenido) = match pantalla {
         Pantalla::Inicio(estado) => (
             true,
@@ -212,28 +298,56 @@ fn vista(pantalla: &Pantalla) -> Element<'_, Mensaje> {
         .style(tema::marca_solida);
     let barra = container(
         row![
-            marca,
-            text("RustyDialogue").font(tema::MONO).size(10),
+            mouse_area(
+                row![marca, text("RustyDialogue").font(tema::MONO).size(10)]
+                    .spacing(8)
+                    .align_y(Vertical::Center)
+            )
+            .on_press(Mensaje::ArrastrarVentana),
             menu::barra(en_inicio, Mensaje::Comando),
-            container(text(estado).font(tema::MONO).size(9).color(tema::DIM))
-                .width(Length::Fill)
-                .align_x(Horizontal::Right),
+            mouse_area(container("").width(Length::Fill).height(30))
+                .on_press(Mensaje::ArrastrarVentana),
+            text(estado).font(tema::MONO).size(9).color(tema::DIM),
+            button(iconos::vista(Icono::Menos, 12, tema::SECUNDARIO))
+                .style(tema::boton_menu)
+                .on_press(Mensaje::MinimizarVentana)
+                .width(28)
+                .height(30),
+            button(iconos::vista(Icono::Ajustar, 12, tema::SECUNDARIO))
+                .style(tema::boton_menu)
+                .on_press(Mensaje::MaximizarVentana)
+                .width(28)
+                .height(30),
+            button(iconos::vista(Icono::Cerrar, 12, tema::TEXTO))
+                .style(tema::boton_menu)
+                .on_press(Mensaje::CerrarVentana)
+                .width(28)
+                .height(30),
         ]
-        .spacing(10)
+        .spacing(8)
         .align_y(Vertical::Center),
     )
     .height(30)
     .padding([0, 10])
     .style(tema::fondo);
 
-    container(column![barra, contenido])
+    let base = container(column![barra, contenido])
         .style(tema::fondo)
+        .width(Length::Fill)
+        .height(Length::Fill);
+    Stack::new()
+        .push(base)
+        .push(borde(Direction::North, true, false))
+        .push(borde(Direction::South, true, true))
+        .push(borde(Direction::West, false, false))
+        .push(borde(Direction::East, false, true))
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
 }
 
-fn suscripcion(pantalla: &Pantalla) -> Subscription<Mensaje> {
+fn suscripcion(state: &AppState) -> Subscription<Mensaje> {
+    let pantalla = &state.pantalla;
     let arrastre = iced::window::events().filter_map(|(_id, evento)| match evento {
         iced::window::Event::FileDropped(ruta) => Some(Mensaje::ArchivoSoltado(ruta)),
         _ => None,
@@ -255,8 +369,10 @@ fn suscripcion(pantalla: &Pantalla) -> Subscription<Mensaje> {
 }
 
 fn main() -> iced::Result {
-    iced::application(nuevo, actualizar, vista)
+    iced::application(boot, actualizar, vista)
         .title("RustyDialogue")
+        .default_font(tema::CUERPO)
+        .decorations(false)
         .window_size([1600.0, 900.0])
         .subscription(suscripcion)
         .run()
@@ -293,11 +409,11 @@ mod tests {
 
     #[test]
     fn video_invalido_no_cambia_de_pantalla() {
-        let mut pantalla = pantalla_de_prueba();
-        let _ = super::actualizar(
-            &mut pantalla,
-            super::Mensaje::ArchivoSoltado("x.txt".into()),
-        );
-        assert!(matches!(pantalla, super::Pantalla::Inicio(_)));
+        let mut state = super::AppState {
+            pantalla: pantalla_de_prueba(),
+            ventana: None,
+        };
+        let _ = super::actualizar(&mut state, super::Mensaje::ArchivoSoltado("x.txt".into()));
+        assert!(matches!(state.pantalla, super::Pantalla::Inicio(_)));
     }
 }

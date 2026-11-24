@@ -322,7 +322,8 @@ pub fn view(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
                     iconos::vista(Icono::Nuevo, 16, Color::WHITE),
                     text("Nuevo archivo"),
                 ]
-                .spacing(8),
+                .spacing(8)
+                .align_y(Vertical::Center),
             )
             .style(tema::boton_primario)
             .on_press(MensajeInicio::AbrirVideo)
@@ -333,7 +334,8 @@ pub fn view(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
                     iconos::vista(Icono::Abrir, 16, tema::TEXTO),
                     text("Abrir..."),
                 ]
-                .spacing(8),
+                .spacing(8)
+                .align_y(Vertical::Center),
             )
             .style(tema::boton_secundario)
             .on_press(MensajeInicio::AbrirProyecto)
@@ -349,7 +351,8 @@ pub fn view(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
                     iconos::vista(Icono::Inicio, 15, tema::SECUNDARIO),
                     text("Inicio").size(12),
                 ]
-                .spacing(9),
+                .spacing(9)
+                .align_y(Vertical::Center),
             )
             .width(Length::Fill)
             .padding([8, 10])
@@ -386,7 +389,7 @@ pub fn view(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
             .align_x(Horizontal::Center)
             .align_y(Vertical::Center)
             .style(tema::marca_solida),
-        text("RustyDialogue").size(18),
+        text("RustyDialogue").font(tema::SEMINEGRITA).size(18),
         container("")
             .height(1)
             .width(Length::Fill)
@@ -408,7 +411,7 @@ pub fn view(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
             .push(container(text(mensaje.clone()).size(11).color(tema::ACENTO)).padding([12, 0]));
     }
     let titulo = row![
-        text("Reciente").size(15),
+        text("Reciente").font(tema::SEMINEGRITA).size(15),
         text(format!("{:02}", estado.recientes.len()))
             .font(tema::MONO)
             .size(10)

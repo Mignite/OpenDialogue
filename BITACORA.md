@@ -447,3 +447,19 @@ cara.
   manipular el ratón de forma controlada. Si se retoma: `MouseArea` + id de
   ventana guardado en el estado en el `boot`, y handles de resize.
 
+### Reintento con control del ratón (éxito)
+
+- El autor confirmó que el arrastre funciona con `MouseArea`. La causa del
+  fallo anterior era el `button` como zona de arrastre y/o resolver el id de
+  forma asíncrona; con el id guardado en `AppState` desde el `boot` y
+  `MouseArea::on_press`, `window::drag` se pide en el mismo evento.
+- Se añadieron cuatro franjas invisibles con `MouseArea` +
+  `window::drag_resize` para recuperar el redimensionado sin marco nativo, y
+  botones SVG de minimizar/maximizar/cerrar. Maximizar consulta
+  `window::is_maximized` para alternar.
+- **Fuente:** se cambió la tipografía por `Segoe UI Variable` (cuerpo, display
+  black y seminegrita) y `Cascadia Mono` para etiquetas en Windows. En otros
+  sistemas se cae a las fuentes por defecto de iced: no se distribuyen archivos
+  ni licencias nuevas. Se aplicó con `.default_font(tema::CUERPO)`.
+- Captura: `slice-15-inicio-fuente.png`.
+

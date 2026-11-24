@@ -1627,7 +1627,9 @@ pub fn view(state: &EditorApp) -> Element<'_, MensajeEditor> {
                 .width(36)
                 .height(36),
                 button(
-                    row![iconos::vista(Icono::Atrasar, 14, tema::TEXTO), text("5 s"),].spacing(5),
+                    row![iconos::vista(Icono::Atrasar, 14, tema::TEXTO), text("5 s"),]
+                        .spacing(5)
+                        .align_y(iced::alignment::Vertical::Center),
                 )
                 .style(tema::boton_secundario)
                 .on_press(MensajeEditor::Step(-5.0)),
@@ -1636,7 +1638,8 @@ pub fn view(state: &EditorApp) -> Element<'_, MensajeEditor> {
                         iconos::vista(Icono::Adelantar, 14, tema::TEXTO),
                         text("5 s"),
                     ]
-                    .spacing(5),
+                    .spacing(5)
+                    .align_y(iced::alignment::Vertical::Center),
                 )
                 .style(tema::boton_secundario)
                 .on_press(MensajeEditor::Step(5.0)),
@@ -1881,7 +1884,8 @@ fn subtitle_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                         .size(9)
                         .color(tema::SECUNDARIO),
                     ]
-                    .spacing(6),
+                    .spacing(6)
+                    .align_y(iced::alignment::Vertical::Center),
                     text(caption.texto.clone()).size(11.5),
                 ]
                 .spacing(3),
@@ -1898,7 +1902,7 @@ fn subtitle_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
     container(
         column![
             row![
-                text("Subtítulos").size(15),
+                text("Subtítulos").font(tema::SEMINEGRITA).size(15),
                 space::horizontal(),
                 button(iconos::vista(Icono::Deshacer, 14, tema::SECUNDARIO))
                     .style(tema::boton_menu)
