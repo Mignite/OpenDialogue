@@ -1,95 +1,153 @@
-use egui::Ui;
+//! Lista virtualizada de subtítulos con edición inline.
 
-use crate::editor_app::{CampoTiempo, EditorApp, MensajeEditor, etiqueta_caption};
-use crate::ui::tema;
+use egui::{RichText, Sense, Vec2};
 
-pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
+use crate::editor_app::{EditorApp, MensajeEditor};
+use crate::textos::Textos;
+use crate::ui::tema::{self, Estilo};
+
+/// Solo la lista; el inspector se añade en la tarea siguiente.
+pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec<MensajeEditor> {
+    let _ = textos;
     let mut mensajes = Vec::new();
     let total = state.editor.proyecto().captions.len();
-    ui.horizontal(|ui| {
-        ui.label(egui::RichText::new("Subtítulos").strong().size(13.0));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(
-                egui::RichText::new(format!("{total}"))
-                    .font(tema::mono_public())
-                    .size(10.0)
-                    .color(tema::DIM),
-            );
-        });
-    });
-    ui.add_space(6.0);
-
     let seleccion = state.editor.seleccion.clone();
-    for (indice, caption) in state.editor.proyecto().captions.iter().enumerate() {
-        let seleccionado = seleccion.contains(&caption.id);
-        let etiqueta = etiqueta_caption(indice, caption.inicio, caption.fin, &caption.texto);
-        let fila = ui.add(
-            egui::Button::new(egui::RichText::new(etiqueta).size(11.0))
-                .frame(false)
-                .truncate()
-                .min_size(egui::vec2(ui.available_width(), 26.0))
-                .fill(if seleccionado {
-                    tema::ACENTO.gamma_multiply(0.22)
-                } else {
-                    egui::Color32::TRANSPARENT
-                })
-                .corner_radius(egui::CornerRadius::same(3)),
-        );
-        if seleccionado {
-            ui.painter().rect_stroke(
-                fila.rect,
-                egui::CornerRadius::same(3),
-                egui::Stroke::new(1.0_f32, tema::ACENTO),
-                egui::StrokeKind::Inside,
-            );
-        }
-        if fila.clicked() {
-            mensajes.push(MensajeEditor::Seleccionar(caption.id.clone()));
-        }
-    }
 
-    ui.add_space(10.0);
-    ui.separator();
-    ui.add_space(8.0);
-    tema::etiqueta(ui, "Texto");
-    ui.add_space(3.0);
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        let respuesta = ui.add(
-            egui::TextEdit::singleline(&mut state.borrador)
-                .desired_width((ui.available_width() - 96.0).max(40.0)),
-        );
-        if ui.button("Aplicar texto").clicked()
-            || (respuesta.changed() && ui.input(|entrada| entrada.key_pressed(egui::Key::Enter)))
-        {
-            mensajes.push(MensajeEditor::AplicarTexto);
-        }
-    });
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show_rows(ui, tema::ALTO_FILA_SUB, total, |ui, rango| {
+            for indice in rango {
+                let caption = state.editor.proyecto().captions[indice].clone();
+                let seleccionado = seleccion.contains(&caption.id);
+                let color = caption
+                    .hablante_id
+                    .as_deref()
+                    .and_then(|id| {
+                        state
+                            .editor
+                            .proyecto()
+                            .hablantes
+                            .iter()
+                            .position(|h| h.id == id)
+                    })
+                    .map(|i| {
+                        tema::color(rod_core::color_identidad(
+                            &state.editor.proyecto().hablantes[i],
+                            i,
+                        ))
+                    })
+                    .unwrap_or(tema::TEXTO_3);
 
-    ui.add_space(10.0);
-    ui.columns(2, |columnas| {
-        for (columna, (nombre, borrador, campo)) in columnas.iter_mut().zip([
-            ("Entrada", &mut state.borrador_inicio, CampoTiempo::Entrada),
-            ("Salida", &mut state.borrador_fin, CampoTiempo::Salida),
-        ]) {
-            tema::etiqueta(columna, nombre);
-            let respuesta = columna.text_edit_singleline(borrador);
-            if respuesta.lost_focus()
-                || columna.input(|entrada| entrada.key_pressed(egui::Key::Enter))
-            {
-                let valor = borrador.clone();
-                mensajes.push(MensajeEditor::EditarTiempo(
-                    seleccion.first().cloned().unwrap_or_default(),
-                    campo,
-                    valor,
-                ));
+                let (rect, _) = ui.allocate_exact_size(
+                    Vec2::new(ui.available_width(), tema::ALTO_FILA_SUB),
+                    Sense::click(),
+                );
+                let pintor = ui.painter();
+                if seleccionado {
+                    pintor.rect_filled(
+                        rect,
+                        egui::CornerRadius::same(tema::RADIO_CONTROL as u8),
+                        tema::ACENTO.gamma_multiply(0.18),
+                    );
+                }
+                pintor.rect_filled(
+                    egui::Rect::from_min_max(rect.min, egui::pos2(rect.min.x + 3.0, rect.max.y)),
+                    0.0,
+                    color,
+                );
+
+                ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                    ui.set_width(rect.width());
+                    ui.vertical(|ui| {
+                        ui.spacing_mut().item_spacing.y = tema::ESP_2;
+                        if let Some((id, borrador)) = state.inline.as_mut()
+                            && *id == caption.id
+                        {
+                            let respuesta = ui.add(
+                                egui::TextEdit::singleline(borrador)
+                                    .font(tema::fuente(Estilo::Base))
+                                    .desired_width(rect.width() - 8.0),
+                            );
+                            if ui.input(|entrada| entrada.key_pressed(egui::Key::Enter)) {
+                                mensajes.push(MensajeEditor::EditarInline(
+                                    caption.id.clone(),
+                                    borrador.clone(),
+                                ));
+                            }
+                            let escape = ui.input(|entrada| {
+                                entrada.events.iter().any(|evento| {
+                                    matches!(
+                                        evento,
+                                        egui::Event::Key {
+                                            key: egui::Key::Escape,
+                                            pressed: true,
+                                            ..
+                                        }
+                                    )
+                                })
+                            });
+                            if escape || respuesta.lost_focus() {
+                                mensajes.push(MensajeEditor::CancelarInline);
+                            }
+                        } else {
+                            ui.label(
+                                RichText::new(&caption.texto)
+                                    .font(tema::fuente(Estilo::Cuerpo))
+                                    .color(tema::TEXTO),
+                            );
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = tema::ESP_4;
+                                ui.label(
+                                    RichText::new(rod_core::format_time(caption.inicio))
+                                        .font(tema::fuente(Estilo::Timecode))
+                                        .color(tema::TEXTO_3),
+                                );
+                                ui.label(
+                                    RichText::new(crate::editor_app::duracion_texto(
+                                        caption.inicio,
+                                        caption.fin,
+                                    ))
+                                    .font(tema::fuente(Estilo::Pequeno))
+                                    .color(tema::TEXTO_3),
+                                );
+                            });
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        RichText::new("Editar").font(tema::fuente(Estilo::Pequeno)),
+                                    )
+                                    .frame(false),
+                                )
+                                .clicked()
+                            {
+                                state.inline = Some((caption.id.clone(), caption.texto.clone()));
+                            }
+                        }
+                    });
+                });
+
+                if state.inline.is_none() {
+                    let sobre = rect.contains(
+                        ui.ctx()
+                            .input(|entrada| entrada.pointer.latest_pos())
+                            .unwrap_or_default(),
+                    );
+                    if sobre {
+                        let doble = ui.ctx().input(|entrada| {
+                            entrada
+                                .pointer
+                                .button_double_clicked(egui::PointerButton::Primary)
+                        });
+                        if doble {
+                            state.inline = Some((caption.id.clone(), caption.texto.clone()));
+                        } else if ui.ctx().input(|entrada| {
+                            entrada.pointer.button_clicked(egui::PointerButton::Primary)
+                        }) {
+                            mensajes.push(MensajeEditor::Seleccionar(caption.id.clone()));
+                        }
+                    }
+                }
             }
-        }
-    });
-
-    ui.add_space(12.0);
-    if ui.button("Borrar selección").clicked() {
-        mensajes.push(MensajeEditor::BorrarSeleccion);
-    }
+        });
     mensajes
 }

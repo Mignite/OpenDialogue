@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+﻿use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -92,6 +92,9 @@ pub enum MensajeEditor {
     /// así un Ctrl+Z deshace el texto confirmado, no cada tecla.
     Borrador(String),
     AplicarTexto,
+    /// Confirmación de la edición inline de una fila (id, texto nuevo).
+    EditarInline(String, String),
+    CancelarInline,
     /// Entrada/salida del caption seleccionado. Se aplica al confirmar; un
     /// valor inválido o invertido se descarta sin tocar el proyecto.
     EditarTiempo(String, CampoTiempo, String),
@@ -166,6 +169,8 @@ pub struct EditorApp {
     pub(crate) velocidad: Velocidad,
     /// Lo que hay en el `text_input` del caption seleccionado.
     pub(crate) borrador: String,
+    /// Fila en edición inline: (id del caption, borrador).
+    pub inline: Option<(String, String)>,
     /// Borradores de entrada y salida del caption seleccionado.
     pub(crate) borrador_inicio: String,
     pub(crate) borrador_fin: String,
@@ -238,6 +243,16 @@ pub struct EditorApp {
 }
 
 impl EditorApp {
+    /// Hay una fila en edición inline.
+    pub fn texto_inline_activo(&self) -> bool {
+        self.inline.is_some()
+    }
+
+    /// Proyecto en memoria, solo lectura.
+    pub fn proyecto(&self) -> &rod_core::Proyecto {
+        self.editor.proyecto()
+    }
+
     /// Proyecto nuevo en memoria: captions vacíos y todavía sin `.cdp`.
     pub fn desde_video(path: &str) -> Result<Self, String> {
         Self::desde_proyecto(Proyecto::nuevo(path), None, 0.0)
@@ -300,6 +315,7 @@ impl EditorApp {
             selected_audio,
             velocidad,
             borrador: String::new(),
+            inline: None,
             borrador_inicio: String::new(),
             borrador_fin: String::new(),
             panel: Panel::Subtitulos,
@@ -1331,6 +1347,15 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             if state.editor.aplicar_texto(&id, texto) {
                 refrescar_preview(state);
             }
+        }
+        MensajeEditor::EditarInline(id, texto) => {
+            state.inline = None;
+            if state.editor.aplicar_texto(&id, texto) {
+                refrescar_preview(state);
+            }
+        }
+        MensajeEditor::CancelarInline => {
+            state.inline = None;
         }
         MensajeEditor::EditarTiempo(id, campo, valor) => {
             let tiempo = rod_core::parse_time_input(&valor);

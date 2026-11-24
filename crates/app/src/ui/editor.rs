@@ -1,4 +1,4 @@
-﻿//! Vista del editor en egui. Compone el preview, la barra de transporte, los
+//! Vista del editor en egui. Compone el preview, la barra de transporte, los
 //! paneles laterales y la barra de estado. Devuelve **todos** los mensajes del
 //! frame: sobrescribirlos habría dejado los botones inertes.
 
@@ -82,7 +82,7 @@ pub fn show(
                     mensajes.push(MensajeEditor::Panel(panel));
                 }
                 egui::ScrollArea::vertical().show(ui, |ui| match state.panel {
-                    Panel::Subtitulos => mensajes.extend(subtitulos::mostrar(ui, state)),
+                    Panel::Subtitulos => mensajes.extend(subtitulos::mostrar(ui, state, textos)),
                     Panel::Hablantes => mensajes.extend(hablantes::mostrar(ui, state)),
                     Panel::Estilos => mensajes.extend(estilos::mostrar(ui, state)),
                 });
@@ -212,40 +212,16 @@ mod tests {
         });
         let id = editor.editor.proyecto().captions[0].id.clone();
         editor.editor.seleccionar_uno(&id);
-        editor.borrador = "texto nuevo".into();
         editor.limpio = editor.editor.proyecto().clone();
 
-        let mensajes = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
-        let recolector = std::rc::Rc::clone(&mensajes);
-        let mut harness = egui_kittest::Harness::new_state(
-            move |ctx: &egui::Context, editor: &mut EditorApp| {
-                recolector.borrow_mut().extend(super::show(
-                    ctx,
-                    editor,
-                    wgpu::TextureFormat::Bgra8Unorm,
-                    Arc::new(Mutex::new(None)),
-                    &crate::textos::ES,
-                    &crate::comandos::MapaAtajos::por_defecto(),
-                    &mut MedidasEditor::default(),
-                ));
-            },
-            editor,
+        // La edición inline se confirma con un mensaje; el botón que lo emite
+        // se prueba en `tests/subtitulos.rs`.
+        update(
+            &mut editor,
+            MensajeEditor::EditarInline(id, "texto nuevo".into()),
         );
-        harness.run();
-        harness.get_by_label("Aplicar texto").click();
-        harness.run();
-        let mensajes = mensajes.borrow().clone();
-        assert!(
-            mensajes
-                .iter()
-                .any(|mensaje| matches!(mensaje, MensajeEditor::AplicarTexto))
-        );
-
-        for mensaje in mensajes {
-            update(harness.state_mut(), mensaje);
-        }
-        let editor = harness.state();
         assert_eq!(editor.editor.texto_de("cap-prueba"), Some("texto nuevo"));
         assert!(editor.editor.puede_deshacer());
+        assert!(!editor.texto_inline_activo());
     }
 }
