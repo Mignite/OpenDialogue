@@ -53,6 +53,15 @@ pub struct Textos {
     pub agregar_hablante: &'static str,
     pub quitar_de_la_seleccion: &'static str,
     pub borrar_hablante: &'static str,
+    pub ajustes: &'static str,
+    pub pestana_atajos: &'static str,
+    pub pestana_idioma: &'static str,
+    pub cambiar: &'static str,
+    pub intercambiar: &'static str,
+    pub cancelar: &'static str,
+    pub restablecer: &'static str,
+    pub buscar: &'static str,
+    pub pulsa_una_tecla: &'static str,
 }
 
 pub const ES: Textos = Textos {
@@ -78,6 +87,15 @@ pub const ES: Textos = Textos {
     agregar_hablante: "Agregar hablante",
     quitar_de_la_seleccion: "Quitar de la selección",
     borrar_hablante: "Borrar hablante",
+    ajustes: "Ajustes",
+    pestana_atajos: "Atajos",
+    pestana_idioma: "Idioma",
+    cambiar: "Cambiar",
+    intercambiar: "Intercambiar",
+    cancelar: "Cancelar",
+    restablecer: "Restablecer",
+    buscar: "Buscar",
+    pulsa_una_tecla: "Pulsa una tecla…",
 };
 
 pub const EN: Textos = Textos {
@@ -103,6 +121,15 @@ pub const EN: Textos = Textos {
     agregar_hablante: "Add speaker",
     quitar_de_la_seleccion: "Clear speaker of selection",
     borrar_hablante: "Delete speaker",
+    ajustes: "Preferences",
+    pestana_atajos: "Shortcuts",
+    pestana_idioma: "Language",
+    cambiar: "Change",
+    intercambiar: "Swap",
+    cancelar: "Cancel",
+    restablecer: "Reset",
+    buscar: "Search",
+    pulsa_una_tecla: "Press a key…",
 };
 
 impl Textos {
@@ -156,6 +183,7 @@ impl Textos {
             Comando::PanelSubtitulos => "Panel de subtítulos",
             Comando::PanelHablantes => "Panel de hablantes",
             Comando::PanelEstilos => "Panel de estilos",
+            Comando::Ajustes => "Ajustes",
         }
     }
 
@@ -264,6 +292,7 @@ impl Textos {
             Comando::PanelSubtitulos => "Subtitles panel",
             Comando::PanelHablantes => "Speakers panel",
             Comando::PanelEstilos => "Styles panel",
+            Comando::Ajustes => "Preferences",
         }
     }
 }

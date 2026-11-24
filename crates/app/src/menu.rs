@@ -42,6 +42,7 @@ const TODOS: &[Comando] = &[
     Comando::Pegar,
     Comando::Dividir,
     Comando::Buscar,
+    Comando::Ajustes,
     Comando::PanelSubtitulos,
     Comando::PanelHablantes,
     Comando::PanelEstilos,

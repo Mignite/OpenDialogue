@@ -44,6 +44,7 @@ pub enum Comando {
     PanelSubtitulos,
     PanelHablantes,
     PanelEstilos,
+    Ajustes,
 }
 
 impl Comando {
@@ -97,6 +98,7 @@ impl Comando {
             Comando::PanelSubtitulos,
             Comando::PanelHablantes,
             Comando::PanelEstilos,
+            Comando::Ajustes,
         ]
     }
 }
@@ -125,6 +127,7 @@ pub fn seccion(comando: Comando) -> Seccion {
         Comando::Estilos => Seccion::Estilos,
         Comando::PanelSubtitulos | Comando::PanelHablantes | Comando::PanelEstilos => Seccion::Ver,
         Comando::Ayuda => Seccion::Ayuda,
+        Comando::Ajustes => Seccion::Edicion,
         Comando::ReproducirPausa
         | Comando::CaptionAnterior
         | Comando::CaptionSiguiente

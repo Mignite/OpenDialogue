@@ -797,6 +797,8 @@ fn ejecutar_comando(state: &mut EditorApp, comando: Comando) -> Tarea {
             state.mensaje = Some("Usa el menú de inicio para abrir un proyecto".into());
             Tarea::Ninguna
         }
+        // El enrutador abre la capa de Ajustes antes de llegar aquí.
+        C::Ajustes => Tarea::Ninguna,
     }
 }
 

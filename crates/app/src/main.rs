@@ -32,6 +32,7 @@ struct RustyDialogue {
     /// Un único pipeline de composición para toda la sesión.
     gpu: Arc<Mutex<Option<Gpu>>>,
     preferencias: Preferencias,
+    ajustes: ui::ajustes::EstadoAjustes,
 }
 
 fn nuevo() -> Pantalla {
@@ -63,6 +64,7 @@ impl RustyDialogue {
             formato,
             gpu: Arc::new(Mutex::new(None)),
             preferencias: Preferencias::cargar(),
+            ajustes: Default::default(),
         }
     }
 
@@ -179,6 +181,10 @@ impl RustyDialogue {
     }
 
     fn aplicar_comando(&mut self, comando: Comando) {
+        if comando == Comando::Ajustes {
+            self.ajustes.abierto = true;
+            return;
+        }
         match &mut self.pantalla {
             Pantalla::Inicio(estado) => {
                 let mensaje = match comando {
@@ -309,6 +315,11 @@ impl eframe::App for RustyDialogue {
         );
         if let Some(comando) = comando_menu {
             self.aplicar_comando(comando);
+        }
+        if ui::ajustes::mostrar(ctx, &mut self.preferencias, &mut self.ajustes)
+            && self.preferencias.guardar().is_err()
+        {
+            // Un archivo de solo lectura no debe impedir usar la app.
         }
 
         let mut mensaje_inicio = None;
