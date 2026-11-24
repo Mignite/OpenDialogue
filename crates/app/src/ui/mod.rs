@@ -2,6 +2,7 @@
 //! la lógica del proyecto vive en los módulos de `rod_app` de siempre.
 
 pub mod ajustes;
+pub mod atajos;
 pub mod chrome;
 pub mod editor;
 pub mod iconos;

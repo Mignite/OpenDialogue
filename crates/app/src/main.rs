@@ -35,6 +35,7 @@ struct RustyDialogue {
     preferencias: Preferencias,
     ajustes: ui::ajustes::EstadoAjustes,
     toasts: ui::toast::Toasts,
+    panel_atajos: ui::atajos::EstadoAtajos,
 }
 
 fn nuevo() -> Pantalla {
@@ -68,6 +69,7 @@ impl RustyDialogue {
             preferencias: Preferencias::cargar(),
             ajustes: Default::default(),
             toasts: Default::default(),
+            panel_atajos: Default::default(),
         }
     }
 
@@ -186,6 +188,10 @@ impl RustyDialogue {
     fn aplicar_comando(&mut self, comando: Comando) {
         if comando == Comando::Ajustes {
             self.ajustes.abierto = true;
+            return;
+        }
+        if comando == Comando::Ayuda {
+            self.panel_atajos.abierto = true;
             return;
         }
         match &mut self.pantalla {
@@ -379,6 +385,12 @@ impl eframe::App for RustyDialogue {
         if borro {
             self.toasts.push(textos.linea_eliminada.to_owned(), true);
         }
+        ui::atajos::mostrar(
+            ctx,
+            textos,
+            &self.preferencias.atajos,
+            &mut self.panel_atajos,
+        );
         if self.toasts.mostrar(ctx, textos)
             && let Pantalla::Editor(editor) = &mut self.pantalla
         {
