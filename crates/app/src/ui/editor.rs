@@ -61,6 +61,11 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
     });
 
     ui.separator();
+    if let Some(mensaje_timeline) = crate::ui::timeline::mostrar(ui, state) {
+        mensaje = Some(mensaje_timeline);
+    }
+
+    ui.separator();
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new("RUSTYDIALOGUE")
