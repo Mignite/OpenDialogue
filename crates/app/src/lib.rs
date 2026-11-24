@@ -1,6 +1,7 @@
 pub mod comandos;
 pub mod editor;
 pub mod editor_app;
+pub mod iconos;
 pub mod inicio;
 pub mod menu;
 pub mod presets_edicion;

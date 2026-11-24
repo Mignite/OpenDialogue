@@ -6,8 +6,9 @@ use std::path::{Path, PathBuf};
 
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{button, column, container, image, row, scrollable, text};
-use iced::{Element, Length, Task};
+use iced::{Color, Element, Length, Task};
 
+use crate::iconos::{self, Icono};
 use crate::recientes::Reciente;
 use crate::recovery_io::AvisoRecovery;
 use crate::tema;
@@ -183,7 +184,7 @@ fn vista_recientes(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
                     .height(110)
                     .style(tema::sunk)
                     .into(),
-                    None => container(text("[ > ]").font(tema::MONO).size(20))
+                    None => container(iconos::vista(Icono::Imagen, 30, tema::DIM))
                         .width(196)
                         .height(110)
                         .style(tema::sunk)
@@ -235,7 +236,7 @@ fn vista_recientes(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
         button(
             container(
                 column![
-                    text("+").size(22).color(tema::SECUNDARIO),
+                    iconos::vista(Icono::Mas, 22, tema::SECUNDARIO),
                     text("Suelta un video en cualquier lugar para abrirlo")
                         .size(11)
                         .color(tema::SECUNDARIO),
@@ -313,25 +314,43 @@ fn vista_aviso(aviso: &AvisoRecovery) -> Element<'_, MensajeInicio> {
 pub fn view(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
     let lateral = container(
         column![
-            button("＋  Nuevo archivo")
-                .style(tema::boton_primario)
-                .on_press(MensajeInicio::AbrirVideo)
-                .width(Length::Fill)
-                .height(38),
-            button("Abrir...")
-                .style(tema::boton_secundario)
-                .on_press(MensajeInicio::AbrirProyecto)
-                .width(Length::Fill)
-                .height(34),
+            button(
+                row![
+                    iconos::vista(Icono::Nuevo, 16, Color::WHITE),
+                    text("Nuevo archivo"),
+                ]
+                .spacing(8),
+            )
+            .style(tema::boton_primario)
+            .on_press(MensajeInicio::AbrirVideo)
+            .width(Length::Fill)
+            .height(38),
+            button(
+                row![
+                    iconos::vista(Icono::Abrir, 16, tema::TEXTO),
+                    text("Abrir..."),
+                ]
+                .spacing(8),
+            )
+            .style(tema::boton_secundario)
+            .on_press(MensajeInicio::AbrirProyecto)
+            .width(Length::Fill)
+            .height(34),
             container("")
                 .height(1)
                 .width(Length::Fill)
                 .style(tema::hairline),
             text("ESPACIO").font(tema::MONO).size(9).color(tema::DIM),
-            container(text("Inicio").size(12))
-                .width(Length::Fill)
-                .padding([8, 10])
-                .style(tema::sunk),
+            container(
+                row![
+                    iconos::vista(Icono::Inicio, 15, tema::SECUNDARIO),
+                    text("Inicio").size(12),
+                ]
+                .spacing(9),
+            )
+            .width(Length::Fill)
+            .padding([8, 10])
+            .style(tema::sunk),
             text("El espacio de trabajo se abre al soltar un video.")
                 .size(10)
                 .color(tema::DIM),

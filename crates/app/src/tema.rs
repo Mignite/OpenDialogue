@@ -36,7 +36,10 @@ pub const DISPLAY: Font = Font {
 };
 pub const MONO: Font = Font::MONOSPACE;
 
-const RADIO: f32 = 3.0;
+/// Controles: botones y campos.
+const RADIO: f32 = 4.0;
+/// Superficies: paneles, tarjetas y avisos, un paso más suaves que los controles.
+const RADIO_TARJETA: f32 = 6.0;
 
 /// Color semántico del `.ass` de un hablante. Un valor ausente o mal escrito
 /// cae al gris secundario, nunca al azul: el azul es de la chrome.
@@ -73,7 +76,7 @@ pub fn panel(_theme: &iced::Theme) -> iced::widget::container::Style {
         border: Border {
             color: HAIRLINE,
             width: 1.0,
-            radius: RADIO.into(),
+            radius: RADIO_TARJETA.into(),
         },
         ..Default::default()
     }
@@ -87,7 +90,7 @@ pub fn lateral(_theme: &iced::Theme) -> iced::widget::container::Style {
         border: Border {
             color: HAIRLINE,
             width: 1.0,
-            ..Default::default()
+            radius: RADIO_TARJETA.into(),
         },
         ..Default::default()
     }
@@ -101,13 +104,13 @@ pub fn sunk(_theme: &iced::Theme) -> iced::widget::container::Style {
         border: Border {
             color: LINE2,
             width: 1.0,
-            ..Default::default()
+            radius: RADIO.into(),
         },
         ..Default::default()
     }
 }
 
-/// Aviso con fondo mostaza muy diluido: tarjeta de recuperación.
+/// Aviso con fondo azul muy diluido: tarjeta de recuperación.
 pub fn wash(_theme: &iced::Theme) -> iced::widget::container::Style {
     iced::widget::container::Style {
         background: Some(Background::Color(ACENTO_WASH)),
@@ -115,13 +118,13 @@ pub fn wash(_theme: &iced::Theme) -> iced::widget::container::Style {
         border: Border {
             color: ACENTO_LINE,
             width: 1.0,
-            ..Default::default()
+            radius: RADIO_TARJETA.into(),
         },
         ..Default::default()
     }
 }
 
-/// Marca de la barra de menú: cuadrado mostaza con la R en negro.
+/// Marca de la barra de menú: cuadrado azul con la R en blanco.
 pub fn marca_solida(_theme: &iced::Theme) -> iced::widget::container::Style {
     iced::widget::container::Style {
         background: Some(Background::Color(ACENTO)),
@@ -130,7 +133,7 @@ pub fn marca_solida(_theme: &iced::Theme) -> iced::widget::container::Style {
     }
 }
 
-/// Marca de registro de la zona de arrastre: cuadrado de 18 px sin relleno.
+/// Marca de registro: cuadrado de 18 px sin relleno.
 pub fn marca(_theme: &iced::Theme) -> iced::widget::container::Style {
     iced::widget::container::Style {
         border: Border {
@@ -220,7 +223,7 @@ pub fn aviso(_theme: &iced::Theme) -> iced::widget::container::Style {
         border: Border {
             color: ACENTO_LINE,
             width: 1.0,
-            radius: RADIO.into(),
+            radius: RADIO_TARJETA.into(),
         },
         ..Default::default()
     }
@@ -242,7 +245,7 @@ pub fn barra_menu(
         menu_border: Border {
             color: HAIRLINE,
             width: 1.0,
-            radius: RADIO.into(),
+            radius: RADIO_TARJETA.into(),
         },
         menu_shadow: Shadow::default(),
         path: Background::Color(ACENTO),
@@ -282,7 +285,7 @@ mod tests {
             radio.bottom_left,
         ]
         .iter()
-        .all(|valor| *valor <= 3.0)
+        .all(|valor| *valor <= 6.0)
     }
 
     #[test]
@@ -303,7 +306,7 @@ mod tests {
     }
 
     #[test]
-    fn ningun_estilo_tiene_sombra_ni_radio_mayor_a_tres() {
+    fn ningun_estilo_tiene_sombra_ni_radio_mayor_a_seis() {
         let tema = iced::Theme::Dark;
         for estilo in [
             fondo(&tema),
@@ -333,6 +336,17 @@ mod tests {
         assert_eq!(barra.menu_shadow, Shadow::default());
         assert!(radio_valido(barra.menu_border.radius));
         assert!(radio_valido(barra.path_border.radius));
+    }
+
+    #[test]
+    fn las_tarjetas_son_mas_redondeadas_que_los_controles() {
+        let tema = iced::Theme::Dark;
+        let tarjeta = panel(&tema).border.radius.top_left;
+        let control = boton_primario(&tema, button::Status::Active)
+            .border
+            .radius
+            .top_left;
+        assert!(tarjeta > control, "tarjeta {tarjeta}, control {control}");
     }
 
     #[test]

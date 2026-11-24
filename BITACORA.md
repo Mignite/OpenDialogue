@@ -378,3 +378,23 @@ cara.
   `docs/superpowers/plans/2026-11-23-port-mockup-inicio-editor.md` y capturas en
   `docs/checklists/slice-12-*`.
 
+## 2026-11-23 — detalles FilmCraft: esquinas y SVG
+
+- **Petición del autor:** «le faltaron ciertos detalles de más redondeados y
+  svgs», con la captura de FilmCraft y `github.com/storytold` como referencia
+  directa.
+- **Problema:** la chrome era completamente cuadrada (radio 3 px) y usaba
+  glifos de texto (`＋`, `↶`, `×`) con trazos inconsistentes. FilmCraft usa
+  superficies de ~6 px y controles de ~4 px, con iconos de trazo 1,7 px en
+  rejilla de 24.
+- **Alternativa descartada:** copiar los SVG del repo de ArtCraft. Están bajo
+  licencia de marca/asset y el proyecto no debe incorporarlos; se dibujaron
+  iconos propios con la misma gramática.
+- **Decisión:** `RADIO = 4` para controles y `RADIO_TARJETA = 6` para paneles,
+  tarjetas y avisos; test que exige que la tarjeta sea más redondeada que el
+  control. Iconos SVG en memoria en `iconos.rs`, teñidos con el filtro del
+  widget; se habilitó el feature `svg` de iced (misma dependencia, sin crate
+  nueva). Timeline con tira de herramientas funcional (zoom, dividir, buscar).
+- **Regla rota a propósito:** la spec antigua fijaba radios ≤ 3 px; ahora el
+  techo es 6 px para superficies. Sin sombras ni gradientes.
+

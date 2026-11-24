@@ -37,6 +37,9 @@ híbrido de 440 px con timeline abajo**. El motivo y los riesgos están en
 - Editor: inspector 440 px, timeline 196 px abajo, paneles densos con fuente
   pequeña y separadores finos. El azul solo tiñe CTA, foco y selección; los
   colores de hablante siguen siendo semánticos en carriles, lista y `.ass`.
+- Anexo FilmCraft (23-nov): esquinas de 4 px en controles y 6 px en superficies
+  (el límite anterior de 3 px queda derogado), iconos SVG propios en
+  `iconos.rs` con el feature `svg` de iced y tira de herramientas en el timeline.
 - Se conservan todas las interfaces puras ya implementadas
   (`cantidad_visible`, `resumen_reciente`, `color_de_hex`, `resumen_estado`) y
   sus tests; solo cambia el color por defecto y el orden de los widgets.

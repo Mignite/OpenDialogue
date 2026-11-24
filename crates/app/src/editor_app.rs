@@ -5,10 +5,11 @@ use std::sync::Arc;
 use iced::widget::{
     button, column, container, pick_list, row, scrollable, shader, slider, space, text, text_input,
 };
-use iced::{Background, Element, Length, Subscription, Task};
+use iced::{Background, Color, Element, Length, Subscription, Task};
 
 use crate::comandos::Comando;
 use crate::editor::{EstadoEditor, MAX_HABLANTES, normalizar_tecla};
+use crate::iconos::{self, Icono};
 use crate::presets_edicion::{CampoPreset, aplicar_campo, valor_campo};
 use crate::presets_io;
 use crate::preview::{CANVAS, ass_del_proyecto};
@@ -1612,17 +1613,33 @@ pub fn view(state: &EditorApp) -> Element<'_, MensajeEditor> {
             row![
                 // Ancho fijo: si no, el botón cambia de tamaño al alternar y la
                 // fila entera se corre bajo el cursor.
-                button(if state.paused { ">" } else { "||" })
-                    .on_press(MensajeEditor::PlayPause)
-                    .style(tema::boton_primario)
-                    .width(36)
-                    .height(36),
-                button("−5 s")
-                    .style(tema::boton_secundario)
-                    .on_press(MensajeEditor::Step(-5.0)),
-                button("+5 s")
-                    .style(tema::boton_secundario)
-                    .on_press(MensajeEditor::Step(5.0)),
+                button(iconos::vista(
+                    if state.paused {
+                        Icono::Reproducir
+                    } else {
+                        Icono::Pausa
+                    },
+                    16,
+                    Color::WHITE,
+                ))
+                .on_press(MensajeEditor::PlayPause)
+                .style(tema::boton_primario)
+                .width(36)
+                .height(36),
+                button(
+                    row![iconos::vista(Icono::Atrasar, 14, tema::TEXTO), text("5 s"),].spacing(5),
+                )
+                .style(tema::boton_secundario)
+                .on_press(MensajeEditor::Step(-5.0)),
+                button(
+                    row![
+                        iconos::vista(Icono::Adelantar, 14, tema::TEXTO),
+                        text("5 s"),
+                    ]
+                    .spacing(5),
+                )
+                .style(tema::boton_secundario)
+                .on_press(MensajeEditor::Step(5.0)),
                 pick_list(
                     state.audio_tracks.clone(),
                     state.selected_audio.clone(),
@@ -1689,8 +1706,29 @@ pub fn view(state: &EditorApp) -> Element<'_, MensajeEditor> {
         Panel::Estilos => styles_panel(state),
     };
     let right = column![pestanas, contenido].width(440).height(Length::Fill);
+    let herramientas = column![
+        button(iconos::vista(Icono::Zoom, 16, tema::SECUNDARIO))
+            .style(tema::boton_menu)
+            .on_press(MensajeEditor::Zoom(1.5))
+            .width(30)
+            .height(28),
+        button(iconos::vista(Icono::Cortar, 16, tema::SECUNDARIO))
+            .style(tema::boton_menu)
+            .on_press(MensajeEditor::Comando(Comando::Dividir))
+            .width(30)
+            .height(28),
+        button(iconos::vista(Icono::Buscar, 16, tema::SECUNDARIO))
+            .style(tema::boton_menu)
+            .on_press(MensajeEditor::Comando(Comando::Buscar))
+            .width(30)
+            .height(28),
+    ]
+    .spacing(2)
+    .padding([4, 1])
+    .width(32);
     let timeline = container(
         row![
+            herramientas,
             Element::from(
                 timeline::widget(timeline::Linea {
                     proyecto: state.editor.proyecto(),
@@ -1709,11 +1747,11 @@ pub fn view(state: &EditorApp) -> Element<'_, MensajeEditor> {
                     .on_press(MensajeEditor::Seguir)
                     .width(62)
                     .style(if state.seguir { boton_activo } else { boton }),
-                button("+")
+                button(iconos::vista(Icono::Mas, 14, tema::TEXTO))
                     .style(tema::boton_secundario)
                     .on_press(MensajeEditor::Zoom(1.5))
                     .width(62),
-                button("−")
+                button(iconos::vista(Icono::Menos, 14, tema::TEXTO))
                     .style(tema::boton_secundario)
                     .on_press(MensajeEditor::Zoom(1.0 / 1.5))
                     .width(62),
@@ -1862,7 +1900,7 @@ fn subtitle_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
             row![
                 text("Subtítulos").size(15),
                 space::horizontal(),
-                button("↶")
+                button(iconos::vista(Icono::Deshacer, 14, tema::SECUNDARIO))
                     .style(tema::boton_menu)
                     .on_press_maybe(
                         state
@@ -1871,7 +1909,7 @@ fn subtitle_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                             .then_some(MensajeEditor::Deshacer)
                     )
                     .width(24),
-                button("↷")
+                button(iconos::vista(Icono::Rehacer, 14, tema::SECUNDARIO))
                     .style(tema::boton_menu)
                     .on_press_maybe(
                         state
@@ -1880,7 +1918,7 @@ fn subtitle_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                             .then_some(MensajeEditor::Rehacer)
                     )
                     .width(24),
-                button("×")
+                button(iconos::vista(Icono::Borrar, 14, tema::ACENTO))
                     .style(tema::boton_menu)
                     .on_press_maybe(
                         (!state.editor.seleccion.is_empty())
@@ -2038,7 +2076,7 @@ fn speakers_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                         hay_seleccion
                             .then(|| MensajeEditor::AsignarHablante(Some(id_asignar.clone())))
                     ),
-                button("×")
+                button(iconos::vista(Icono::Borrar, 14, tema::SECUNDARIO))
                     .style(tema::boton_secundario)
                     .on_press(MensajeEditor::BorrarHablante(hablante.id.clone()))
                     .width(36),
@@ -2064,9 +2102,11 @@ fn speakers_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                         (!state.editor.seleccion.is_empty())
                             .then_some(MensajeEditor::AsignarHablante(None))
                     ),
-                button("＋").style(tema::boton_secundario).on_press_maybe(
-                    (hablantes.len() < MAX_HABLANTES).then_some(MensajeEditor::AgregarHablante)
-                ),
+                button(iconos::vista(Icono::Mas, 14, tema::TEXTO))
+                    .style(tema::boton_secundario)
+                    .on_press_maybe(
+                        (hablantes.len() < MAX_HABLANTES).then_some(MensajeEditor::AgregarHablante)
+                    ),
             ]
             .spacing(12),
             // El color del hablante es semántico: identifica carril y `.ass`.
@@ -2180,7 +2220,7 @@ fn styles_panel(state: &EditorApp) -> Element<'_, MensajeEditor> {
                 // Sin `space::horizontal()`: dentro de un `scrollable` el
                 // espacio elástico crece sin límite y empuja los botones
                 // fuera del viewport.
-                button("＋")
+                button(iconos::vista(Icono::Mas, 14, tema::TEXTO))
                     .style(tema::boton_secundario)
                     .on_press(MensajeEditor::NuevoPreset)
                     .width(36),
