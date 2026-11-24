@@ -125,7 +125,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
             egui::Stroke::new(1.0_f32, tema::BORDE),
         );
         let (nombre, color) = if fila == 0 {
-            ("—".to_string(), tema::DIM)
+            ("Audio".to_string(), tema::TEXTO_3)
         } else {
             let hablante = &hablantes[fila - 1];
             let nombre = if hablante.nombre.is_empty() {
@@ -133,7 +133,10 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
             } else {
                 hablante.nombre.clone()
             };
-            (nombre, tema::color_de_hex(&hablante.color))
+            (
+                nombre,
+                tema::color(rod_core::color_identidad(hablante, fila - 1)),
+            )
         };
         let centro = ALTO_REGLA + fila as f32 * ALTO_CARRIL + ALTO_CARRIL / 2.0;
         painter.circle_filled(gutter.min + egui::vec2(12.0, centro), 3.0, color);
@@ -144,6 +147,28 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
             egui::FontId::proportional(11.0),
             tema::SECUNDARIO,
         );
+    }
+
+    // Waveform apagada en el carril de audio: se pinta de los picos ya
+    // decodificados, nunca se recalcula por frame.
+    if let Some(picos) = &state.picos {
+        let base = rect.min.y + ALTO_REGLA;
+        let altura = ALTO_CARRIL - 6.0;
+        let color_onda = tema::color("#3A4A5A");
+        for xpx in (0..area.width() as i32).step_by(2) {
+            let segundo = vista.tiempo_de(xpx as f32);
+            let indice = (segundo * picos.por_segundo as f64) as usize;
+            let Some(&valor) = picos.max.get(indice) else {
+                continue;
+            };
+            let alto = (valor.clamp(0.0, 1.0) * altura * 0.5).max(1.0);
+            let x = area.min.x + xpx as f32;
+            let centro = base + ALTO_CARRIL / 2.0;
+            painter.line_segment(
+                [egui::pos2(x, centro - alto), egui::pos2(x, centro + alto)],
+                egui::Stroke::new(2.0_f32, color_onda),
+            );
+        }
     }
 
     // Retícula tenue que baja de cada marca de la regla a los carriles.

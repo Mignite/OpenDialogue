@@ -143,6 +143,48 @@ impl Vista {
     }
 }
 
+/// Paso de la regla en segundos para una densidad dada de píxeles por segundo.
+pub fn paso_de_regla(px_por_segundo: f64) -> f64 {
+    if px_por_segundo >= 500.0 {
+        0.5
+    } else if px_por_segundo >= 50.0 {
+        1.0
+    } else if px_por_segundo >= 5.0 {
+        10.0
+    } else {
+        60.0
+    }
+}
+
+/// Tiempo más cercano dentro de la tolerancia, para ajustar al soltar un clip.
+pub fn iman(candidato: f64, puntos: &[f64], tolerancia_s: f64) -> Option<f64> {
+    puntos
+        .iter()
+        .copied()
+        .filter_map(|punto| {
+            let distancia = (punto - candidato).abs();
+            (distancia <= tolerancia_s).then_some((distancia, punto))
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, punto)| punto)
+}
+
+/// Segundo que hay bajo una x del widget.
+pub fn tiempo_bajo_cursor(vista: Vista, x: f32) -> f64 {
+    vista.tiempo_de(x)
+}
+
+/// Cambia la escala dejando quieto el segundo bajo el cursor.
+pub fn escala_anclada(vista: Vista, factor: f64, x: f32, duracion: f64, ancho: f32) -> Vista {
+    let escala = (vista.escala * factor).clamp(Vista::ESCALA_MINIMA, Vista::ESCALA_MAXIMA);
+    let anclado = tiempo_bajo_cursor(vista, x);
+    let max_inicio = (duracion - f64::from(ancho) * escala).max(0.0);
+    Vista {
+        inicio: (anclado - f64::from(x) * escala).clamp(0.0, max_inicio),
+        escala,
+    }
+}
+
 /// Dónde tiene que empezar la ventana para que el playhead quede a la vista.
 ///
 /// `None` cuando no hay que mover nada: el playhead está dentro de la ventana
