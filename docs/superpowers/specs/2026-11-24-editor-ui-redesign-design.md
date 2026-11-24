@@ -429,7 +429,9 @@ como `dev-dependency` de `rod-app` y un binario de desarrollo
 
 1. Construye el estado real de Inicio (`EstadoInicio` con 0, 1 y 3 recientes) y
    de Editor (fixture de 543 líneas y 7 hablantes, `gpu = None`).
-2. Renderiza a 1100×700, 1440×900 y 2560×1440 con `Harness::render()`.
+2. Renderiza a 1100×700, 1440×900 y 2560×1440 con `Harness::render()`. En el
+   idioma por defecto, y una pasada en español a 1100 px: las cadenas españolas
+   son las largas, así que ahí es donde se ve un desborde.
 3. Escribe PNG en `docs/checklists/rediseno/` con nombre estable por pantalla,
    tamaño y fase (`editor-1440-fase3.png`, etc.).
 
@@ -495,9 +497,11 @@ silenciosas, ni un `match` de 200 brazos en el punto de dibujo.
   muestran con un prefijo traducido («No se pudo abrir el proyecto: …»); para
   traducirlos de verdad habría que convertir los `String` de error en un enum,
   que no es de esta spec. Queda como deuda anotada.
-- Idioma por defecto: español. `preferencias.idioma` manda desde el primer
+- Idioma por defecto: **inglés**. `preferencias.idioma` manda desde el primer
   arranque en que exista el archivo; no se adivina por la configuración de
-  Windows.
+  Windows. El producto es global y la primera pantalla no debe obligar a cambiar
+  de idioma para entenderla; quien subtitule en español lo pone en Ajustes una
+  vez y queda guardado.
 
 ### 11.2 Atajos (`comandos.rs` y `atajos.rs`)
 
@@ -563,9 +567,9 @@ el `tab_bar` del kit: **Atajos** e **Idioma**.
 - `Textos`: los dos `const` compilan (cobertura garantizada por el tipo) y un
   test recorre `Comando` comprobando que `comando()` no da cadena vacía en
   ningún idioma.
-- kittest: abrir Ajustes, cambiar a English, cerrar y ver el título de Inicio en
-  inglés; captura en EN a 1100 px para detectar desbordes (las cadenas inglesas
-  son más cortas, pero los botones dependen del ancho, no del texto).
+- kittest: con el idioma por defecto, comprobar que el título de Inicio está en
+  inglés; abrir Ajustes, cambiar a Español, cerrar y verlo traducido, y comprobar
+  que al reabrir la app sigue en español (`preferencias.json`).
 
 ## 12. Fases
 
