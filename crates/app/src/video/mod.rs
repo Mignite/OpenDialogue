@@ -81,10 +81,10 @@ impl<Message> shader::Program<Message> for Video {
 }
 
 pub struct Frame {
-    pixels: Arc<Vec<u8>>,
-    width: u32,
-    height: u32,
-    capas: Arc<Vec<Capa>>,
+    pub(crate) pixels: Arc<Vec<u8>>,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+    pub(crate) capas: Arc<Vec<Capa>>,
 }
 
 impl shader::Primitive for Frame {
@@ -408,6 +408,74 @@ impl shader::Pipeline for Gpu {
 }
 
 impl Gpu {
+    /// Construye el pipeline con el `device`/`queue` del renderer de egui.
+    pub(crate) fn nuevo(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        formato: wgpu::TextureFormat,
+    ) -> Self {
+        <Self as shader::Pipeline>::new(device, queue, formato)
+    }
+
+    /// Sube el frame y las capas. Es la misma operación que hacía `prepare`
+    /// del primitivo de iced; el callback de egui la llama en su `prepare`.
+    pub(crate) fn subir(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        frame: &Frame,
+        escala: (f32, f32),
+    ) {
+        self.ensure_texture(device, frame.width, frame.height);
+        let Some(texture) = self.texture.as_ref() else {
+            return;
+        };
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &frame.pixels,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(frame.width * 4),
+                rows_per_image: Some(frame.height),
+            },
+            wgpu::Extent3d {
+                width: frame.width,
+                height: frame.height,
+                depth_or_array_layers: 1,
+            },
+        );
+        self.subir_capas(
+            device,
+            queue,
+            &frame.capas,
+            frame.width,
+            frame.height,
+            escala,
+        );
+    }
+
+    /// Ejecuta los dos draw calls en el `RenderPass` de egui.
+    pub(crate) fn dibujar<'a>(&self, render_pass: &mut wgpu::RenderPass<'a>) {
+        if let Some(bind_group) = self.bind_group.as_ref() {
+            render_pass.set_pipeline(&self.pipeline);
+            render_pass.set_bind_group(0, bind_group, &[]);
+            render_pass.draw(0..4, 0..1);
+        }
+        if self.capas_dibujadas > 0
+            && let Some(capas) = self.capas_bind_group.as_ref()
+        {
+            render_pass.set_pipeline(&self.capas_pipeline);
+            render_pass.set_bind_group(0, capas, &[]);
+            render_pass.set_vertex_buffer(0, self.instancias.slice(..));
+            render_pass.draw(0..6, 0..self.capas_dibujadas);
+        }
+    }
+
     /// Crea la textura y su bind group la primera vez, y los rehace solo si el
     /// tamaño del frame cambia. `write_texture` reescribe el contenido.
     fn ensure_texture(&mut self, device: &wgpu::Device, width: u32, height: u32) {

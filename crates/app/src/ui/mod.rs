@@ -7,3 +7,4 @@ pub mod inicio;
 pub mod paneles;
 pub mod tema;
 pub mod transporte;
+pub mod video;

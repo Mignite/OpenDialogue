@@ -10,14 +10,23 @@ use crate::ui::{tema, transporte};
 pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Option<MensajeEditor> {
     let mut mensaje = None;
 
-    // Hueco del preview: el task 6 sustituye este rectángulo por el compositor
-    // de video + libass.
+    // Preview real: el mismo pipeline de video + libass que antes, ahora a
+    // través de un paint callback de egui_wgpu.
     let (rect, _) = ui.allocate_exact_size(
         egui::vec2(ui.available_width(), 260.0),
         egui::Sense::hover(),
     );
     ui.painter()
         .rect_filled(rect, egui::CornerRadius::same(6), tema::SUPERFICIE);
+    if !state.pixels.is_empty() {
+        let frame = crate::video::Frame {
+            pixels: std::sync::Arc::new(state.pixels.clone()),
+            width: crate::preview::CANVAS.0,
+            height: crate::preview::CANVAS.1,
+            capas: std::sync::Arc::clone(&state.layers),
+        };
+        crate::ui::video::pintar(ui, rect, frame);
+    }
 
     if let Some(mensaje_transporte) = transporte::mostrar(ui, state) {
         mensaje = Some(mensaje_transporte);
