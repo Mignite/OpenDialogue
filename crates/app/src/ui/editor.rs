@@ -6,79 +6,105 @@ use std::sync::{Arc, Mutex};
 
 use egui::Ui;
 
+use crate::comandos::MapaAtajos;
 use crate::editor_app::{EditorApp, MensajeEditor, Panel, sucio};
+use crate::preferencias::Preferencias;
+use crate::textos::Textos;
+use crate::ui::kit;
 use crate::ui::paneles::{estilos, hablantes, subtitulos};
 use crate::ui::{tema, transporte};
 use crate::video::Gpu;
 
-/// Distribución real: inspector a la derecha, timeline abajo, monitor al centro.
+/// Medidas del editor, persistidas en `Preferencias`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MedidasEditor {
+    pub ancho_panel: f32,
+    pub alto_timeline: f32,
+    pub panel_visible: bool,
+}
+
+impl Default for MedidasEditor {
+    fn default() -> Self {
+        Self {
+            ancho_panel: 320.0,
+            alto_timeline: 260.0,
+            panel_visible: true,
+        }
+    }
+}
+
+impl From<&Preferencias> for MedidasEditor {
+    fn from(prefs: &Preferencias) -> Self {
+        Self {
+            ancho_panel: prefs.ancho_panel,
+            alto_timeline: prefs.alto_timeline,
+            panel_visible: prefs.panel_visible,
+        }
+    }
+}
+
+/// Distribución: inspector a la derecha, timeline abajo, monitor al centro.
 pub fn show(
     ctx: &egui::Context,
     state: &mut EditorApp,
     formato: wgpu::TextureFormat,
     gpu: Arc<Mutex<Option<Gpu>>>,
+    textos: &Textos,
+    atajos: &MapaAtajos,
+    medidas: &mut MedidasEditor,
 ) -> Vec<MensajeEditor> {
+    let _ = atajos;
     let mut mensajes = Vec::new();
 
-    egui::SidePanel::right("inspector")
-        .resizable(true)
-        .default_width(300.0)
-        .min_width(240.0)
-        .frame(tema::panel(tema::PANEL))
-        .show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 2.0;
-                for (panel, etiqueta) in [
-                    (Panel::Subtitulos, "SUBTÍTULOS"),
-                    (Panel::Hablantes, "HABLANTES"),
-                    (Panel::Estilos, "ESTILOS"),
-                ] {
-                    let activo = state.panel == panel;
-                    let boton = ui.add(
-                        egui::Button::new(
-                            egui::RichText::new(etiqueta)
-                                .font(tema::mono_public())
-                                .size(9.0)
-                                .color(if activo {
-                                    egui::Color32::WHITE
-                                } else {
-                                    tema::DIM
-                                }),
-                        )
-                        .frame(false)
-                        .fill(if activo {
-                            tema::ACENTO
-                        } else {
-                            egui::Color32::TRANSPARENT
-                        })
-                        .corner_radius(egui::CornerRadius::same(3)),
-                    );
-                    if boton.clicked() {
-                        mensajes.push(MensajeEditor::Panel(panel));
-                    }
+    if medidas.panel_visible {
+        let lado = egui::SidePanel::right("inspector")
+            .resizable(true)
+            .default_width(medidas.ancho_panel)
+            .min_width(280.0)
+            .max_width(420.0)
+            .frame(tema::panel(tema::PANEL))
+            .show(ctx, |ui| {
+                let titulo = match state.panel {
+                    Panel::Subtitulos => textos.tab_subtitulos,
+                    Panel::Hablantes => textos.tab_hablantes,
+                    Panel::Estilos => textos.tab_estilos,
+                };
+                kit::panel_header(ui, titulo);
+                if let Some(panel) = kit::tab_bar(
+                    ui,
+                    &[
+                        (Panel::Subtitulos, textos.tab_subtitulos, None),
+                        (Panel::Hablantes, textos.tab_hablantes, None),
+                        (Panel::Estilos, textos.tab_estilos, None),
+                    ],
+                    state.panel,
+                ) {
+                    mensajes.push(MensajeEditor::Panel(panel));
                 }
+                egui::ScrollArea::vertical().show(ui, |ui| match state.panel {
+                    Panel::Subtitulos => mensajes.extend(subtitulos::mostrar(ui, state)),
+                    Panel::Hablantes => mensajes.extend(hablantes::mostrar(ui, state)),
+                    Panel::Estilos => mensajes.extend(estilos::mostrar(ui, state)),
+                });
             });
-            ui.separator();
-            egui::ScrollArea::vertical().show(ui, |ui| match state.panel {
-                Panel::Subtitulos => mensajes.extend(subtitulos::mostrar(ui, state)),
-                Panel::Hablantes => mensajes.extend(hablantes::mostrar(ui, state)),
-                Panel::Estilos => mensajes.extend(estilos::mostrar(ui, state)),
-            });
-        });
+        medidas.ancho_panel = lado.response.rect.width();
+    }
 
-    egui::TopBottomPanel::bottom("timeline")
+    let abajo = egui::TopBottomPanel::bottom("timeline")
         .resizable(true)
-        .default_height(224.0)
-        .min_height(120.0)
-        .frame(tema::panel(tema::SUPERFICIE))
+        .default_height(medidas.alto_timeline)
+        .min_height(160.0)
+        .frame(tema::panel(tema::FONDO))
         .show(ctx, |ui| {
+            kit::panel_header(ui, "Timeline");
             mensajes.extend(crate::ui::timeline::mostrar(ui, state));
         });
+    medidas.alto_timeline = abajo.response.rect.height();
 
     egui::CentralPanel::default()
         .frame(tema::panel(tema::FONDO))
         .show(ctx, |ui| {
-            mensajes.extend(mostrar(ui, state, formato, gpu));
+            mensajes.extend(mostrar(ui, state, formato, gpu, textos));
         });
 
     mensajes
@@ -89,6 +115,7 @@ pub fn mostrar(
     state: &mut EditorApp,
     formato: wgpu::TextureFormat,
     gpu: Arc<Mutex<Option<Gpu>>>,
+    textos: &Textos,
 ) -> Vec<MensajeEditor> {
     let mut mensajes = Vec::new();
 
@@ -122,7 +149,7 @@ pub fn mostrar(
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 10.0;
         ui.label(
-            egui::RichText::new("RUSTYDIALOGUE")
+            egui::RichText::new("OpenDialogue")
                 .font(tema::mono_public())
                 .color(tema::DIM)
                 .size(9.0),
@@ -135,9 +162,9 @@ pub fn mostrar(
         }));
         ui.label(
             egui::RichText::new(if sucio {
-                "Cambios sin guardar"
+                textos.sin_guardar
             } else {
-                "Guardado"
+                textos.guardado
             })
             .font(tema::mono_public())
             .size(10.0)
@@ -162,6 +189,7 @@ mod tests {
 
     use egui_kittest::kittest::Queryable;
 
+    use super::MedidasEditor;
     use crate::editor_app::{EditorApp, MensajeEditor, update};
 
     fn editor() -> EditorApp {
@@ -196,6 +224,9 @@ mod tests {
                     editor,
                     wgpu::TextureFormat::Bgra8Unorm,
                     Arc::new(Mutex::new(None)),
+                    &crate::textos::ES,
+                    &crate::comandos::MapaAtajos::por_defecto(),
+                    &mut MedidasEditor::default(),
                 ));
             },
             editor,

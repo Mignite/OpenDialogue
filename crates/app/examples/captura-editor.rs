@@ -10,13 +10,21 @@ struct CapturaEditor {
     editor: EditorApp,
     formato: wgpu::TextureFormat,
     gpu: Arc<Mutex<Option<Gpu>>>,
+    medidas: rod_app::ui::editor::MedidasEditor,
 }
 
 impl eframe::App for CapturaEditor {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         editor_app::update(&mut self.editor, MensajeEditor::Tick);
-        let mensajes =
-            rod_app::ui::editor::show(ctx, &mut self.editor, self.formato, Arc::clone(&self.gpu));
+        let mensajes = rod_app::ui::editor::show(
+            ctx,
+            &mut self.editor,
+            self.formato,
+            Arc::clone(&self.gpu),
+            &rod_app::textos::ES,
+            &rod_app::comandos::MapaAtajos::por_defecto(),
+            &mut self.medidas,
+        );
         for mensaje in mensajes {
             editor_app::update(&mut self.editor, mensaje);
         }
@@ -73,6 +81,7 @@ fn main() -> eframe::Result<()> {
                 editor,
                 formato,
                 gpu: Arc::new(Mutex::new(None)),
+                medidas: rod_app::ui::editor::MedidasEditor::default(),
             }))
         }),
     )

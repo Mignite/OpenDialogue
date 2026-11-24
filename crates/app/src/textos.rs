@@ -1,4 +1,4 @@
-//! Textos visibles en los dos idiomas soportados.
+﻿//! Textos visibles en los dos idiomas soportados.
 //!
 //! Una tabla por idioma, ambas del mismo tipo: si falta una frase, no compila.
 //! No hay claves de cadena que admitan erratas silenciosas.
@@ -68,6 +68,9 @@ pub struct Textos {
     pub orden_lineas: &'static str,
     pub abrir_otro: &'static str,
     pub inicio: &'static str,
+    pub tab_subtitulos: &'static str,
+    pub tab_hablantes: &'static str,
+    pub tab_estilos: &'static str,
 }
 
 pub const ES: Textos = Textos {
@@ -108,6 +111,9 @@ pub const ES: Textos = Textos {
     orden_lineas: "Líneas",
     abrir_otro: "Abrir otro proyecto",
     inicio: "Inicio",
+    tab_subtitulos: "Subtítulos",
+    tab_hablantes: "Hablantes",
+    tab_estilos: "Estilos",
 };
 
 pub const EN: Textos = Textos {
@@ -148,6 +154,9 @@ pub const EN: Textos = Textos {
     orden_lineas: "Lines",
     abrir_otro: "Open another project",
     inicio: "Home",
+    tab_subtitulos: "Subtitles",
+    tab_hablantes: "Speakers",
+    tab_estilos: "Styles",
 };
 
 impl Textos {

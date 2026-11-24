@@ -1,4 +1,4 @@
-﻿#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -327,6 +327,9 @@ impl eframe::App for RustyDialogue {
         let mut mensajes_editor = Vec::new();
         let formato = self.formato;
         let gpu = Arc::clone(&self.gpu);
+        let textos = self.preferencias.idioma.textos();
+        let atajos = &self.preferencias.atajos;
+        let mut medidas = ui::editor::MedidasEditor::from(&self.preferencias);
         match &mut self.pantalla {
             Pantalla::Inicio(estado) => {
                 egui::CentralPanel::default()
@@ -342,8 +345,15 @@ impl eframe::App for RustyDialogue {
                     });
             }
             Pantalla::Editor(editor) => {
-                mensajes_editor = ui::editor::show(ctx, editor, formato, gpu);
+                mensajes_editor =
+                    ui::editor::show(ctx, editor, formato, gpu, textos, atajos, &mut medidas);
             }
+        }
+        if medidas != ui::editor::MedidasEditor::from(&self.preferencias) {
+            self.preferencias.ancho_panel = medidas.ancho_panel;
+            self.preferencias.alto_timeline = medidas.alto_timeline;
+            self.preferencias.panel_visible = medidas.panel_visible;
+            let _ = self.preferencias.guardar();
         }
         if let Some(mensaje) = mensaje_inicio {
             let (tarea, salida) = match &mut self.pantalla {
