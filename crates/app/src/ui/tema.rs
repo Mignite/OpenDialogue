@@ -132,6 +132,17 @@ pub fn mono_public() -> FontId {
     fuente(Estilo::Mono)
 }
 
+/// Recorta a `max` caracteres con elipsis; para nombres de pista, clips y
+/// proyectos que no caben en su rect.
+pub fn acortar(texto: &str, max: usize) -> String {
+    if texto.chars().count() <= max {
+        texto.to_owned()
+    } else {
+        let corto: String = texto.chars().take(max.saturating_sub(1)).collect();
+        format!("{corto}…")
+    }
+}
+
 /// Misma medida, pero con una familia siempre registrada. La usan las vistas
 /// que se pintan en tests sin `aplicar`: las familias con nombre solo existen
 /// después de instalar las fuentes.

@@ -2,7 +2,7 @@
 
 use egui::{RichText, Vec2};
 
-use crate::comandos::{Comando, MapaAtajos};
+use crate::comandos::MapaAtajos;
 use crate::editor_app::{EditorApp, MensajeEditor, VELOCIDADES, sucio};
 use crate::textos::Textos;
 use crate::ui::kit::{self, Icono};
@@ -98,7 +98,14 @@ pub fn barra_estado(ui: &mut egui::Ui, state: &EditorApp, textos: &Textos) {
                 "{} · {} · {}",
                 textos.lineas(state.editor.proyecto().captions.len()),
                 textos.hablantes(state.editor.proyecto().hablantes.len()),
-                textos.comando(Comando::Buscar)
+                {
+                    let captions = &state.editor.proyecto().captions;
+                    let solapes = captions
+                        .windows(2)
+                        .filter(|par| par[1].inicio < par[0].fin)
+                        .count();
+                    format!("{solapes} solapes")
+                }
             ))
             .font(tema::fuente(Estilo::Pequeno))
             .color(tema::TEXTO_3),
@@ -112,5 +119,12 @@ pub fn barra_estado(ui: &mut egui::Ui, state: &EditorApp, textos: &Textos) {
             .font(tema::fuente(Estilo::Pequeno))
             .color(tema::TEXTO_3),
         );
+        if let Some(mensaje) = &state.mensaje {
+            ui.label(
+                RichText::new(mensaje)
+                    .font(tema::fuente(Estilo::Pequeno))
+                    .color(tema::PELIGRO),
+            );
+        }
     });
 }

@@ -1,4 +1,4 @@
-//! Timeline dibujada con `egui::Painter`: regla con marcas, carriles con
+﻿//! Timeline dibujada con `egui::Painter`: regla con marcas, carriles con
 //! nombre, clips con el color del hablante y playhead. El significado de cada
 //! gesto sigue en `timeline::pulsar`, que es código probado.
 
@@ -61,7 +61,8 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
 
     let vista = state.vista;
     let hablantes = &state.editor.proyecto().hablantes;
-    let filas = (hablantes.len() + 1).min(6);
+    // Una pista por hablante; el bucle de dibujo ya para al llegar al borde.
+    let filas = hablantes.len() + 1;
 
     // Regla: marcas redondas con etiqueta en mono.
     painter.rect_filled(
@@ -134,7 +135,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
                 hablante.nombre.clone()
             };
             (
-                nombre,
+                tema::acortar(&nombre, 12),
                 tema::color(rod_core::color_identidad(hablante, fila - 1)),
             )
         };
@@ -143,7 +144,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
         painter.text(
             gutter.min + egui::vec2(22.0, centro),
             egui::Align2::LEFT_CENTER,
-            nombre,
+            tema::acortar(&nombre, 12),
             egui::FontId::proportional(11.0),
             tema::SECUNDARIO,
         );
@@ -206,8 +207,13 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
         let color = caption
             .hablante_id
             .as_deref()
-            .and_then(|id| state.editor.hablante(id))
-            .map(|hablante| tema::color_de_hex(&hablante.color))
+            .and_then(|id| {
+                hablantes
+                    .iter()
+                    .position(|hablante| hablante.id == id)
+                    .map(|indice| (indice, &hablantes[indice]))
+            })
+            .map(|(indice, hablante)| tema::color(rod_core::color_identidad(hablante, indice)))
             .unwrap_or(tema::DIM);
         let seleccionado = state.editor.seleccion.contains(&caption.id);
         painter.rect_filled(
@@ -228,7 +234,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
             painter.text(
                 clip.min + egui::vec2(5.0, 4.0),
                 egui::Align2::LEFT_TOP,
-                &caption.texto,
+                tema::acortar(&caption.texto, (clip.width() / 7.0).max(4.0) as usize),
                 egui::FontId::proportional(10.0),
                 tema::TEXTO,
             );
@@ -275,11 +281,16 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
             pos - rect.min,
         ))));
     }
-    let lineas = ui.input(|entrada| entrada.raw_scroll_delta.y) / 40.0;
+    let (modificadores, lineas) =
+        ui.input(|entrada| (entrada.modifiers, entrada.raw_scroll_delta.y / 40.0));
+    mensajes.push(MensajeEditor::Modificadores(modificadores));
     if lineas != 0.0 {
+        let cursor = ui
+            .input(|entrada| entrada.pointer.latest_pos())
+            .unwrap_or_else(|| area.center());
         mensajes.push(MensajeEditor::Timeline(Mensaje::Rueda {
             lineas,
-            punto: timeline::Punto::new(area.width() / 2.0, ALTO_REGLA),
+            punto: punto(cursor - rect.min),
         }));
     }
     let _ = timeline::UMBRAL_CLIC;

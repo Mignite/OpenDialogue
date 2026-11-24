@@ -1,4 +1,4 @@
-//! Capa modal de Ajustes: idioma y atajos reasignables.
+﻿//! Capa modal de Ajustes: idioma y atajos reasignables.
 
 use egui::{Color32, Event, Key, RichText, Vec2};
 
@@ -26,6 +26,12 @@ pub struct EstadoAjustes {
 }
 
 /// Dibuja la capa. Devuelve `true` si cambió algo y hay que guardar.
+fn cerrar(estado: &mut EstadoAjustes) {
+    estado.abierto = false;
+    estado.capturando = None;
+    estado.conflicto = None;
+}
+
 pub fn mostrar(ctx: &egui::Context, prefs: &mut Preferencias, estado: &mut EstadoAjustes) -> bool {
     if !estado.abierto {
         return false;
@@ -91,7 +97,7 @@ pub fn mostrar(ctx: &egui::Context, prefs: &mut Preferencias, estado: &mut Estad
         )
     }) && estado.capturando.is_none()
     {
-        estado.abierto = false;
+        cerrar(estado);
     }
 
     let marco = egui::Frame {
@@ -256,7 +262,7 @@ pub fn mostrar(ctx: &egui::Context, prefs: &mut Preferencias, estado: &mut Estad
                     .is_some_and(|pos| !respuesta.response.rect.contains(pos))
         });
         if clic_fuera {
-            estado.abierto = false;
+            cerrar(estado);
         }
     }
     cambiado

@@ -157,7 +157,7 @@ pub fn mostrar(
                         ui.end_row();
                     }
                 });
-            if estado.recientes.len() > 3 && ui.button("Ver todos").clicked() {
+            if estado.recientes.len() > 3 && ui.button(textos.ver_todos).clicked() {
                 intencion = Some(MensajeInicio::VerTodos);
             }
         }
@@ -315,39 +315,47 @@ fn tarjeta_reciente(
         .map(|(color, _)| tema::color(color))
         .unwrap_or(tema::CONTROL);
     let (respuesta, _) = kit::tarjeta(ui, |ui| {
-        ui.set_width(ancho - tema::ESP_16 * 2.0);
-        let (miniatura, _) =
-            ui.allocate_exact_size(Vec2::new(ui.available_width(), 96.0), Sense::hover());
-        ui.painter().rect_filled(miniatura, 0.0, tema::CONTROL);
-        ui.painter().rect_filled(
-            egui::Rect::from_min_max(
-                egui::pos2(miniatura.min.x, miniatura.max.y - 4.0),
-                miniatura.max,
-            ),
-            0.0,
-            color,
-        );
-        ui.label(
-            RichText::new(
-                reciente
-                    .ruta
-                    .file_name()
-                    .map(|nombre| nombre.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| reciente.ruta.display().to_string()),
-            )
-            .font(tema::fuente_segura(Estilo::CuerpoFuerte))
-            .color(tema::TEXTO),
-        );
-        ui.label(
-            RichText::new(format!(
-                "{} · {} · {}",
-                textos.lineas(reciente.lineas),
-                textos.hablantes(reciente.hablantes),
-                textos.fecha(&reciente.fecha)
-            ))
-            .font(tema::fuente(Estilo::Pequeno))
-            .color(tema::TEXTO_3),
-        );
+        // El Grid celda usa layout horizontal: sin este vertical los labels
+        // caen al lado de la miniatura y se solapan con ella.
+        ui.vertical(|ui| {
+            // El ancho de la tarjeta ya viene del Grid; forzarlo aquí rompía el
+            // layout y los labels se solapaban con la miniatura.
+            let ancho_util = (ancho - tema::ESP_16 * 2.0).max(120.0);
+            let (miniatura, _) =
+                ui.allocate_exact_size(Vec2::new(ancho_util, 96.0), Sense::hover());
+            ui.painter().rect_filled(miniatura, 0.0, tema::CONTROL);
+            ui.painter().rect_filled(
+                egui::Rect::from_min_max(
+                    egui::pos2(miniatura.min.x, miniatura.max.y - 4.0),
+                    miniatura.max,
+                ),
+                0.0,
+                color,
+            );
+            ui.set_width(ancho_util);
+            ui.label(
+                RichText::new(tema::acortar(
+                    &reciente
+                        .ruta
+                        .file_name()
+                        .map(|nombre| nombre.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| reciente.ruta.display().to_string()),
+                    28,
+                ))
+                .font(tema::fuente_segura(Estilo::CuerpoFuerte))
+                .color(tema::TEXTO),
+            );
+            ui.label(
+                RichText::new(format!(
+                    "{} · {} · {}",
+                    textos.lineas(reciente.lineas),
+                    textos.hablantes(reciente.hablantes),
+                    textos.fecha(&reciente.fecha)
+                ))
+                .font(tema::fuente(Estilo::Pequeno))
+                .color(tema::TEXTO_3),
+            );
+        });
     });
     if destacada {
         ui.painter().rect_stroke(

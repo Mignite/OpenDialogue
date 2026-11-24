@@ -47,9 +47,14 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::splat(tema::ESP_4);
                 for muestra in rod_core::paleta_identidad() {
+                    let usado = hablantes
+                        .iter()
+                        .enumerate()
+                        .any(|(otro, h)| otro != indice && h.color.eq_ignore_ascii_case(muestra));
                     let elegido =
                         rod_core::color_identidad(hablante, indice).eq_ignore_ascii_case(muestra);
-                    let respuesta = ui.add(
+                    let respuesta = ui.add_enabled(
+                        !usado,
                         egui::Button::new(RichText::new(*muestra).color(Color32::TRANSPARENT))
                             .fill(tema::color(muestra))
                             .stroke(Stroke::new(

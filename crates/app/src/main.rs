@@ -239,24 +239,32 @@ impl eframe::App for RustyDialogue {
             self.responder(respuesta);
         }
 
-        // Un único registro de atajos para menú y teclado.
-        let foco_en_texto = ctx.memory(|memoria| memoria.focused().is_some());
+        // Un único registro de atajos para menú y teclado. Con un modal
+        // abierto o editando una fila, la tecla va al widget, no al proyecto.
+        let capturando_teclado = self.ajustes.abierto
+            || self.panel_atajos.abierto
+            || matches!(&self.pantalla, Pantalla::Editor(editor) if editor.texto_inline_activo());
+        let foco_en_texto = ctx.memory(|memoria| memoria.focused().is_some()) || capturando_teclado;
         let atajos = &self.preferencias.atajos;
-        let pulsaciones: Vec<Comando> = ctx.input(|entrada| {
-            entrada
-                .events
-                .iter()
-                .filter_map(|evento| match evento {
-                    egui::Event::Key {
-                        key,
-                        modifiers,
-                        pressed: true,
-                        ..
-                    } => atajos.comando_de(*key, *modifiers, foco_en_texto),
-                    _ => None,
-                })
-                .collect()
-        });
+        let pulsaciones: Vec<Comando> = if capturando_teclado {
+            Vec::new()
+        } else {
+            ctx.input(|entrada| {
+                entrada
+                    .events
+                    .iter()
+                    .filter_map(|evento| match evento {
+                        egui::Event::Key {
+                            key,
+                            modifiers,
+                            pressed: true,
+                            ..
+                        } => atajos.comando_de(*key, *modifiers, foco_en_texto),
+                        _ => None,
+                    })
+                    .collect()
+            })
+        };
         for comando in pulsaciones {
             self.aplicar_comando(comando);
         }

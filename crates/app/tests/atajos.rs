@@ -84,6 +84,28 @@ fn preferencias_rotas_dan_los_valores_de_fabrica() {
 }
 
 #[test]
+fn un_archivo_parcial_no_deja_los_demas_atajos_sin_asignar() {
+    let dir = std::env::temp_dir().join(format!("rod-prefs-parcial-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let ruta = dir.join("preferencias.json");
+    std::fs::write(
+        &ruta,
+        r#"{"atajos":[["Guardar",{"tecla":"S","ctrl":true,"shift":false,"alt":false}]]}"#,
+    )
+    .unwrap();
+    let prefs = Preferencias::cargar_en(&ruta);
+    assert_eq!(prefs.atajo(Comando::Guardar).unwrap().to_string(), "Ctrl+S");
+    assert_eq!(
+        prefs.atajo(Comando::ReproducirPausa).unwrap().to_string(),
+        "Space"
+    );
+    assert_eq!(
+        prefs.atajo(Comando::Deshacer).unwrap().to_string(),
+        "Ctrl+Z"
+    );
+}
+
+#[test]
 fn preferencias_hacen_round_trip() {
     let dir = std::env::temp_dir().join(format!("rod-prefs-rt-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();

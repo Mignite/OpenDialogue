@@ -96,7 +96,7 @@ pub fn show(
         .min_height(160.0)
         .frame(tema::panel(tema::FONDO))
         .show(ctx, |ui| {
-            kit::panel_header(ui, "Timeline");
+            kit::panel_header(ui, textos.timeline);
             mensajes.extend(crate::ui::timeline::mostrar(ui, state));
         });
     medidas.alto_timeline = abajo.response.rect.height();

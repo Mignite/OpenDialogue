@@ -1,4 +1,4 @@
-use egui::{Key, Modifiers};
+﻿use egui::{Key, Modifiers};
 use egui_kittest::kittest::Queryable;
 use rod_app::comandos::Comando;
 use rod_app::preferencias::Preferencias;
@@ -48,10 +48,6 @@ fn reasignar_una_tecla_tomada_pide_intercambio() {
     let mut harness = harness(estado);
     harness.get_by_label("Change Undo").click();
     harness.run();
-    println!(
-        "DEBUG tras click capturando={:?}",
-        harness.state().1.capturando
-    );
     harness.key_press_modifiers(
         Modifiers {
             ctrl: true,

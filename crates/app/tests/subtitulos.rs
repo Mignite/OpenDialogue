@@ -36,6 +36,8 @@ fn doble_clic_abre_editor_y_escape_no_cambia_el_texto() {
     h.get_by_label("Editar").click();
     h.run();
     assert!(h.state().texto_inline_activo());
+    // El campo inline debe tomar el foco: si no, escribir dispara atajos.
+    assert!(h.ctx.memory(|memoria| memoria.focused().is_some()));
     h.key_press(Key::Escape);
     h.run();
     assert_eq!(h.state().proyecto().captions[0].texto, "texto original");

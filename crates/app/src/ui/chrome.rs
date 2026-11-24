@@ -1,4 +1,4 @@
-//! Cabecera de ventana propia: marca, menús, nombre del proyecto y controles.
+﻿//! Cabecera de ventana propia: marca, menús, nombre del proyecto y controles.
 
 use crate::comandos::{Comando, MapaAtajos};
 use crate::menu;
@@ -71,9 +71,9 @@ pub fn mostrar(
                 }
                 if let Some(proyecto) = estado.proyecto {
                     let texto = if estado.sucio {
-                        format!("{proyecto} · {}", textos.sin_guardar)
+                        format!("{} · {}", tema::acortar(proyecto, 40), textos.sin_guardar)
                     } else {
-                        format!("{proyecto} · {}", textos.guardado)
+                        format!("{} · {}", tema::acortar(proyecto, 40), textos.guardado)
                     };
                     ui.painter().text(
                         franja.center(),

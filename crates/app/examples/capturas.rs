@@ -96,12 +96,39 @@ fn capturar_editor(nombre: &str, ancho: f32, alto: f32, idioma: rod_app::textos:
         env!("CARGO_MANIFEST_DIR"),
         "/../../testdata/clip-15s-2audio.mp4"
     );
-    let app = rod_app::editor_app::EditorApp::desde_video(video).expect("abre el clip de prueba");
+    let mut proyecto = rod_core::Proyecto::nuevo(video);
+    for i in 0..7 {
+        proyecto.hablantes.push(rod_core::Hablante {
+            id: format!("h{i}"),
+            nombre: format!("Hablante {i}"),
+            tecla: (i + 1).to_string(),
+            color: String::new(),
+            preset_id: None,
+        });
+    }
+    for n in 0..40 {
+        let inicio = n as f64 * 0.38;
+        proyecto.captions.push(rod_core::Caption {
+            id: format!("cap-{n}"),
+            inicio,
+            fin: inicio + 0.3,
+            texto: format!("Línea {n} · hablante {}", n % 7),
+            hablante_id: Some(format!("h{}", n % 7)),
+        });
+    }
+    let app = rod_app::editor_app::EditorApp::desde_proyecto_en(
+        proyecto,
+        None,
+        0.0,
+        &std::env::temp_dir(),
+    )
+    .expect("abre el clip de prueba");
     let mut harness = Harness::builder()
         .wgpu()
         .with_size(egui::vec2(ancho, alto))
         .build_state(
             |ctx, (editor, medidas)| {
+                rod_app::ui::tema::aplicar(ctx);
                 rod_app::ui::editor::show(
                     ctx,
                     editor,

@@ -64,11 +64,16 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
                         if let Some((id, borrador)) = state.inline.as_mut()
                             && *id == caption.id
                         {
+                            let id_campo = egui::Id::new(("inline", &caption.id));
                             let respuesta = ui.add(
                                 egui::TextEdit::singleline(borrador)
+                                    .id(id_campo)
                                     .font(tema::fuente(Estilo::Base))
                                     .desired_width(rect.width() - 8.0),
                             );
+                            // Sin foco, las teclas desnudas las consume el
+                            // enrutador de atajos y no llegan al texto.
+                            respuesta.request_focus();
                             if ui.input(|entrada| entrada.key_pressed(egui::Key::Enter)) {
                                 mensajes.push(MensajeEditor::EditarInline(
                                     caption.id.clone(),
@@ -87,7 +92,17 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
                                     )
                                 })
                             });
-                            if escape || respuesta.lost_focus() {
+                            if escape
+                                || ui
+                                    .add(
+                                        egui::Button::new(
+                                            RichText::new(textos.cancelar)
+                                                .font(tema::fuente(Estilo::Pequeno)),
+                                        )
+                                        .frame(false),
+                                    )
+                                    .clicked()
+                            {
                                 mensajes.push(MensajeEditor::CancelarInline);
                             }
                         } else {
@@ -115,7 +130,8 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
                             if ui
                                 .add(
                                     egui::Button::new(
-                                        RichText::new("Editar").font(tema::fuente(Estilo::Pequeno)),
+                                        RichText::new(textos.editar)
+                                            .font(tema::fuente(Estilo::Pequeno)),
                                     )
                                     .frame(false),
                                 )

@@ -409,11 +409,14 @@ impl MapaAtajos {
                 },
             ));
         }
-        if mapa.filas.is_empty() {
-            Self::por_defecto()
-        } else {
-            mapa
+        let defecto = Self::por_defecto();
+        for comando in Comando::todas() {
+            if !mapa.filas.iter().any(|(c, _)| c == comando) {
+                mapa.filas
+                    .extend(defecto.filas.iter().filter(|(c, _)| c == comando).cloned());
+            }
         }
+        mapa
     }
 }
 

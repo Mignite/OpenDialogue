@@ -13,6 +13,12 @@
 - kittest no ejecuta el `PaintCallback` de mpv: las capturas finales del editor
   son headless con el monitor vacío. El «antes» real con video quedó en
   `docs/checklists/rediseno/antes-editor-1440.png`.
+- Revisión final de rama: se corrigieron foco del editor inline, atajos que se
+  ejecutaban con modales abiertos, color de identidad en los clips, pista por
+  hablante, seek al seleccionar, zoom con `Ctrl+rueda`, waveform al cambiar de
+  video y cadenas sin traducir. Quedan como menores: toast que se congela al
+  guardar, tres textos de 9/10 px en la regla, navegación `Home`/`End`/`Tab` y
+  tooltips de los botones de ventana.
 - Pendiente: marquesina y guía visual de `snapping` en el timeline; se conserva
   la lógica de arrastre ya probada.
 - Pendiente: errores de `rod-core` y del sistema de archivos siguen en español

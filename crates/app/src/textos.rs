@@ -77,6 +77,9 @@ pub struct Textos {
     pub salida: &'static str,
     pub sin_seleccion: &'static str,
     pub linea_eliminada: &'static str,
+    pub ver_todos: &'static str,
+    pub editar: &'static str,
+    pub timeline: &'static str,
 }
 
 pub const ES: Textos = Textos {
@@ -126,6 +129,9 @@ pub const ES: Textos = Textos {
     salida: "Salida",
     sin_seleccion: "Selecciona una línea para editarla",
     linea_eliminada: "Línea eliminada",
+    ver_todos: "Ver todos",
+    editar: "Editar",
+    timeline: "Línea de tiempo",
 };
 
 pub const EN: Textos = Textos {
@@ -175,6 +181,9 @@ pub const EN: Textos = Textos {
     salida: "Out",
     sin_seleccion: "Select a line to edit it",
     linea_eliminada: "Line deleted",
+    ver_todos: "See all",
+    editar: "Edit",
+    timeline: "Timeline",
 };
 
 impl Textos {

@@ -403,6 +403,11 @@ fn reemplazar_player(
     state.velocidad = Velocidad(player.speed() as f32);
     state.player = player;
     state.layers = Arc::new(Vec::new());
+    // La waveform del video anterior no sirve para el nuevo.
+    state.picos = None;
+    state.rx_picos = Some(rod_player::waveform::analizar_en_hilo(
+        std::path::PathBuf::from(ruta_video),
+    ));
     // Otro video, otra escala: se encaja entero en la ventana.
     state.vista = state.vista.encajar(state.duration, state.ancho_timeline);
     state.objetivo_vista = None;
@@ -1354,6 +1359,17 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
         MensajeEditor::Seleccionar(id) => {
             state.editor.seleccionar_uno(&id);
             sincronizar_borrador(state);
+            // Un clic en la lista lleva el preview al inicio del caption.
+            if let Some(inicio) = state
+                .editor
+                .proyecto()
+                .captions
+                .iter()
+                .find(|caption| caption.id == id)
+                .map(|caption| caption.inicio)
+            {
+                let _ = state.player.seek(inicio);
+            }
         }
         MensajeEditor::Borrador(texto) => state.borrador = texto,
         MensajeEditor::BorradorInicio(texto) => state.borrador_inicio = texto,
@@ -1567,7 +1583,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
                 // playhead, el siguiente frame desharía el gesto.
                 state.seguir = false;
                 state.objetivo_vista = None;
-                if state.modificadores.shift {
+                if state.modificadores.ctrl || state.modificadores.shift {
                     // Zoom anclado al cursor: el tiempo bajo el ratón no se
                     // mueve. 1.15 por muesca, el mismo paso que el oráculo.
                     let factor = 1.15_f64.powf(f64::from(lineas));
