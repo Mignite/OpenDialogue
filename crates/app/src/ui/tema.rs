@@ -3,14 +3,21 @@
 
 use egui::{Color32, CornerRadius, FontId, Style, TextStyle, Visuals};
 
-pub const FONDO: Color32 = Color32::from_rgb(74, 74, 74);
-pub const SUPERFICIE: Color32 = Color32::from_rgb(14, 14, 15);
-pub const PANEL: Color32 = Color32::from_rgb(44, 44, 44);
-pub const LATERAL: Color32 = Color32::from_rgb(41, 41, 41);
-pub const TEXTO: Color32 = Color32::from_rgb(232, 232, 232);
-pub const SECUNDARIO: Color32 = Color32::from_rgb(184, 184, 184);
-pub const DIM: Color32 = Color32::from_rgb(140, 140, 140);
+/// Chrome: la estructura alrededor del trabajo.
+pub const FONDO: Color32 = Color32::from_rgb(29, 30, 34);
+/// Monitor de video: lo más oscuro, para que el frame mande.
+pub const SUPERFICIE: Color32 = Color32::from_rgb(11, 11, 13);
+/// Paneles e inspectores: un paso por encima del fondo, no otro negro.
+pub const PANEL: Color32 = Color32::from_rgb(37, 38, 43);
+/// Carriles y superficies elevadas.
+pub const LATERAL: Color32 = Color32::from_rgb(32, 33, 38);
+pub const BORDE: Color32 = Color32::from_rgb(72, 74, 82);
+pub const TEXTO: Color32 = Color32::from_rgb(235, 236, 239);
+pub const SECUNDARIO: Color32 = Color32::from_rgb(182, 185, 192);
+pub const DIM: Color32 = Color32::from_rgb(126, 129, 137);
 pub const ACENTO: Color32 = Color32::from_rgb(20, 115, 230);
+/// Sin guardar y pista activa; nunca tiñe un carril de hablante.
+pub const AMBAR: Color32 = Color32::from_rgb(229, 169, 59);
 
 /// Controles: botones y campos.
 pub const RADIO_CONTROL: f32 = 4.0;
@@ -26,6 +33,11 @@ fn familia() -> egui::FontFamily {
 
 fn mono() -> egui::FontFamily {
     egui::FontFamily::Monospace
+}
+
+/// Tipografía mono para el chrome y las etiquetas técnicas.
+pub fn mono_public() -> egui::FontId {
+    egui::FontId::monospace(10.0)
 }
 
 /// Color semántico de un hablante. Un valor ausente o mal escrito cae al
@@ -88,6 +100,42 @@ pub fn estilo() -> Style {
         .text_styles
         .insert(TextStyle::Small, FontId::new(10.0, familia()));
     estilo
+}
+
+/// Marco de un panel: fondo, borde de un píxel y esquinas suaves.
+pub fn panel(fill: Color32) -> egui::Frame {
+    egui::Frame {
+        inner_margin: egui::Margin::symmetric(10, 8),
+        outer_margin: egui::Margin::ZERO,
+        corner_radius: egui::CornerRadius::same(RADIO_SUPERFICIE as u8),
+        shadow: egui::Shadow::NONE,
+        fill,
+        stroke: egui::Stroke::new(1.0_f32, BORDE),
+    }
+}
+
+/// Etiqueta de sección: pequeña, en mono y apagada. Estructura, no adorno.
+pub fn etiqueta(ui: &mut egui::Ui, texto: &str) {
+    ui.label(
+        egui::RichText::new(texto.to_uppercase())
+            .font(mono_public())
+            .size(9.0)
+            .color(DIM),
+    );
+}
+
+/// Chip compacto para el estado de la cabecera.
+pub fn chip(
+    ui: &mut egui::Ui,
+    texto: impl Into<egui::WidgetText>,
+    color: Color32,
+) -> egui::Response {
+    ui.add(
+        egui::Button::new(texto)
+            .fill(Color32::TRANSPARENT)
+            .corner_radius(egui::CornerRadius::same(RADIO_CONTROL as u8))
+            .stroke(egui::Stroke::new(1.0_f32, color)),
+    )
 }
 
 #[cfg(test)]

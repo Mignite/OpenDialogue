@@ -74,9 +74,15 @@ pub fn comandos_de(seccion: Seccion) -> Vec<Comando> {
 /// Barra de menú dibujada con egui. Un `MenuButton` por sección, con los
 /// comandos del registro; en el arranque solo aparecen los cuatro válidos.
 pub fn mostrar(ui: &mut egui::Ui, en_inicio: bool) -> Option<Comando> {
+    use crate::ui::tema;
+
     let mut elegido = None;
     ui.horizontal(|ui| {
-        for seccion in SECCIONES {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        for (indice, seccion) in SECCIONES.into_iter().enumerate() {
+            if indice > 0 {
+                ui.separator();
+            }
             let nombre = match seccion {
                 Seccion::Archivo => "Archivo",
                 Seccion::Edicion => "Edición",
@@ -85,11 +91,15 @@ pub fn mostrar(ui: &mut egui::Ui, en_inicio: bool) -> Option<Comando> {
                 Seccion::Estilos => "Estilos",
                 Seccion::Ayuda => "Ayuda",
             };
-            ui.menu_button(nombre, |ui| {
+            let etiqueta = egui::RichText::new(nombre)
+                .size(11.0)
+                .color(tema::SECUNDARIO);
+            ui.menu_button(etiqueta, |ui| {
+                ui.set_min_width(226.0);
                 for comando in comandos_de(seccion) {
                     let habilitado = !en_inicio || comandos::disponible_en_inicio(comando);
                     if ui
-                        .add_enabled(habilitado, egui::Button::new(texto(comando)))
+                        .add_enabled(habilitado, egui::Button::new(texto(comando)).frame(false))
                         .clicked()
                     {
                         elegido = Some(comando);

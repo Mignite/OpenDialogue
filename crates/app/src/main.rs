@@ -272,27 +272,89 @@ impl eframe::App for RustyDialogue {
         }
 
         let mut comando_menu = None;
-        egui::TopBottomPanel::top("cabecera").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("R").color(ui::tema::ACENTO).strong());
-                ui.label(egui::RichText::new("RustyDialogue").size(12.0));
-                let en_inicio = matches!(self.pantalla, Pantalla::Inicio(_));
-                comando_menu = rod_app::menu::mostrar(ui, en_inicio);
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("✕").clicked() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        let cabecera = egui::Frame {
+            inner_margin: egui::Margin::symmetric(10, 4),
+            outer_margin: egui::Margin::ZERO,
+            corner_radius: egui::CornerRadius::ZERO,
+            shadow: egui::Shadow::NONE,
+            fill: ui::tema::FONDO,
+            stroke: egui::Stroke::new(1.0_f32, ui::tema::BORDE),
+        };
+        egui::TopBottomPanel::top("cabecera")
+            .frame(cabecera)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    // Marca: un cuadrado de acento, contenido y sobrio.
+                    let (marca, _) =
+                        ui.allocate_exact_size(egui::vec2(18.0, 18.0), egui::Sense::hover());
+                    ui.painter()
+                        .rect_filled(marca, egui::CornerRadius::same(3), ui::tema::ACENTO);
+                    ui.painter().text(
+                        marca.center(),
+                        egui::Align2::CENTER_CENTER,
+                        "R",
+                        egui::FontId::proportional(10.0),
+                        egui::Color32::WHITE,
+                    );
+                    ui.label(
+                        egui::RichText::new("RUSTYDIALOGUE")
+                            .font(ui::tema::mono_public())
+                            .size(10.0)
+                            .color(ui::tema::SECUNDARIO),
+                    );
+                    ui.separator();
+
+                    let en_inicio = matches!(self.pantalla, Pantalla::Inicio(_));
+                    comando_menu = rod_app::menu::mostrar(ui, en_inicio);
+
+                    // Franja arrastrable: sin marco nativo, el usuario mueve la
+                    // ventana por aquí y hace doble clic para maximizar.
+                    let (franja, respuesta) = ui.allocate_exact_size(
+                        egui::vec2(ui.available_width().max(1.0), 22.0),
+                        egui::Sense::click_and_drag(),
+                    );
+                    if respuesta.drag_started() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
                     }
-                    if ui.button("□").clicked() {
+                    if respuesta.double_clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(
                             !ctx.input(|entrada| entrada.viewport().maximized.unwrap_or(false)),
                         ));
                     }
-                    if ui.button("—").clicked() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                    let _ = franja;
+
+                    let sucio = match &self.pantalla {
+                        Pantalla::Editor(editor) => rod_app::editor_app::sucio(editor),
+                        Pantalla::Inicio(_) => false,
+                    };
+                    if !en_inicio {
+                        ui::tema::chip(
+                            ui,
+                            if sucio { "● Sin guardar" } else { "Guardado" },
+                            if sucio {
+                                ui::tema::AMBAR
+                            } else {
+                                ui::tema::DIM
+                            },
+                        );
                     }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.spacing_mut().item_spacing.x = 2.0;
+                        if ui.button("✕").clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                        if ui.button("□").clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(
+                                !ctx.input(|entrada| entrada.viewport().maximized.unwrap_or(false)),
+                            ));
+                        }
+                        if ui.button("—").clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                        }
+                    });
                 });
             });
-        });
         if let Some(comando) = comando_menu {
             self.aplicar_comando(comando);
         }
@@ -301,12 +363,18 @@ impl eframe::App for RustyDialogue {
         let mut mensajes_editor = Vec::new();
         let formato = self.formato;
         let gpu = Arc::clone(&self.gpu);
-        egui::CentralPanel::default().show(ctx, |ui| match &mut self.pantalla {
-            Pantalla::Inicio(estado) => mensaje_inicio = ui::inicio::mostrar(ui, estado),
-            Pantalla::Editor(editor) => {
-                mensajes_editor = ui::editor::mostrar(ui, editor, formato, gpu);
+        match &mut self.pantalla {
+            Pantalla::Inicio(estado) => {
+                egui::CentralPanel::default()
+                    .frame(ui::tema::panel(ui::tema::FONDO))
+                    .show(ctx, |ui| {
+                        mensaje_inicio = ui::inicio::mostrar(ui, estado);
+                    });
             }
-        });
+            Pantalla::Editor(editor) => {
+                mensajes_editor = ui::editor::show(ctx, editor, formato, gpu);
+            }
+        }
         if let Some(mensaje) = mensaje_inicio {
             let (tarea, salida) = match &mut self.pantalla {
                 Pantalla::Inicio(estado) => inicio::update(estado, mensaje),
@@ -328,7 +396,9 @@ impl eframe::App for RustyDialogue {
 
 fn main() -> eframe::Result<()> {
     let opciones = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([1600.0, 900.0]),
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1600.0, 900.0])
+            .with_decorations(false),
         ..Default::default()
     };
     eframe::run_native(

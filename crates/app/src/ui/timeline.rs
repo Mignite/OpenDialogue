@@ -1,6 +1,6 @@
-//! Timeline dibujada con `egui::Painter`: regla, carriles, clips y playhead.
-//! El significado de cada gesto sigue en `timeline::pulsar` y en
-//! `EditorApp::update`, que recibe los mismos mensajes de antes.
+//! Timeline dibujada con `egui::Painter`: regla con marcas, carriles con
+//! nombre, clips con el color del hablante y playhead. El significado de cada
+//! gesto sigue en `timeline::pulsar`, que es código probado.
 
 use egui::{Ui, Vec2};
 
@@ -8,8 +8,11 @@ use crate::editor_app::{EditorApp, MensajeEditor};
 use crate::timeline::{self, ALTO_CARRIL, ALTO_REGLA, Mensaje};
 use crate::ui::tema;
 
-fn punto(rect: egui::Rect, pos: egui::Pos2) -> timeline::Punto {
-    timeline::Punto::new(pos.x - rect.min.x, pos.y - rect.min.y)
+/// Margen izquierdo para los nombres de carril. El eje empieza después.
+const GUTTER: f32 = 104.0;
+
+fn punto(rel: egui::Vec2) -> timeline::Punto {
+    timeline::Punto::new(rel.x - GUTTER, rel.y)
 }
 
 pub fn playhead(state: &EditorApp) -> f64 {
@@ -20,91 +23,238 @@ pub fn playhead(state: &EditorApp) -> f64 {
     }
 }
 
+/// Paso de regla redondo: 0,5 / 1 / 2 / 5 / 10 s según el zoom.
+fn paso_de_regla(escala: f64) -> f64 {
+    for paso in [0.5, 1.0, 2.0, 5.0, 10.0, 30.0] {
+        if paso / escala >= 70.0 {
+            return paso;
+        }
+    }
+    60.0
+}
+
 pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
     let (rect, respuesta) = ui.allocate_exact_size(
-        Vec2::new(ui.available_width(), ALTO_REGLA + ALTO_CARRIL * 3.0),
+        Vec2::new(ui.available_width(), ui.available_height()),
         egui::Sense::click_and_drag(),
     );
     let painter = ui.painter();
-    painter.rect_filled(rect, egui::CornerRadius::same(0), tema::SUPERFICIE);
+    painter.rect_filled(rect, egui::CornerRadius::ZERO, tema::SUPERFICIE);
 
-    // Ancho real para que la app sepa cuántos segundos caben. Solo se envía
-    // cuando cambia: si no, sustituiría cualquier otro mensaje del frame.
+    let gutter = egui::Rect::from_min_max(rect.min, egui::pos2(rect.min.x + GUTTER, rect.max.y));
+    let area = egui::Rect::from_min_max(egui::pos2(gutter.max.x, rect.min.y), rect.max);
+    painter.rect_filled(gutter, egui::CornerRadius::ZERO, tema::PANEL);
+    painter.line_segment(
+        [
+            egui::pos2(gutter.max.x, rect.min.y),
+            egui::pos2(gutter.max.x, rect.max.y),
+        ],
+        egui::Stroke::new(1.0_f32, tema::BORDE),
+    );
+
+    // Ancho real del eje. Solo se envía cuando cambia para no sobrescribir
+    // otros mensajes del frame.
     let mut mensajes = Vec::new();
-    if (state.ancho_timeline - rect.width()).abs() > 0.5 {
-        mensajes.push(MensajeEditor::Timeline(Mensaje::Ancho(rect.width())));
-    }
-
-    // Regla y carriles.
-    for fila in 0..3 {
-        let y = rect.min.y + ALTO_REGLA + fila as f32 * ALTO_CARRIL;
-        painter.rect_filled(
-            egui::Rect::from_min_max(
-                egui::pos2(rect.min.x, y),
-                egui::pos2(rect.max.x, y + ALTO_CARRIL - 1.0),
-            ),
-            egui::CornerRadius::same(0),
-            tema::color_de_hex("#232323"),
-        );
+    if (state.ancho_timeline - area.width()).abs() > 0.5 {
+        mensajes.push(MensajeEditor::Timeline(Mensaje::Ancho(area.width())));
     }
 
     let vista = state.vista;
-    for (indice, caption) in state.editor.proyecto().captions.iter().enumerate() {
-        let x0 = rect.min.x + vista.x_de(caption.inicio);
-        let x1 = rect.min.x + vista.x_de(caption.fin);
-        if x1 <= rect.min.x || x0 >= rect.max.x {
+    let hablantes = &state.editor.proyecto().hablantes;
+    let filas = (hablantes.len() + 1).min(6);
+
+    // Regla: marcas redondas con etiqueta en mono.
+    painter.rect_filled(
+        egui::Rect::from_min_max(area.min, egui::pos2(area.max.x, rect.min.y + ALTO_REGLA)),
+        egui::CornerRadius::ZERO,
+        tema::LATERAL,
+    );
+    let paso = paso_de_regla(vista.escala);
+    let mut t = (vista.inicio / paso).ceil() * paso;
+    while t <= vista.tiempo_de(area.width()) + paso {
+        let x = area.min.x + vista.x_de(t);
+        if (area.min.x..=area.max.x).contains(&x) {
+            painter.line_segment(
+                [
+                    egui::pos2(x, rect.min.y + 15.0),
+                    egui::pos2(x, rect.min.y + ALTO_REGLA),
+                ],
+                egui::Stroke::new(1.0_f32, tema::BORDE),
+            );
+            painter.text(
+                egui::pos2(x + 4.0, rect.min.y + 8.0),
+                egui::Align2::LEFT_CENTER,
+                format!("{}:{:02}", (t / 60.0) as i32, (t % 60.0) as i32),
+                egui::FontId::monospace(10.0),
+                tema::DIM,
+            );
+        }
+        t += paso;
+    }
+    painter.text(
+        gutter.min + egui::vec2(10.0, 8.0),
+        egui::Align2::LEFT_CENTER,
+        "TIEMPO",
+        egui::FontId::monospace(9.0),
+        tema::DIM,
+    );
+
+    // Carriles: fondo alterno y nombre con el punto semántico del hablante.
+    for fila in 0..filas {
+        let y = rect.min.y + ALTO_REGLA + fila as f32 * ALTO_CARRIL;
+        if y + ALTO_CARRIL > rect.max.y {
+            break;
+        }
+        painter.rect_filled(
+            egui::Rect::from_min_max(
+                egui::pos2(area.min.x, y),
+                egui::pos2(area.max.x, y + ALTO_CARRIL - 1.0),
+            ),
+            egui::CornerRadius::ZERO,
+            if fila % 2 == 0 {
+                tema::PANEL
+            } else {
+                tema::LATERAL
+            },
+        );
+        painter.line_segment(
+            [
+                egui::pos2(area.min.x, y + ALTO_CARRIL - 1.0),
+                egui::pos2(area.max.x, y + ALTO_CARRIL - 1.0),
+            ],
+            egui::Stroke::new(1.0_f32, tema::BORDE),
+        );
+        let (nombre, color) = if fila == 0 {
+            ("—".to_string(), tema::DIM)
+        } else {
+            let hablante = &hablantes[fila - 1];
+            let nombre = if hablante.nombre.is_empty() {
+                hablante.tecla.clone()
+            } else {
+                hablante.nombre.clone()
+            };
+            (nombre, tema::color_de_hex(&hablante.color))
+        };
+        let centro = ALTO_REGLA + fila as f32 * ALTO_CARRIL + ALTO_CARRIL / 2.0;
+        painter.circle_filled(gutter.min + egui::vec2(12.0, centro), 3.0, color);
+        painter.text(
+            gutter.min + egui::vec2(22.0, centro),
+            egui::Align2::LEFT_CENTER,
+            nombre,
+            egui::FontId::proportional(11.0),
+            tema::SECUNDARIO,
+        );
+    }
+
+    // Retícula tenue que baja de cada marca de la regla a los carriles.
+    let mut t = (vista.inicio / paso).ceil() * paso;
+    while t <= vista.tiempo_de(area.width()) + paso {
+        let x = area.min.x + vista.x_de(t);
+        if (area.min.x..=area.max.x).contains(&x) {
+            painter.line_segment(
+                [
+                    egui::pos2(x, rect.min.y + ALTO_REGLA),
+                    egui::pos2(x, rect.max.y),
+                ],
+                egui::Stroke::new(1.0_f32, tema::BORDE.gamma_multiply(0.45)),
+            );
+        }
+        t += paso;
+    }
+
+    // Clips: el color del hablante manda; el azul marca selección.
+    for caption in state.editor.proyecto().captions.iter() {
+        let fila = rod_core::caption_row_index(caption.hablante_id.as_deref(), hablantes);
+        if fila >= filas {
             continue;
         }
-        let fila = indice % 3;
-        let y = rect.min.y + ALTO_REGLA + fila as f32 * ALTO_CARRIL + 4.0;
+        let x0 = area.min.x + vista.x_de(caption.inicio);
+        let x1 = area.min.x + vista.x_de(caption.fin);
+        if x1 <= area.min.x || x0 >= area.max.x {
+            continue;
+        }
+        let y = rect.min.y + ALTO_REGLA + fila as f32 * ALTO_CARRIL + 7.0;
+        let clip = egui::Rect::from_min_max(
+            egui::pos2(x0.max(area.min.x), y),
+            egui::pos2(x1.min(area.max.x), y + ALTO_CARRIL - 14.0),
+        );
         let color = caption
             .hablante_id
             .as_deref()
             .and_then(|id| state.editor.hablante(id))
             .map(|hablante| tema::color_de_hex(&hablante.color))
-            .unwrap_or(tema::SECUNDARIO);
+            .unwrap_or(tema::DIM);
         let seleccionado = state.editor.seleccion.contains(&caption.id);
         painter.rect_filled(
-            egui::Rect::from_min_max(
-                egui::pos2(x0.max(rect.min.x), y),
-                egui::pos2(x1.min(rect.max.x), y + ALTO_CARRIL - 10.0),
-            ),
-            egui::CornerRadius::same(4),
-            if seleccionado { tema::ACENTO } else { color },
+            clip,
+            egui::CornerRadius::same(3),
+            color.gamma_multiply(0.42),
         );
+        painter.rect_stroke(
+            clip,
+            egui::CornerRadius::same(3),
+            egui::Stroke::new(
+                if seleccionado { 2.0_f32 } else { 1.0_f32 },
+                if seleccionado { tema::ACENTO } else { color },
+            ),
+            egui::StrokeKind::Inside,
+        );
+        if clip.width() > 56.0 {
+            painter.text(
+                clip.min + egui::vec2(5.0, 4.0),
+                egui::Align2::LEFT_TOP,
+                &caption.texto,
+                egui::FontId::proportional(10.0),
+                tema::TEXTO,
+            );
+        }
     }
 
-    let x = rect.min.x + vista.x_de(playhead(state));
-    if (rect.min.x..=rect.max.x).contains(&x) {
+    // Playhead con tirador.
+    let x = area.min.x + vista.x_de(playhead(state));
+    if (area.min.x..=area.max.x).contains(&x) {
         painter.line_segment(
-            [egui::pos2(x, rect.min.y), egui::pos2(x, rect.max.y)],
+            [egui::pos2(x, rect.min.y + 10.0), egui::pos2(x, rect.max.y)],
             egui::Stroke::new(1.5_f32, tema::ACENTO),
         );
+        painter.add(egui::Shape::closed_line(
+            vec![
+                egui::pos2(x - 5.0, rect.min.y + 2.0),
+                egui::pos2(x + 5.0, rect.min.y + 2.0),
+                egui::pos2(x, rect.min.y + 10.0),
+            ],
+            egui::Stroke::new(1.0_f32, tema::ACENTO),
+        ));
     }
 
+    // Los eventos llegan en coordenadas locales del rect del timeline: el
+    // margen de nombres ya está descontado por la geometría del eje.
     if respuesta.drag_started()
         && let Some(pos) = respuesta.interact_pointer_pos()
     {
-        mensajes.push(MensajeEditor::Timeline(Mensaje::Pulsar(punto(rect, pos))));
+        mensajes.push(MensajeEditor::Timeline(Mensaje::Pulsar(punto(
+            pos - rect.min,
+        ))));
     }
     if respuesta.dragged()
         && let Some(pos) = respuesta.interact_pointer_pos()
     {
         mensajes.push(MensajeEditor::Timeline(Mensaje::Arrastrar(punto(
-            rect, pos,
+            pos - rect.min,
         ))));
     }
     if respuesta.drag_stopped()
         && let Some(pos) = respuesta.interact_pointer_pos()
     {
-        mensajes.push(MensajeEditor::Timeline(Mensaje::Soltar(punto(rect, pos))));
+        mensajes.push(MensajeEditor::Timeline(Mensaje::Soltar(punto(
+            pos - rect.min,
+        ))));
     }
-    // Una muesca de rueda equivale a ~40 px en el registro del oráculo.
     let lineas = ui.input(|entrada| entrada.raw_scroll_delta.y) / 40.0;
     if lineas != 0.0 {
         mensajes.push(MensajeEditor::Timeline(Mensaje::Rueda {
             lineas,
-            punto: punto(rect, rect.min + Vec2::new(rect.width() / 2.0, ALTO_REGLA)),
+            punto: timeline::Punto::new(area.width() / 2.0, ALTO_REGLA),
         }));
     }
     let _ = timeline::UMBRAL_CLIC;
