@@ -388,6 +388,16 @@ pub fn sucio(state: &EditorApp) -> bool {
     proyecto.captions != state.limpio.captions || proyecto.hablantes != state.limpio.hablantes
 }
 
+/// Estado de reproducción, para la política de repintado.
+pub fn pausado(state: &EditorApp) -> bool {
+    state.paused
+}
+
+/// mpv todavía está sirviendo un seek.
+pub fn buscando(state: &EditorApp) -> bool {
+    state.player.seeking()
+}
+
 /// Seguro ante crash: cada 15 s, si hay cambios sin guardar, escribe una copia
 /// del proyecto en `recovery.json`. Falla en silencio a propósito: si el disco
 /// está lleno o no hay permisos, el aviso al usuario sigue siendo el guardado

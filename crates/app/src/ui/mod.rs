@@ -6,6 +6,7 @@ pub mod iconos;
 pub mod inicio;
 pub mod kit;
 pub mod paneles;
+pub mod repintado;
 pub mod tema;
 pub mod timeline;
 pub mod tipografia;

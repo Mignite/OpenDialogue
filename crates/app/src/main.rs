@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::mpsc::{Receiver, Sender};
+use std::time::Duration;
 
 use rod_app::comandos::Comando;
 use rod_app::dialogos::{self, RespuestaDialogo};
@@ -270,10 +271,22 @@ impl eframe::App for RustyDialogue {
 
         // mpv entrega frames por eventos: se sondea una vez por frame y se pide
         // repintado mientras haya video abierto.
+        let repintado = match &self.pantalla {
+            Pantalla::Editor(editor) => ui::repintado::politica(
+                !editor_app::pausado(editor),
+                editor_app::sucio(editor),
+                editor_app::buscando(editor),
+            ),
+            Pantalla::Inicio(_) => None,
+        };
         if let Pantalla::Editor(editor) = &mut self.pantalla {
             let tarea = editor_app::update(editor, MensajeEditor::Tick);
             self.ejecutar_tarea(tarea);
-            ctx.request_repaint();
+        }
+        match repintado {
+            Some(Duration::ZERO) => ctx.request_repaint(),
+            Some(delay) => ctx.request_repaint_after(delay),
+            None => {}
         }
 
         let mut comando_menu = None;
