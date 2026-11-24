@@ -50,6 +50,7 @@ pub const ESP_20: f32 = 20.0;
 pub const ESP_24: f32 = 24.0;
 pub const ESP_32: f32 = 32.0;
 pub const ESP_40: f32 = 40.0;
+pub const ESP_48: f32 = 48.0;
 pub const ESP_72: f32 = 72.0;
 
 pub const ALTO_CHIP: f32 = 24.0;

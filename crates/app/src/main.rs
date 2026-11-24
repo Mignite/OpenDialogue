@@ -233,6 +233,23 @@ impl RustyDialogue {
 
 impl eframe::App for RustyDialogue {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Al minimizar, wgpu recibe una superficie de 0x0 y el renderizador
+        // puede fallar. No pintamos ni pedimos frames mientras no haya área.
+        let minimizado = ctx.input(|entrada| {
+            entrada
+                .viewport()
+                .inner_rect
+                .is_some_and(|rect| rect.width() <= 1.0 || rect.height() <= 1.0)
+        });
+        if minimizado {
+            // La superficie wgpu desaparece al minimizar: soltar la pipeline
+            // cacheada evita usar un formato/dispositivo inválidos al volver.
+            if let Ok(mut gpu) = self.gpu.lock() {
+                gpu.take();
+            }
+            return;
+        }
+
         // Respuestas de los diálogos que se abrieron en otro hilo.
         let pendientes: Vec<_> = self.rx_dialogos.try_iter().collect();
         for respuesta in pendientes {

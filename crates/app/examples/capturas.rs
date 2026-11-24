@@ -176,6 +176,23 @@ fn main() {
         rod_app::textos::Idioma::En,
     );
 
+    if fase == "diagnostico" {
+        capturar(
+            "diagnostico-inicio-1914",
+            1914.0,
+            1015.0,
+            inicio::nuevo(
+                vec![
+                    reciente("presa.cdp", 19, 3),
+                    reciente("RobloxTerror.cdp", 543, 7),
+                    reciente("proyecto.cdp", 543, 7),
+                ],
+                None,
+            ),
+            rod_app::textos::Idioma::En,
+        );
+    }
+
     if fase == "finales" {
         for ancho in [1100.0, 1440.0, 2560.0] {
             let alto = if ancho == 1100.0 { 700.0 } else { 900.0 };

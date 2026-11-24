@@ -13,6 +13,11 @@
 - kittest no ejecuta el `PaintCallback` de mpv: las capturas finales del editor
   son headless con el monitor vacío. El «antes» real con video quedó en
   `docs/checklists/rediseno/antes-editor-1440.png`.
+- Ajustes de layout tras captura del usuario: margen lateral de 48 px en el
+  contenido, rejilla con `horizontal_wrapped` (el `Grid` apilaba las tarjetas
+  en la app real), más aire entre bloques y Ajustes al pie sobre la versión.
+- Minimizar: se suelta la pipeline wgpu cacheada y no se pinta ni se piden
+  frames mientras la superficie tiene tamaño 0.
 - Revisión final de rama: se corrigieron foco del editor inline, atajos que se
   ejecutaban con modales abiertos, color de identidad en los clips, pista por
   hablante, seek al seleccionar, zoom con `Ctrl+rueda`, waveform al cambiar de

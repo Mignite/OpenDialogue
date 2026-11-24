@@ -23,8 +23,11 @@ pub fn mostrar(
 
     let ancho_riel = 220.0;
     let riel = egui::Rect::from_min_size(rect.min, Vec2::new(ancho_riel, rect.height()));
-    let contenido =
-        egui::Rect::from_min_max(egui::pos2(rect.min.x + ancho_riel, rect.min.y), rect.max);
+    // Margen lateral real: sin él el título y las tarjetas se pegan al riel.
+    let contenido = egui::Rect::from_min_max(
+        egui::pos2(rect.min.x + ancho_riel + tema::ESP_48, rect.min.y),
+        egui::pos2(rect.max.x - tema::ESP_48, rect.max.y),
+    );
 
     let abrir_ajustes = riel_de_navegacion(ui, riel, textos);
 
@@ -38,7 +41,7 @@ pub fn mostrar(
                 .font(tema::fuente_segura(Estilo::Titulo))
                 .color(tema::TEXTO),
         );
-        ui.add_space(tema::ESP_8);
+        ui.add_space(tema::ESP_12);
         ui.label(
             RichText::new(textos.inicio_subtitulo)
                 .font(tema::fuente_segura(Estilo::Cuerpo))
@@ -61,7 +64,7 @@ pub fn mostrar(
             );
         });
 
-        ui.add_space(tema::ESP_8);
+        ui.add_space(tema::ESP_16);
         zona_de_arrastre(ui, textos);
 
         if let Some(aviso) = &estado.aviso {
@@ -94,7 +97,7 @@ pub fn mostrar(
             );
         }
 
-        ui.add_space(tema::ESP_40);
+        ui.add_space(tema::ESP_48);
         ui.horizontal(|ui| {
             ui.label(
                 RichText::new(textos.recientes)
@@ -133,30 +136,29 @@ pub fn mostrar(
                 OrdenRecientes::Lineas => recientes.sort_by_key(|r| std::cmp::Reverse(r.lineas)),
             }
             let visibles = cantidad_visible(recientes.len(), estado.expandido);
-            let ancho_celda = 260.0;
-            let espacio = tema::ESP_20;
-            let columnas = ((contenido.width() + espacio) / (ancho_celda + espacio))
-                .floor()
-                .max(1.0) as usize;
-            let ancho_tarjeta =
-                (contenido.width() - espacio * (columnas - 1) as f32) / columnas as f32;
-            egui::Grid::new("tarjetas-recientes")
-                .num_columns(columnas)
-                .spacing(Vec2::splat(espacio))
-                .show(ui, |ui| {
-                    for (indice, reciente) in recientes.into_iter().take(visibles).enumerate() {
-                        ui.set_width(ancho_tarjeta);
-                        tarjeta_reciente(
-                            ui,
-                            reciente,
-                            textos,
-                            ancho_tarjeta,
-                            Some(indice) == destacado,
-                            &mut intencion,
-                        );
-                        ui.end_row();
-                    }
-                });
+            let ancho_tarjeta = 260.0;
+            // horizontal_wrapped decide las columnas con el ancho realmente
+            // disponible; el Grid anterior se apilaba en la app real.
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = Vec2::splat(tema::ESP_24);
+                for (indice, reciente) in recientes.into_iter().take(visibles).enumerate() {
+                    ui.allocate_ui_with_layout(
+                        Vec2::new(ancho_tarjeta, 210.0),
+                        egui::Layout::top_down(egui::Align::LEFT),
+                        |ui| {
+                            ui.set_width(ancho_tarjeta);
+                            tarjeta_reciente(
+                                ui,
+                                reciente,
+                                textos,
+                                ancho_tarjeta,
+                                Some(indice) == destacado,
+                                &mut intencion,
+                            );
+                        },
+                    );
+                }
+            });
             if estado.recientes.len() > 3 && ui.button(textos.ver_todos).clicked() {
                 intencion = Some(MensajeInicio::VerTodos);
             }
@@ -182,7 +184,7 @@ fn riel_de_navegacion(ui: &mut egui::Ui, riel: egui::Rect, textos: &Textos) -> b
         egui::UiBuilder::new().max_rect(riel.shrink(tema::ESP_12)),
         |ui| {
             ui.vertical(|ui| {
-                ui.add_space(tema::ESP_24);
+                ui.add_space(tema::ESP_32);
                 for (etiqueta, icono, activo) in [
                     (textos.inicio, Icono::Inicio2, true),
                     (textos.recientes, Icono::Reloj, false),
@@ -204,27 +206,28 @@ fn riel_de_navegacion(ui: &mut egui::Ui, riel: egui::Rect, textos: &Textos) -> b
                         ui.painter().rect_filled(barra, 0.0, tema::ACENTO);
                     }
                 }
-                kit::icono(ui, Icono::Ajustes);
-                if ui
-                    .add(
-                        egui::Button::new(
-                            RichText::new(textos.ajustes)
-                                .font(tema::fuente(Estilo::Base))
-                                .color(tema::TEXTO_2),
-                        )
-                        .frame(false)
-                        .min_size(Vec2::new(ui.available_width(), tema::ALTO_NAV)),
-                    )
-                    .clicked()
-                {
-                    abrir_ajustes = true;
-                }
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+                    // En bottom_up el primer widget va abajo del todo: la
+                    // versión queda al pie y Ajustes justo encima.
                     ui.label(
                         RichText::new("v0.9")
                             .font(tema::fuente(Estilo::Mono))
                             .color(tema::TEXTO_3),
                     );
+                    if ui
+                        .add(
+                            egui::Button::new(
+                                RichText::new(textos.ajustes)
+                                    .font(tema::fuente(Estilo::Base))
+                                    .color(tema::TEXTO_2),
+                            )
+                            .frame(false)
+                            .min_size(Vec2::new(ui.available_width(), tema::ALTO_NAV)),
+                        )
+                        .clicked()
+                    {
+                        abrir_ajustes = true;
+                    }
                 });
             });
         },
