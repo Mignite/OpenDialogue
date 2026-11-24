@@ -308,10 +308,18 @@ impl eframe::App for RustyDialogue {
                     let en_inicio = matches!(self.pantalla, Pantalla::Inicio(_));
                     comando_menu = rod_app::menu::mostrar(ui, en_inicio);
 
+                    // Reservar primero el sitio de los controles: si la franja
+                    // de arrastre toma todo el ancho, los botones se salen del
+                    // rect de la cabecera y desaparecen por el borde.
+                    let ancho_botones = 3.0 * 26.0 + 2.0 * 4.0;
+                    let ancho_estado = if en_inicio { 0.0 } else { 122.0 };
+                    let reservado = ancho_botones + ancho_estado + 8.0;
+                    let ancho_arrastre = (ui.available_width() - reservado).max(4.0);
+
                     // Franja arrastrable: sin marco nativo, el usuario mueve la
                     // ventana por aquí y hace doble clic para maximizar.
                     let (franja, respuesta) = ui.allocate_exact_size(
-                        egui::vec2(ui.available_width().max(1.0), 22.0),
+                        egui::vec2(ancho_arrastre, 22.0),
                         egui::Sense::click_and_drag(),
                     );
                     if respuesta.drag_started() {
@@ -339,20 +347,27 @@ impl eframe::App for RustyDialogue {
                             },
                         );
                     }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.spacing_mut().item_spacing.x = 2.0;
-                        if ui.button("✕").clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                        if ui.button("□").clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(
-                                !ctx.input(|entrada| entrada.viewport().maximized.unwrap_or(false)),
-                            ));
-                        }
-                        if ui.button("—").clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-                        }
-                    });
+                    ui.spacing_mut().item_spacing.x = 4.0;
+                    if ui
+                        .add(egui::Button::new("—").min_size(egui::vec2(26.0, 22.0)))
+                        .clicked()
+                    {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                    }
+                    if ui
+                        .add(egui::Button::new("□").min_size(egui::vec2(26.0, 22.0)))
+                        .clicked()
+                    {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(
+                            !ctx.input(|entrada| entrada.viewport().maximized.unwrap_or(false)),
+                        ));
+                    }
+                    if ui
+                        .add(egui::Button::new("✕").min_size(egui::vec2(26.0, 22.0)))
+                        .clicked()
+                    {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
                 });
             });
         if let Some(comando) = comando_menu {
