@@ -7,5 +7,6 @@ pub mod inicio;
 pub mod paneles;
 pub mod tema;
 pub mod timeline;
+pub mod tipografia;
 pub mod transporte;
 pub mod video;
