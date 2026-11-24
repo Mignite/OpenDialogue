@@ -420,7 +420,7 @@ fn main() -> eframe::Result<()> {
         "RustyDialogue",
         opciones,
         Box::new(|cc| {
-            cc.egui_ctx.set_style(ui::tema::estilo());
+            ui::tema::aplicar(&cc.egui_ctx);
             let formato = cc
                 .wgpu_render_state
                 .as_ref()

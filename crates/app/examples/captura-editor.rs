@@ -35,7 +35,7 @@ fn main() -> eframe::Result<()> {
         "OpenDialogue (capturas)",
         opciones,
         Box::new(|cc| {
-            cc.egui_ctx.set_style(rod_app::ui::tema::estilo());
+            rod_app::ui::tema::aplicar(&cc.egui_ctx);
             let formato = cc
                 .wgpu_render_state
                 .as_ref()

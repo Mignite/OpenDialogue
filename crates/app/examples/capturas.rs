@@ -34,7 +34,7 @@ fn capturar(nombre: &str, ancho: f32, alto: f32, estado: EstadoInicio) {
             estado,
         );
     // La app aplica el tema en `main.rs`; el arnés arranca con el estilo de egui.
-    harness.ctx.set_style(rod_app::ui::tema::estilo());
+    rod_app::ui::tema::aplicar(&harness.ctx);
     harness.run();
 
     let imagen = harness.render().expect("renderiza con wgpu");

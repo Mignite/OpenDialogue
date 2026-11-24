@@ -1,4 +1,4 @@
-//! La pantalla de arranque. Solo dibuja y devuelve la intención del usuario;
+﻿//! La pantalla de arranque. Solo dibuja y devuelve la intención del usuario;
 //! `rod_app::inicio::update` sigue siendo quien decide qué hacer con ella.
 
 use egui::Ui;
@@ -227,7 +227,6 @@ mod tests {
             },
             estado,
         );
-        harness.run();
         assert!(harness.query_by_label("Abrir video").is_some());
         assert!(harness.query_by_label_contains("1.cdp").is_some());
         assert!(harness.query_by_label_contains("4.cdp").is_none());

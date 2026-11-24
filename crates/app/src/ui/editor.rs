@@ -1,4 +1,4 @@
-//! Vista del editor en egui. Compone el preview, la barra de transporte, los
+﻿//! Vista del editor en egui. Compone el preview, la barra de transporte, los
 //! paneles laterales y la barra de estado. Devuelve **todos** los mensajes del
 //! frame: sobrescribirlos habría dejado los botones inertes.
 
@@ -200,6 +200,7 @@ mod tests {
             },
             editor,
         );
+        harness.run();
         harness.get_by_label("Aplicar texto").click();
         harness.run();
         let mensajes = mensajes.borrow().clone();
