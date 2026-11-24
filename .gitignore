@@ -14,3 +14,6 @@
 
 # mensajes de commit temporales
 commit-msg.txt
+
+# andamiaje de las skills de superpowers (ledger y briefs por plan)
+/.superpowers/
