@@ -484,3 +484,17 @@ cara.
   archivos modificados que quedaron en `main`.
 - **Dónde queda:** `docs/superpowers/specs/2026-11-24-egui-migracion-design.md`.
 
+### Cierre del slice 16
+
+- **Problema:** la primera captura falló porque `FontFamily::Name("Segoe UI
+  Variable")` no estaba registrado en epaint y el app entraba en pánico al
+  dibujar el primer texto.
+- **Alternativa descartada:** cargar la fuente del sistema y registrar sus
+  bytes; añade un asset y su licencia para un cambio que no afecta a la
+  funcionalidad.
+- **Decisión:** usar `FontFamily::Proportional` y `Monospace`, que egui ya trae.
+  Coste: se pierde la tipografía corporativa específica en Windows; la app
+  arranca. Queda como mejora pendiente si se registra la fuente.
+- **Evidencia:** `docs/checklists/slice-16-inicio-egui.png`, captura real de la
+  ventana de arranque a 1600×900. El editor con video y Linux siguen pendientes.
+

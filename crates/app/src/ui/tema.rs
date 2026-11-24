@@ -17,28 +17,15 @@ pub const RADIO_CONTROL: f32 = 4.0;
 /// Superficies: paneles, tarjetas y avisos.
 pub const RADIO_SUPERFICIE: f32 = 6.0;
 
-/// En Windows se pide la familia instalada; en otros sistemas egui usa la suya.
-/// No se distribuyen fuentes nuevas.
+/// Se usan las familias que egui ya trae registradas. Pedir `FontFamily::Name`
+/// sin haber cargado esa fuente hace que epaint entre en pánico al dibujar el
+/// primer texto, así que no se nombra ninguna familia externa.
 fn familia() -> egui::FontFamily {
-    #[cfg(windows)]
-    {
-        egui::FontFamily::Name("Segoe UI Variable".into())
-    }
-    #[cfg(not(windows))]
-    {
-        egui::FontFamily::Proportional
-    }
+    egui::FontFamily::Proportional
 }
 
 fn mono() -> egui::FontFamily {
-    #[cfg(windows)]
-    {
-        egui::FontFamily::Name("Cascadia Mono".into())
-    }
-    #[cfg(not(windows))]
-    {
-        egui::FontFamily::Monospace
-    }
+    egui::FontFamily::Monospace
 }
 
 /// Color semántico de un hablante. Un valor ausente o mal escrito cae al
