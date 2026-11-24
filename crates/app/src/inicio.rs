@@ -63,29 +63,6 @@ pub fn cantidad_visible(total: usize, expandido: bool) -> usize {
     if expandido { total } else { total.min(3) }
 }
 
-pub fn resumen_reciente(reciente: &Reciente) -> String {
-    format!(
-        "{} {} · {} {} · {}",
-        reciente.lineas,
-        if reciente.lineas == 1 {
-            "línea"
-        } else {
-            "líneas"
-        },
-        reciente.hablantes,
-        if reciente.hablantes == 1 {
-            "hablante"
-        } else {
-            "hablantes"
-        },
-        reciente.fecha
-    )
-}
-
-pub fn texto_vacio_recientes() -> &'static str {
-    "Todavía no hay proyectos. El primero aparece aquí al guardar."
-}
-
 /// Extensiones que el menú acepta. Es un filtro de interfaz: mpv decide si el
 /// archivo abre de verdad.
 fn es_video(ruta: &Path) -> bool {
@@ -157,7 +134,9 @@ mod tests {
                 ruta: PathBuf::from("a.cdp"),
                 lineas: 1,
                 hablantes: 1,
-                fecha: "hoy".into(),
+                fecha: Default::default(),
+                duracion: 0.0,
+                tira: Vec::new(),
             })
             .collect::<Vec<_>>();
         assert!(!super::mostrar_ver_todos(&tres));
@@ -166,7 +145,9 @@ mod tests {
                 ruta: PathBuf::from("a.cdp"),
                 lineas: 1,
                 hablantes: 1,
-                fecha: "hoy".into(),
+                fecha: Default::default(),
+                duracion: 0.0,
+                tira: Vec::new(),
             })
             .collect::<Vec<_>>();
         assert!(super::mostrar_ver_todos(&cuatro));
@@ -177,32 +158,6 @@ mod tests {
         assert_eq!(super::cantidad_visible(0, false), 0);
         assert_eq!(super::cantidad_visible(7, false), 3);
         assert_eq!(super::cantidad_visible(7, true), 7);
-    }
-
-    #[test]
-    fn resumen_reciente_usa_singular_y_plural() {
-        let reciente = |lineas, hablantes, fecha| crate::recientes::Reciente {
-            ruta: PathBuf::from("a.cdp"),
-            lineas,
-            hablantes,
-            fecha,
-        };
-        assert_eq!(
-            super::resumen_reciente(&reciente(52, 2, "hace 2 h".into())),
-            "52 líneas · 2 hablantes · hace 2 h"
-        );
-        assert_eq!(
-            super::resumen_reciente(&reciente(1, 1, "hoy".into())),
-            "1 línea · 1 hablante · hoy"
-        );
-    }
-
-    #[test]
-    fn texto_vacio_recientes_es_el_literal_de_la_spec() {
-        assert_eq!(
-            super::texto_vacio_recientes(),
-            "Todavía no hay proyectos. El primero aparece aquí al guardar."
-        );
     }
 
     #[test]
@@ -227,7 +182,9 @@ mod tests {
             ruta: PathBuf::from("/p/mi.cdp"),
             lineas: 1,
             hablantes: 1,
-            fecha: "hoy".into(),
+            fecha: Default::default(),
+            duracion: 0.0,
+            tira: Vec::new(),
         };
         assert!(super::miniatura_en(&dir, &reciente).is_none());
         let png = crate::thumbnail::ruta_cache_en(&dir, &reciente.ruta);

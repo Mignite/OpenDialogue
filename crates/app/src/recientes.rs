@@ -6,6 +6,8 @@
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
+pub use crate::textos::FechaRelativa;
+
 /// Cuántas rutas caben en el menú. Las más viejas se descartan al registrar.
 const TOPE: usize = 10;
 const MS_POR_DIA: f64 = 86_400_000.0;
@@ -17,7 +19,11 @@ pub struct Reciente {
     pub ruta: PathBuf,
     pub lineas: usize,
     pub hablantes: usize,
-    pub fecha: String,
+    pub fecha: FechaRelativa,
+    /// Fin del último caption, en segundos.
+    pub duracion: f64,
+    /// Color de identidad y segundos acumulados por cada hablante con líneas.
+    pub tira: Vec<(String, f32)>,
 }
 
 /// `%APPDATA%\RustyOpenDialogue\recientes.json`, con el mismo respaldo al
@@ -65,21 +71,9 @@ pub fn registrar(ruta_indice: &Path, proyecto: &Path) -> std::io::Result<()> {
 
 /// Días completos entre dos instantes epoch-ms. Un reloj adelantado se toma
 /// como «hoy» en vez de dar una fecha negativa.
-pub fn fecha_relativa(mtime_ms: f64, ahora_ms: f64) -> String {
+pub fn fecha_relativa(mtime_ms: f64, ahora_ms: f64) -> FechaRelativa {
     let dias = ((ahora_ms - mtime_ms) / MS_POR_DIA).floor().max(0.0) as u64;
-    match dias {
-        0 => "hoy".to_owned(),
-        1 => "ayer".to_owned(),
-        n if n < 7 => format!("hace {n} días"),
-        n => {
-            let semanas = n / 7;
-            if semanas == 1 {
-                "hace 1 semana".to_owned()
-            } else {
-                format!("hace {semanas} semanas")
-            }
-        }
-    }
+    FechaRelativa { dias }
 }
 
 /// Lee un `.cdp` y deriva lo que el menú muestra. Cualquier fallo (archivo
@@ -95,11 +89,36 @@ pub fn metadata(ruta_cdp: &Path, ahora_ms: f64) -> Option<Reciente> {
         .ok()?
         .as_secs_f64()
         * 1000.0;
+    let duracion = proyecto
+        .captions
+        .iter()
+        .map(|caption| caption.fin)
+        .fold(0.0_f64, f64::max);
+
+    let mut tira: Vec<(String, f32)> = Vec::new();
+    for caption in &proyecto.captions {
+        let Some(id) = caption.hablante_id.as_deref() else {
+            continue;
+        };
+        let Some(indice) = proyecto.hablantes.iter().position(|h| h.id == id) else {
+            continue;
+        };
+        let color = rod_core::color_identidad(&proyecto.hablantes[indice], indice).to_owned();
+        let segundos = (caption.fin - caption.inicio).max(0.0) as f32;
+        if let Some(entrada) = tira.iter_mut().find(|(c, _)| *c == color) {
+            entrada.1 += segundos;
+        } else {
+            tira.push((color, segundos));
+        }
+    }
+
     Some(Reciente {
         ruta: ruta_cdp.to_path_buf(),
         lineas: proyecto.captions.len(),
         hablantes: proyecto.hablantes.len(),
         fecha: fecha_relativa(mtime_ms, ahora_ms),
+        duracion,
+        tira,
     })
 }
 
@@ -243,11 +262,38 @@ mod tests {
     }
 
     #[test]
-    fn fecha_relativa_es_hoy_y_hace_tres_dias() {
-        assert_eq!(super::fecha_relativa(1_000.0, 1_000.0), "hoy");
+    fn fecha_relativa_no_lleva_texto() {
+        use crate::textos::{EN, ES, FechaRelativa};
+
+        assert_eq!(
+            super::fecha_relativa(1_000.0, 1_000.0),
+            FechaRelativa { dias: 0 }
+        );
         assert_eq!(
             super::fecha_relativa(1_000.0, 1_000.0 + 3.0 * 86_400_000.0),
-            "hace 3 días"
+            FechaRelativa { dias: 3 }
         );
+        assert_eq!(EN.fecha(&FechaRelativa { dias: 1 }), "yesterday");
+        assert_eq!(ES.fecha(&FechaRelativa { dias: 3 }), "hace 3 días");
+    }
+
+    #[test]
+    fn la_duracion_es_el_fin_del_ultimo_caption() {
+        let dir = temp_dir_de_test("duracion");
+        let cdp = dir.join("mi.cdp");
+        std::fs::write(&cdp, texto_fixture()).unwrap();
+        let r = super::metadata(&cdp, 0.0).unwrap();
+        assert!((r.duracion - 4.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn la_tira_suma_los_segundos_por_hablante_y_omite_a_quien_no_habla() {
+        let dir = temp_dir_de_test("tira");
+        let cdp = dir.join("mi.cdp");
+        std::fs::write(&cdp, texto_fixture()).unwrap();
+        let r = super::metadata(&cdp, 0.0).unwrap();
+        assert_eq!(r.tira.len(), 2);
+        assert!((r.tira[0].1 - 1.0).abs() < 1e-6);
+        assert_ne!(r.tira[0].0, r.tira[1].0, "dos hablantes con el mismo color");
     }
 }

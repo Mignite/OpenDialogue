@@ -1,4 +1,4 @@
-//! Capturas deterministas de la UI con egui_kittest, sin abrir ventana.
+﻿//! Capturas deterministas de la UI con egui_kittest, sin abrir ventana.
 //!
 //! Uso: `cargo run -p rod-app --example capturas -- antes`
 //! Las escribe en `docs/checklists/rediseno/`.
@@ -14,7 +14,9 @@ fn reciente(nombre: &str, lineas: usize, hablantes: usize) -> Reciente {
         ruta: PathBuf::from(format!("C:/proyectos/{nombre}")),
         lineas,
         hablantes,
-        fecha: "24 nov".into(),
+        fecha: Default::default(),
+        duracion: 0.0,
+        tira: Vec::new(),
     }
 }
 

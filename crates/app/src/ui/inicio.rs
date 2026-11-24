@@ -1,14 +1,14 @@
-﻿//! La pantalla de arranque. Solo dibuja y devuelve la intención del usuario;
+//! La pantalla de arranque. Solo dibuja y devuelve la intención del usuario;
 //! `rod_app::inicio::update` sigue siendo quien decide qué hacer con ella.
 
 use egui::Ui;
 
-use crate::inicio::{
-    EstadoInicio, MensajeInicio, cantidad_visible, resumen_reciente, texto_vacio_recientes,
-};
+use crate::inicio::{EstadoInicio, MensajeInicio, cantidad_visible};
 use crate::ui::tema;
 
 pub fn mostrar(ui: &mut Ui, estado: &mut EstadoInicio) -> Option<MensajeInicio> {
+    // Hasta la tarea 9, la vista toma el idioma por defecto.
+    let textos = crate::textos::Idioma::default().textos();
     let mut intencion = None;
     let altura = ui.available_height();
 
@@ -141,7 +141,7 @@ pub fn mostrar(ui: &mut Ui, estado: &mut EstadoInicio) -> Option<MensajeInicio> 
                 ui.add_space(10.0);
                 if estado.recientes.is_empty() {
                     ui.label(
-                        egui::RichText::new(texto_vacio_recientes())
+                        egui::RichText::new(textos.texto_vacio_recientes)
                             .size(12.0)
                             .color(tema::DIM),
                     );
@@ -176,10 +176,15 @@ pub fn mostrar(ui: &mut Ui, estado: &mut EstadoInicio) -> Option<MensajeInicio> 
                                     );
                                     ui.add_space(4.0);
                                     ui.label(
-                                        egui::RichText::new(resumen_reciente(reciente))
-                                            .font(tema::mono_public())
-                                            .size(10.0)
-                                            .color(tema::DIM),
+                                        egui::RichText::new(format!(
+                                            "{} · {} · {}",
+                                            textos.lineas(reciente.lineas),
+                                            textos.hablantes(reciente.hablantes),
+                                            textos.fecha(&reciente.fecha)
+                                        ))
+                                        .font(tema::mono_public())
+                                        .size(10.0)
+                                        .color(tema::DIM),
                                     );
                                 });
                             });
@@ -213,7 +218,9 @@ mod tests {
                 ruta: PathBuf::from(format!("C:/proyectos/{n}.cdp")),
                 lineas: n,
                 hablantes: 1,
-                fecha: "24 nov".into(),
+                fecha: Default::default(),
+                duracion: 0.0,
+                tira: Vec::new(),
             })
             .collect()
     }
