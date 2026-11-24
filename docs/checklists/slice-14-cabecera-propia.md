@@ -25,3 +25,11 @@ Semáforo (2026-11-23):
   y los botones de ventana se apoyan en las acciones documentadas de iced y en
   la compilación, pero no se probaron con clics inyectados (limitación de
   `PrintWindow` explicada en `BITACORA.md`).
+
+## Reversión
+
+El arrastre no funcionó en la práctica. Se restauró la barra nativa
+(`.decorations(true)`) y se eliminaron los mensajes y botones de ventana.
+Se conservan el nombre `RustyDialogue`, el padding del estado y la alineación
+de las tarjetas. Evidencia final: `slice-14-inicio-barra-nativa.png`.
+La investigación para retomar CSD con `MouseArea` está en `BITACORA.md`.

@@ -419,3 +419,31 @@ cara.
   `mouse_event` afecta al proceso en primer plano y aquí solo se verifica con
   `PrintWindow`, limitación ya documentada más arriba.
 
+### Reversión del mismo día
+
+- **Resultado:** el arrastre no funcionó. El mensaje `ArrastrarVentana` sí llegaba
+  al `update`, pero `window::drag` no movía la ventana. El autor pidió volver a
+  la barra nativa; se restauró `.decorations(true)` y se quitaron los mensajes
+  y botones de ventana. Se conservan el nombre `RustyDialogue`, el padding del
+  estado y la alineación de las tarjetas.
+- **Causa probable:** se usó un `button` como zona de arrastre y el id se
+  resolvía de forma asíncrona con `window::latest()`. `drag_window()` de winit
+  publica `WM_NCLBUTTONDOWN` con el cursor actual y exige que el botón izquierdo
+  esté recién presionado: el `button` captura el ratón y la resolución
+  asíncrona rompe esa condición. La instrumentación con `mouse_event` tampoco
+  fue fiable mientras el autor usaba el equipo, así que la causa quedó como
+  hipótesis, no como hecho confirmado.
+- **Guía encontrada (para retomarlo con control del ratón):**
+  - iced issue #759, comentario de `tsuza`: «Use a `MouseArea` and then use
+    `window::drag` when you're inside it» — https://github.com/iced-rs/iced/issues/759
+  - iced 0.14.2 ya trae `iced::widget::MouseArea` (en `iced_widget`), con
+    `on_press`; es el patrón que falta probar frente al `button`.
+  - `iced-window-chrome` tiene el ejemplo `custom_titlebar` y documenta el
+    coste real: al quitar el marco se pierden redimensionado y snap de
+    Windows, y hay que dibujar handles invisibles — https://lib.rs/crates/iced-window-chrome
+  - `toymil` en el mismo issue dice que CSD funciona bien en `master` y avisa
+    de un bug con dos `MouseArea` superpuestos (resize debajo de drag).
+- **Decisión:** no añadir `iced-window-chrome` ni volver a intentarlo sin poder
+  manipular el ratón de forma controlada. Si se retoma: `MouseArea` + id de
+  ventana guardado en el estado en el `boot`, y handles de resize.
+
