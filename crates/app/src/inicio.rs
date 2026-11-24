@@ -2,6 +2,7 @@
 //!
 //! No conoce mpv ni el editor: solo decide qué quiere hacer el usuario.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::recientes::Reciente;
@@ -29,6 +30,8 @@ pub struct EstadoInicio {
     pub orden: OrdenRecientes,
     /// Índice de la tarjeta con el foco del teclado.
     pub destacado: Option<usize>,
+    /// Miniaturas ya subidas a la GPU, una por proyecto.
+    pub miniaturas: HashMap<PathBuf, egui::TextureHandle>,
 }
 
 impl EstadoInicio {
@@ -40,6 +43,7 @@ impl EstadoInicio {
             mensaje: None,
             orden: OrdenRecientes::default(),
             destacado: None,
+            miniaturas: HashMap::new(),
         }
     }
 }

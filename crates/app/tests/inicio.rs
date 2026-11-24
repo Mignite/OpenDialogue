@@ -82,3 +82,34 @@ fn el_riel_abre_ajustes() {
     h.run();
     assert!(h.state().2);
 }
+
+#[test]
+fn clic_en_tarjeta_emite_abrir_reciente() {
+    type EstadoClic = (
+        EstadoInicio,
+        Preferencias,
+        Option<rod_app::inicio::MensajeInicio>,
+    );
+    let estado: EstadoClic = (
+        EstadoInicio::nuevo(vec![reciente("RobloxTerror.cdp", 543, 7)], None),
+        Preferencias::default(),
+        None,
+    );
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(1440.0, 900.0))
+        .build_ui_state(
+            |ui, (estado, prefs, mensaje): &mut EstadoClic| {
+                let (intencion, _) = rod_app::ui::inicio::mostrar(ui, estado, &EN, prefs);
+                if intencion.is_some() {
+                    *mensaje = intencion;
+                }
+            },
+            estado,
+        );
+    h.get_by_label("RobloxTerror.cdp").click();
+    h.run();
+    assert!(h.state().2.as_ref().is_some_and(|mensaje| matches!(
+        mensaje,
+        rod_app::inicio::MensajeInicio::AbrirReciente(_)
+    )));
+}

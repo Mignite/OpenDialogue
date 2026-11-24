@@ -178,6 +178,26 @@ fn main() {
     );
 
     if fase == "diagnostico" {
+        // Miniatura sintética para comprobar que se pinta opaca.
+        let appdata = std::env::temp_dir().join("rod-diagnostico-appdata");
+        std::fs::create_dir_all(&appdata).unwrap();
+        let proyecto = PathBuf::from("C:/proyectos/RobloxTerror.cdp");
+        let mut frame = vec![0u8; 4 * 4 * 4];
+        for pixel in frame.as_chunks_mut::<4>().0.iter_mut() {
+            pixel[0] = 40;
+            pixel[1] = 110;
+            pixel[2] = 170;
+            pixel[3] = 0;
+        }
+        rod_app::thumbnail::guardar_en(
+            &rod_app::thumbnail::carpeta_cache(),
+            &proyecto,
+            &frame,
+            4,
+            4,
+        )
+        .unwrap();
+
         let estado = (
             inicio::nuevo(vec![reciente("RobloxTerror.cdp", 543, 7)], None),
             false,

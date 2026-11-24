@@ -1,7 +1,7 @@
-﻿//! Componentes compartidos. Ningún widget suelto en las vistas: tamaños,
+//! Componentes compartidos. Ningún widget suelto en las vistas: tamaños,
 //! colores y tipografía vienen siempre de `tema`.
 
-use egui::{Color32, CornerRadius, FontId, Response, RichText, Stroke, Ui, Vec2};
+use egui::{Color32, CornerRadius, FontId, Response, RichText, Sense, Stroke, Ui, Vec2};
 
 use super::tema::{self, Estilo};
 use crate::editor_app::Panel;
@@ -394,6 +394,53 @@ pub fn recuadro_punteado(ui: &mut Ui, alto: f32, texto: &str) {
 pub fn tarjeta<R>(ui: &mut Ui, contenido: impl FnOnce(&mut Ui) -> R) -> (Response, R) {
     let marco = tema::panel(tema::PANEL).show(ui, contenido);
     (marco.response, marco.inner)
+}
+
+/// Logotipo OpenDialogue: dos burbujas superpuestas, calcado del SVG que
+/// aportó el usuario. Se dibuja con shapes para no depender de un decoder SVG.
+pub fn logo(ui: &mut Ui, tamaño: f32) {
+    let (rect, _) = ui.allocate_exact_size(Vec2::splat(tamaño), Sense::hover());
+    let pintor = ui.painter();
+    let escala = tamaño / 512.0;
+    let punto = |x: f32, y: f32| egui::pos2(rect.min.x + x * escala, rect.min.y + y * escala);
+    let fondo = tema::color("#232323");
+    let ambar = tema::color("#FFB020");
+    let violeta = tema::color("#8F6BFF");
+
+    pintor.circle_filled(rect.center(), tamaño * 0.5, fondo);
+    let radio_ambar = egui::CornerRadius::same((64.0 * escala).round() as u8);
+    pintor.rect_filled(
+        egui::Rect::from_min_max(punto(85.0, 96.0), punto(330.0, 277.0)),
+        radio_ambar,
+        ambar,
+    );
+    pintor.add(egui::Shape::convex_polygon(
+        vec![
+            punto(128.0, 256.0),
+            punto(107.0, 336.0),
+            punto(197.0, 267.0),
+        ],
+        ambar,
+        egui::Stroke::NONE,
+    ));
+    let radio_violeta = egui::CornerRadius::same((64.0 * escala).round() as u8);
+    let borde = egui::Stroke::new(16.0 * escala, fondo);
+    pintor.rect(
+        egui::Rect::from_min_max(punto(181.0, 192.0), punto(426.0, 373.0)),
+        radio_violeta,
+        violeta,
+        borde,
+        egui::StrokeKind::Inside,
+    );
+    pintor.add(egui::Shape::convex_polygon(
+        vec![
+            punto(384.0, 352.0),
+            punto(405.0, 432.0),
+            punto(315.0, 363.0),
+        ],
+        violeta,
+        borde,
+    ));
 }
 
 /// Separador de un píxel.

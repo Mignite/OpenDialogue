@@ -13,6 +13,11 @@
 - kittest no ejecuta el `PaintCallback` de mpv: las capturas finales del editor
   son headless con el monitor vacío. El «antes» real con video quedó en
   `docs/checklists/rediseno/antes-editor-1440.png`.
+- Inicio: logo del SVG del usuario dibujado con shapes de egui (sin decoder
+  SVG). Miniaturas: mpv rellena RGB con alfa basura; se fuerza alfa 255 al
+  guardar y al cargar caches viejas antes de subir la textura. Las tarjetas
+  llevan un botón real con el nombre: `Frame::show` solo percibía hover y el
+  clic no abría el proyecto.
 - Minimizar quedó confirmado por el usuario: ya no crashea.
 - Menús: reducidos a cuatro (Archivo, Edición, Exportar, Ayuda) y a lo
   esencial; sin columna de atajos y con ancho de 160 px (antes 226 px).

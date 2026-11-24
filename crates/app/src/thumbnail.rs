@@ -46,7 +46,13 @@ pub fn guardar_en(
     ancho: u32,
     alto: u32,
 ) -> std::io::Result<()> {
-    let original = image::RgbaImage::from_raw(ancho, alto, frame.to_vec()).ok_or_else(|| {
+    // mpv entrega RGB con el alfa sin rellenar: escalar ese buffer deja una
+    // miniatura transparente. Se fuerza opaco antes de cualquier resize.
+    let mut opaco = frame.to_vec();
+    for pixel in opaco.as_chunks_mut::<4>().0.iter_mut() {
+        pixel[3] = 255;
+    }
+    let original = image::RgbaImage::from_raw(ancho, alto, opaco).ok_or_else(|| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
             format!("el frame no mide {ancho}x{alto}×4 bytes"),
@@ -136,6 +142,27 @@ mod tests {
         assert!(
             (pixel[0] as i32 - 200).abs() < 40 && pixel[1] < 100,
             "se guardó un PNG en blanco: {pixel:?}"
+        );
+    }
+
+    #[test]
+    fn el_png_guardado_es_opaco_aunque_el_frame_tenga_alfa_basura() {
+        let dir = temp_dir_de_test("alfa-opaco");
+        let cdp = dir.join("mi.cdp");
+        let mut frame = vec![0u8; 4 * 4 * 4];
+        for pixel in frame.as_chunks_mut::<4>().0.iter_mut() {
+            pixel[0] = 40;
+            pixel[1] = 90;
+            pixel[2] = 160;
+            pixel[3] = 0;
+        }
+        super::guardar_en(&dir, &cdp, &frame, 4, 4).unwrap();
+        let img = image::open(super::ruta_cache_en(&dir, &cdp))
+            .unwrap()
+            .to_rgba8();
+        assert!(
+            img.pixels().all(|p| p[3] == 255),
+            "la miniatura salió transparente"
         );
     }
 

@@ -1,4 +1,6 @@
-﻿//! Pantalla de arranque: riel, acciones, zona de arrastre y recientes.
+//! Pantalla de arranque: logo, acciones, zona de arrastre y recientes.
+
+use std::path::PathBuf;
 
 use egui::{Align2, Color32, RichText, Sense, Stroke, Vec2};
 
@@ -44,7 +46,9 @@ pub fn mostrar(
     let mut intencion = None;
     ui.scope_builder(egui::UiBuilder::new().max_rect(contenido), |ui| {
         ui.set_width(contenido.width());
-        ui.add_space(tema::ESP_72);
+        ui.add_space(tema::ESP_40);
+        kit::logo(ui, 48.0);
+        ui.add_space(tema::ESP_24);
 
         ui.label(
             RichText::new(textos.inicio_titulo)
@@ -164,6 +168,7 @@ pub fn mostrar(
                                 ancho_tarjeta,
                                 Some(indice) == destacado,
                                 &mut intencion,
+                                &mut estado.miniaturas,
                             );
                         },
                     );
@@ -253,53 +258,102 @@ fn tarjeta_reciente(
     ancho: f32,
     destacada: bool,
     intencion: &mut Option<MensajeInicio>,
+    miniaturas: &mut std::collections::HashMap<PathBuf, egui::TextureHandle>,
 ) {
     let color = reciente
         .tira
         .first()
         .map(|(color, _)| tema::color(color))
         .unwrap_or(tema::CONTROL);
-    let (respuesta, _) = kit::tarjeta(ui, |ui| {
-        // El Grid celda usa layout horizontal: sin este vertical los labels
-        // caen al lado de la miniatura y se solapan con ella.
-        ui.vertical(|ui| {
-            // El ancho de la tarjeta ya viene del Grid; forzarlo aquí rompía el
-            // layout y los labels se solapaban con la miniatura.
-            let ancho_util = (ancho - tema::ESP_16 * 2.0).max(120.0);
-            let (miniatura, _) =
-                ui.allocate_exact_size(Vec2::new(ancho_util, 96.0), Sense::hover());
-            ui.painter().rect_filled(miniatura, 0.0, tema::CONTROL);
-            ui.painter().rect_filled(
-                egui::Rect::from_min_max(
-                    egui::pos2(miniatura.min.x, miniatura.max.y - 4.0),
-                    miniatura.max,
-                ),
-                0.0,
-                color,
-            );
-            ui.set_width(ancho_util);
-            ui.label(
-                RichText::new(tema::acortar(
-                    &reciente
-                        .ruta
-                        .file_name()
-                        .map(|nombre| nombre.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| reciente.ruta.display().to_string()),
-                    28,
-                ))
-                .font(tema::fuente_segura(Estilo::CuerpoFuerte))
-                .color(tema::TEXTO),
-            );
-            ui.label(
-                RichText::new(format!(
-                    "{} · {} · {}",
-                    textos.lineas(reciente.lineas),
-                    textos.hablantes(reciente.hablantes),
-                    textos.fecha(&reciente.fecha)
-                ))
-                .font(tema::fuente(Estilo::Pequeno))
-                .color(tema::TEXTO_3),
-            );
+    // `Frame::show` solo percibe hover: hay que dar a toda la tarjeta un rect
+    // con `Sense::click()` para que abra el proyecto.
+    let (rect, respuesta) = ui.allocate_exact_size(Vec2::new(ancho, 176.0), Sense::click());
+    ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+        let _ = kit::tarjeta(ui, |ui| {
+            // El Grid celda usa layout horizontal: sin este vertical los labels
+            // caen al lado de la miniatura y se solapan con ella.
+            ui.vertical(|ui| {
+                // El ancho de la tarjeta ya viene del Grid; forzarlo aquí rompía el
+                // layout y los labels se solapaban con la miniatura.
+                let ancho_util = (ancho - tema::ESP_16 * 2.0).max(120.0);
+                let (miniatura, _) =
+                    ui.allocate_exact_size(Vec2::new(ancho_util, 96.0), Sense::hover());
+                let ruta_miniatura = crate::thumbnail::ruta_cache(&reciente.ruta);
+                if ruta_miniatura.is_file() {
+                    let textura = miniaturas.entry(reciente.ruta.clone()).or_insert_with(|| {
+                        let mut rgba = image::open(&ruta_miniatura)
+                            .map(|imagen| imagen.to_rgba8())
+                            .unwrap_or_else(|_| {
+                                image::RgbaImage::from_pixel(
+                                    160,
+                                    90,
+                                    image::Rgba([38, 38, 38, 255]),
+                                )
+                            });
+                        // Caches viejos pueden tener alfa basura: se fuerza opaco.
+                        for pixel in rgba.as_mut().as_chunks_mut::<4>().0.iter_mut() {
+                            pixel[3] = 255;
+                        }
+                        let (ancho_img, alto_img) = rgba.dimensions();
+                        ui.ctx().load_texture(
+                            format!("miniatura-{:?}", reciente.ruta),
+                            egui::ColorImage::from_rgba_unmultiplied(
+                                [ancho_img as usize, alto_img as usize],
+                                &rgba,
+                            ),
+                            egui::TextureOptions::default(),
+                        )
+                    });
+                    ui.painter().image(
+                        textura.id(),
+                        miniatura,
+                        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                        Color32::WHITE,
+                    );
+                } else {
+                    ui.painter().rect_filled(miniatura, 0.0, tema::CONTROL);
+                }
+                ui.painter().rect_filled(
+                    egui::Rect::from_min_max(
+                        egui::pos2(miniatura.min.x, miniatura.max.y - 4.0),
+                        miniatura.max,
+                    ),
+                    0.0,
+                    color,
+                );
+                ui.set_width(ancho_util);
+                // Botón real: nodo accesible que abre el proyecto.
+                if ui
+                    .add(
+                        egui::Button::new(
+                            RichText::new(tema::acortar(
+                                &reciente
+                                    .ruta
+                                    .file_name()
+                                    .map(|nombre| nombre.to_string_lossy().into_owned())
+                                    .unwrap_or_else(|| reciente.ruta.display().to_string()),
+                                28,
+                            ))
+                            .font(tema::fuente_segura(Estilo::CuerpoFuerte))
+                            .color(tema::TEXTO),
+                        )
+                        .frame(false),
+                    )
+                    .clicked()
+                {
+                    *intencion = Some(MensajeInicio::AbrirReciente(reciente.ruta.clone()));
+                }
+                ui.label(
+                    RichText::new(format!(
+                        "{} · {} · {}",
+                        textos.lineas(reciente.lineas),
+                        textos.hablantes(reciente.hablantes),
+                        textos.fecha(&reciente.fecha)
+                    ))
+                    .font(tema::fuente(Estilo::Pequeno))
+                    .color(tema::TEXTO_3),
+                );
+            });
         });
     });
     if destacada {
