@@ -4,6 +4,7 @@
 pub mod editor;
 pub mod iconos;
 pub mod inicio;
+pub mod kit;
 pub mod paneles;
 pub mod tema;
 pub mod timeline;

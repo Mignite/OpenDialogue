@@ -75,8 +75,9 @@ pub fn instalar(ctx: &egui::Context) {
         ],
     );
 
-    // Los glifos de Phosphor se añaden en la tarea del kit, después de este
-    // registro, con la API pública de egui-phosphor.
+    // Phosphor entra como reserva de Proportional en el índice 1: los glifos
+    // se pintan con cualquier texto sin familia explícita.
+    egui_phosphor::add_to_fonts(&mut defs, egui_phosphor::Variant::Regular);
     ctx.set_fonts(defs);
 }
 

@@ -59,6 +59,8 @@ pub const ALTO_BOTON: f32 = 36.0;
 pub const ALTO_CABECERA: f32 = 40.0;
 pub const ANCHO_BOTON_VENTANA: f32 = 46.0;
 pub const ALTO_FILA_SUB: f32 = 44.0;
+/// Iconos Phosphor: glifo de 16 px en rejilla de 24.
+pub const TAMANO_ICONO: f32 = 16.0;
 
 // ── Tipografía ──────────────────────────────────────────────────────────────
 
