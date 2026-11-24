@@ -52,10 +52,10 @@ const TODOS: &[Comando] = &[
 ];
 
 fn texto(comando: Comando) -> String {
-    let etiqueta = comandos::etiqueta(comando);
+    let etiqueta = crate::textos::Idioma::default().textos().comando(comando);
     let atajo = comandos::atajo(comando);
     if atajo.is_empty() {
-        etiqueta
+        etiqueta.to_owned()
     } else {
         format!("{etiqueta}    [{atajo}]")
     }

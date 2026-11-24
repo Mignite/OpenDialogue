@@ -1,4 +1,4 @@
-//! Registro único de comandos: menú y teclado producen exactamente lo mismo.
+﻿//! Registro único de comandos: menú y teclado producen exactamente lo mismo.
 //! Portado de `App.tsx:1528-1712` más Ctrl+O, añadido en la versión Rust.
 
 use egui::{Key, Modifiers};
@@ -44,6 +44,61 @@ pub enum Comando {
     PanelSubtitulos,
     PanelHablantes,
     PanelEstilos,
+}
+
+impl Comando {
+    /// Todos los comandos, para alimentar el panel de atajos y los textos.
+    pub fn todas() -> &'static [Comando] {
+        &[
+            Comando::NuevoProyecto,
+            Comando::AbrirProyecto,
+            Comando::AbrirVideo,
+            Comando::Guardar,
+            Comando::GuardarComo,
+            Comando::CargarSrt,
+            Comando::CargarAss,
+            Comando::ImportarAutosubs,
+            Comando::ExportarSrt,
+            Comando::ExportarJson,
+            Comando::ExportarAss,
+            Comando::Estilos,
+            Comando::ReproducirPausa,
+            Comando::CaptionAnterior,
+            Comando::CaptionSiguiente,
+            Comando::RetrocederFino,
+            Comando::AvanzarFino,
+            Comando::Retroceder,
+            Comando::Avanzar,
+            Comando::NudgeIzquierda,
+            Comando::NudgeDerecha,
+            Comando::EditarTexto,
+            Comando::SimultaneoArriba,
+            Comando::SimultaneoAbajo,
+            Comando::AgregarFragmento,
+            Comando::Eliminar,
+            Comando::Deshacer,
+            Comando::Rehacer,
+            Comando::Copiar,
+            Comando::Pegar,
+            Comando::Dividir,
+            Comando::Buscar,
+            Comando::Ayuda,
+            Comando::VelocidadMas,
+            Comando::VelocidadMenos,
+            Comando::Hablante(1),
+            Comando::Hablante(2),
+            Comando::Hablante(3),
+            Comando::Hablante(4),
+            Comando::Hablante(5),
+            Comando::Hablante(6),
+            Comando::Hablante(7),
+            Comando::Hablante(8),
+            Comando::Hablante(9),
+            Comando::PanelSubtitulos,
+            Comando::PanelHablantes,
+            Comando::PanelEstilos,
+        ]
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,51 +158,6 @@ pub fn disponible_en_inicio(comando: Comando) -> bool {
         comando,
         Comando::NuevoProyecto | Comando::AbrirProyecto | Comando::AbrirVideo | Comando::Ayuda
     )
-}
-
-pub fn etiqueta(comando: Comando) -> String {
-    let texto = match comando {
-        Comando::NuevoProyecto => "Nuevo proyecto",
-        Comando::AbrirProyecto => "Abrir proyecto",
-        Comando::AbrirVideo => "Abrir video",
-        Comando::Guardar => "Guardar proyecto",
-        Comando::GuardarComo => "Guardar como...",
-        Comando::CargarSrt => "Cargar SRT",
-        Comando::CargarAss => "Cargar .ass",
-        Comando::ImportarAutosubs => "Importar auto-subs (SRT+TXT)",
-        Comando::ExportarSrt => "Exportar SRT por hablante",
-        Comando::ExportarJson => "Exportar JSON combinado",
-        Comando::ExportarAss => "Exportar .ass...",
-        Comando::Estilos => "Estilos...",
-        Comando::ReproducirPausa => "Reproducir / pausa",
-        Comando::CaptionAnterior => "Caption anterior",
-        Comando::CaptionSiguiente => "Caption siguiente",
-        Comando::RetrocederFino => "Retroceder 0,1 s",
-        Comando::AvanzarFino => "Avanzar 0,1 s",
-        Comando::Retroceder => "Retroceder 5 s",
-        Comando::Avanzar => "Avanzar 5 s",
-        Comando::NudgeIzquierda => "Mover caption 0,1 s a la izquierda",
-        Comando::NudgeDerecha => "Mover caption 0,1 s a la derecha",
-        Comando::EditarTexto => "Editar texto",
-        Comando::SimultaneoArriba => "Caption simultáneo anterior",
-        Comando::SimultaneoAbajo => "Caption simultáneo siguiente",
-        Comando::AgregarFragmento => "Añadir fragmento",
-        Comando::Eliminar => "Eliminar",
-        Comando::Deshacer => "Deshacer",
-        Comando::Rehacer => "Rehacer",
-        Comando::Copiar => "Copiar",
-        Comando::Pegar => "Pegar",
-        Comando::Dividir => "Dividir en el playhead",
-        Comando::Buscar => "Buscar",
-        Comando::Ayuda => "Atajos de teclado",
-        Comando::VelocidadMas => "Aumentar velocidad",
-        Comando::VelocidadMenos => "Reducir velocidad",
-        Comando::Hablante(n) => return format!("Hablante {n}"),
-        Comando::PanelSubtitulos => "Panel de subtítulos",
-        Comando::PanelHablantes => "Panel de hablantes",
-        Comando::PanelEstilos => "Panel de estilos",
-    };
-    texto.to_owned()
 }
 
 pub fn atajo(comando: Comando) -> String {
