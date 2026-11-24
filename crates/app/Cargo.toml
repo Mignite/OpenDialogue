@@ -9,6 +9,9 @@ rod-player.workspace = true
 rod-subs.workspace = true
 # `svg`: iconos del chrome dibujados con el widget de iced, sin assets externos.
 iced = { workspace = true, features = ["image", "svg"] }
+egui = { workspace = true }
+eframe = { workspace = true, features = ["wgpu"] }
+wgpu = { workspace = true }
 # Menú dibujado por la app: iced no trae barra de menú; muda sería nativo y
 # exigiría unsafe para enganchar el HWND, además de no poder estilizarse.
 iced_aw = { version = "0.14.1", features = ["menu", "quad"] }
@@ -18,3 +21,4 @@ serde_json = "1"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 
 [dev-dependencies]
+egui_kittest = { version = "=0.33.0", features = ["eframe", "wgpu"] }

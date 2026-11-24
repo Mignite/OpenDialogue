@@ -1,4 +1,5 @@
 pub mod comandos;
+pub mod dialogos;
 pub mod editor;
 pub mod editor_app;
 pub mod iconos;
@@ -10,6 +11,7 @@ pub mod preview;
 pub mod project_io;
 pub mod recientes;
 pub mod recovery_io;
+pub mod tarea;
 pub mod tema;
 pub mod thumbnail;
 pub mod timeline;

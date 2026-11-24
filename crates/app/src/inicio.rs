@@ -6,11 +6,12 @@ use std::path::{Path, PathBuf};
 
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{button, column, container, image, row, scrollable, text};
-use iced::{Color, Element, Length, Task};
+use iced::{Color, Element, Length};
 
 use crate::iconos::{self, Icono};
 use crate::recientes::Reciente;
 use crate::recovery_io::AvisoRecovery;
+use crate::tarea::Tarea;
 use crate::tema;
 use crate::thumbnail;
 
@@ -98,63 +99,42 @@ fn es_video(ruta: &Path) -> bool {
         })
 }
 
-pub fn update(
-    estado: &mut EstadoInicio,
-    mensaje: MensajeInicio,
-) -> (Task<MensajeInicio>, Option<Salida>) {
+pub fn update(estado: &mut EstadoInicio, mensaje: MensajeInicio) -> (Tarea, Option<Salida>) {
     match mensaje {
         MensajeInicio::ArchivoSoltado(ruta) => {
             if es_video(&ruta) {
                 estado.mensaje = None;
-                (Task::none(), Some(Salida::Video(ruta)))
+                (Tarea::Ninguna, Some(Salida::Video(ruta)))
             } else {
                 estado.mensaje = Some(MENSAJE_ARCHIVO_INVALIDO.into());
-                (Task::none(), None)
+                (Tarea::Ninguna, None)
             }
         }
-        MensajeInicio::AbrirVideo => (
-            Task::future(async {
-                let ruta = rfd::AsyncFileDialog::new()
-                    .add_filter("Video", &["mp4", "mkv", "mov", "webm"])
-                    .pick_file()
-                    .await
-                    .map(|archivo| archivo.path().to_path_buf());
-                MensajeInicio::DialogoVideo(ruta)
-            }),
-            None,
-        ),
-        MensajeInicio::AbrirProyecto => (
-            Task::future(async {
-                let ruta = rfd::AsyncFileDialog::new()
-                    .add_filter("Proyecto", &["cdp"])
-                    .pick_file()
-                    .await
-                    .map(|archivo| archivo.path().to_path_buf());
-                MensajeInicio::DialogoProyecto(ruta)
-            }),
-            None,
-        ),
+        MensajeInicio::AbrirVideo => (Tarea::DialogoVideo, None),
+        MensajeInicio::AbrirProyecto => (Tarea::DialogoProyecto, None),
         MensajeInicio::DialogoVideo(Some(ruta)) => {
             if es_video(&ruta) {
-                (Task::none(), Some(Salida::Video(ruta)))
+                (Tarea::Ninguna, Some(Salida::Video(ruta)))
             } else {
                 estado.mensaje = Some(MENSAJE_ARCHIVO_INVALIDO.into());
-                (Task::none(), None)
+                (Tarea::Ninguna, None)
             }
         }
-        MensajeInicio::DialogoProyecto(Some(ruta)) => (Task::none(), Some(Salida::Proyecto(ruta))),
-        MensajeInicio::DialogoVideo(None) | MensajeInicio::DialogoProyecto(None) => {
-            (Task::none(), None)
+        MensajeInicio::DialogoProyecto(Some(ruta)) => {
+            (Tarea::Ninguna, Some(Salida::Proyecto(ruta)))
         }
-        MensajeInicio::AbrirReciente(ruta) => (Task::none(), Some(Salida::Proyecto(ruta))),
+        MensajeInicio::DialogoVideo(None) | MensajeInicio::DialogoProyecto(None) => {
+            (Tarea::Ninguna, None)
+        }
+        MensajeInicio::AbrirReciente(ruta) => (Tarea::Ninguna, Some(Salida::Proyecto(ruta))),
         MensajeInicio::VerTodos => {
             estado.expandido = !estado.expandido;
-            (Task::none(), None)
+            (Tarea::Ninguna, None)
         }
-        MensajeInicio::Recuperar => (Task::none(), Some(Salida::Recuperar)),
+        MensajeInicio::Recuperar => (Tarea::Ninguna, Some(Salida::Recuperar)),
         MensajeInicio::DescartarRecovery => {
             estado.aviso = None;
-            (Task::none(), Some(Salida::DescartarRecovery))
+            (Tarea::Ninguna, Some(Salida::DescartarRecovery))
         }
     }
 }

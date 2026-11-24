@@ -8,11 +8,13 @@ use iced::window::Direction;
 use iced::{Element, Length, Subscription, Task};
 
 use rod_app::comandos::{self, Comando};
+use rod_app::dialogos::{self, RespuestaDialogo};
 use rod_app::editor_app::{self, EditorApp, MensajeEditor};
 use rod_app::iconos::{self, Icono};
 use rod_app::inicio::{self, EstadoInicio, MensajeInicio, Salida};
 use rod_app::menu;
 use rod_app::project_io::abrir_proyecto;
+use rod_app::tarea::Tarea;
 use rod_app::tema;
 use rod_app::{recientes, recovery_io};
 
@@ -28,6 +30,9 @@ enum Pantalla {
 struct AppState {
     pantalla: Pantalla,
     ventana: Option<iced::window::Id>,
+    /// Diálogos nativos resueltos en otro hilo; se drenan en el update.
+    tx_dialogos: std::sync::mpsc::Sender<RespuestaDialogo>,
+    rx_dialogos: std::sync::mpsc::Receiver<RespuestaDialogo>,
 }
 
 #[derive(Debug, Clone)]
@@ -35,6 +40,8 @@ enum Mensaje {
     Inicio(MensajeInicio),
     Editor(MensajeEditor),
     Comando(Comando),
+    CargarRespuesta,
+    RespuestaDialogo(RespuestaDialogo),
     ArchivoSoltado(PathBuf),
     VentanaId(Option<iced::window::Id>),
     ArrastrarVentana,
@@ -45,13 +52,28 @@ enum Mensaje {
 }
 
 fn boot() -> (AppState, Task<Mensaje>) {
+    let (tx_dialogos, rx_dialogos) = std::sync::mpsc::channel();
     (
         AppState {
             pantalla: nuevo(),
             ventana: None,
+            tx_dialogos,
+            rx_dialogos,
         },
         iced::window::latest().map(Mensaje::VentanaId),
     )
+}
+
+/// Ejecuta los efectos descritos por `Tarea` fuera de la vista.
+fn despachar_tarea(tarea: Tarea, tx: &std::sync::mpsc::Sender<RespuestaDialogo>) -> Task<Mensaje> {
+    match tarea {
+        Tarea::DialogoVideo => dialogos::pedir_video(tx.clone()),
+        Tarea::DialogoProyecto => dialogos::pedir_proyecto(tx.clone()),
+        Tarea::DialogoCarpeta => dialogos::pedir_carpeta(tx.clone()),
+        Tarea::DialogoGuardar => dialogos::pedir_guardar(tx.clone()),
+        Tarea::EnfocarTexto | Tarea::Ninguna => {}
+    }
+    Task::none()
 }
 
 fn nuevo() -> Pantalla {
@@ -148,6 +170,25 @@ fn despachar_salida(pantalla: &mut Pantalla, salida: Salida) -> Task<Mensaje> {
 fn actualizar(state: &mut AppState, mensaje: Mensaje) -> Task<Mensaje> {
     let pantalla = &mut state.pantalla;
     match mensaje {
+        Mensaje::CargarRespuesta => {
+            let pendientes: Vec<_> = state.rx_dialogos.try_iter().collect();
+            let mut tarea_total = Task::none();
+            for respuesta in pendientes {
+                tarea_total = Task::batch([
+                    tarea_total,
+                    actualizar(state, Mensaje::RespuestaDialogo(respuesta)),
+                ]);
+            }
+            tarea_total
+        }
+        Mensaje::RespuestaDialogo(respuesta) => {
+            let mensaje = match respuesta {
+                RespuestaDialogo::Video(ruta) => MensajeInicio::DialogoVideo(ruta),
+                RespuestaDialogo::Proyecto(ruta) => MensajeInicio::DialogoProyecto(ruta),
+                RespuestaDialogo::Carpeta(_) | RespuestaDialogo::Guardar(_) => return Task::none(),
+            };
+            actualizar(state, Mensaje::Inicio(mensaje))
+        }
         Mensaje::VentanaId(id) => {
             state.ventana = id;
             Task::none()
@@ -210,7 +251,7 @@ fn actualizar(state: &mut AppState, mensaje: Mensaje) -> Task<Mensaje> {
                 if let Some(salida) = salida {
                     return despachar_salida(pantalla, salida);
                 }
-                tarea.map(Mensaje::Inicio)
+                despachar_tarea(tarea, &state.tx_dialogos)
             }
         },
         Mensaje::ArchivoSoltado(ruta) => {
@@ -218,22 +259,22 @@ fn actualizar(state: &mut AppState, mensaje: Mensaje) -> Task<Mensaje> {
                 Pantalla::Inicio(estado) => {
                     inicio::update(estado, MensajeInicio::ArchivoSoltado(ruta))
                 }
-                Pantalla::Editor(_) => (Task::none(), None),
+                Pantalla::Editor(_) => (Tarea::Ninguna, None),
             };
             if let Some(salida) = salida {
                 return despachar_salida(pantalla, salida);
             }
-            tarea.map(Mensaje::Inicio)
+            despachar_tarea(tarea, &state.tx_dialogos)
         }
         Mensaje::Inicio(mensaje) => {
             let (tarea, salida) = match pantalla {
                 Pantalla::Inicio(estado) => inicio::update(estado, mensaje),
-                Pantalla::Editor(_) => (Task::none(), None),
+                Pantalla::Editor(_) => (Tarea::Ninguna, None),
             };
             if let Some(salida) = salida {
                 return despachar_salida(pantalla, salida);
             }
-            tarea.map(Mensaje::Inicio)
+            despachar_tarea(tarea, &state.tx_dialogos)
         }
         Mensaje::Editor(mensaje) => match pantalla {
             Pantalla::Editor(editor) => editor_app::update(editor, mensaje).map(Mensaje::Editor),
@@ -358,11 +399,15 @@ fn suscripcion(state: &AppState) -> Subscription<Mensaje> {
         }
         _ => None,
     });
+    // Un tick por frame drena el canal de diálogos. `window::frames` ya está
+    // en el árbol de dependencias; `iced::time::every` exigiría añadir tokio.
+    let respuestas = iced::window::frames().map(|_| Mensaje::CargarRespuesta);
     match pantalla {
-        Pantalla::Inicio(_) => Subscription::batch([arrastre, teclado]),
+        Pantalla::Inicio(_) => Subscription::batch([arrastre, teclado, respuestas]),
         Pantalla::Editor(editor) => Subscription::batch([
             arrastre,
             teclado,
+            respuestas,
             editor_app::subscription(editor).map(Mensaje::Editor),
         ]),
     }
@@ -409,9 +454,12 @@ mod tests {
 
     #[test]
     fn video_invalido_no_cambia_de_pantalla() {
+        let (tx_dialogos, rx_dialogos) = std::sync::mpsc::channel();
         let mut state = super::AppState {
             pantalla: pantalla_de_prueba(),
             ventana: None,
+            tx_dialogos,
+            rx_dialogos,
         };
         let _ = super::actualizar(&mut state, super::Mensaje::ArchivoSoltado("x.txt".into()));
         assert!(matches!(state.pantalla, super::Pantalla::Inicio(_)));
