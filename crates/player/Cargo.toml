@@ -6,6 +6,7 @@ rust-version.workspace = true
 [dependencies]
 libmpv2 = "7"
 libmpv2-sys = "4"
+symphonia = { version = "0.5", features = ["isomp4", "aac"] }
 
 [dev-dependencies]
 image = { version = "0.25.10", default-features = false, features = ["png"] }

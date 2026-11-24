@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -171,6 +171,13 @@ pub struct EditorApp {
     pub(crate) borrador: String,
     /// Fila en edición inline: (id del caption, borrador).
     pub inline: Option<(String, String)>,
+    /// Picos de la waveform, cuando el análisis en hilo terminó.
+    pub picos: Option<rod_player::waveform::Picos>,
+    pub rx_picos: Option<
+        std::sync::mpsc::Receiver<
+            Result<rod_player::waveform::Picos, rod_player::waveform::ErrorWaveform>,
+        >,
+    >,
     /// Borradores de entrada y salida del caption seleccionado.
     pub(crate) borrador_inicio: String,
     pub(crate) borrador_fin: String,
@@ -300,6 +307,7 @@ impl EditorApp {
             .as_ref()
             .is_some_and(|ruta| !thumbnail::ruta_cache_en(base_thumbs, ruta).is_file());
 
+        let ruta_audio = std::path::PathBuf::from(&video_path);
         let mut estado = Self {
             editor,
             player,
@@ -346,6 +354,8 @@ impl EditorApp {
             portapapeles: String::new(),
             pendiente_srt: None,
             borradores_hablante: HashMap::new(),
+            picos: None,
+            rx_picos: Some(rod_player::waveform::analizar_en_hilo(ruta_audio)),
         };
         // El playhead del `.cdp` no se copia solo al estado: mpv sigue en 0.
         // Sin este seek, el primer `Tick` sobreescribe `position` con 0 y la
@@ -1159,6 +1169,12 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
     match message {
         MensajeEditor::Comando(comando) => return ejecutar_comando(state, comando),
         MensajeEditor::Tick => {
+            if let Some(receptor) = &state.rx_picos
+                && let Ok(resultado) = receptor.try_recv()
+            {
+                state.picos = resultado.ok();
+                state.rx_picos = None;
+            }
             let frame_changed = state.player.update() & 1 != 0;
 
             // `time-pos` sigue en el instante viejo uno o dos frames después de

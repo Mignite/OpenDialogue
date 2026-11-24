@@ -2,6 +2,7 @@ use std::cell::Cell;
 use std::fmt;
 
 pub mod mpv_render;
+pub mod waveform;
 use libmpv2::{Mpv, events::Event};
 use mpv_render::RenderContext;
 
