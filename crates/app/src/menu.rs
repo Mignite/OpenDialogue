@@ -1,67 +1,41 @@
-//! Barra de menú dibujada por iced, construida desde el registro de comandos.
+﻿//! Barra de menú dibujada por iced, construida desde el registro de comandos.
 //! El menú no decide nada: solo publica el `Comando` que el usuario eligió.
 
 use crate::comandos::{self, Comando, MapaAtajos, Seccion};
 use crate::textos::Textos;
 
-const SECCIONES: [Seccion; 6] = [
+/// Solo cuatro menús: lo demás está en atajos, pestañas y Ajustes.
+const SECCIONES: [Seccion; 4] = [
     Seccion::Archivo,
     Seccion::Edicion,
-    Seccion::Ver,
     Seccion::Exportar,
-    Seccion::Estilos,
     Seccion::Ayuda,
 ];
 
 const TODOS: &[Comando] = &[
-    Comando::NuevoProyecto,
-    Comando::AbrirProyecto,
     Comando::AbrirVideo,
+    Comando::AbrirProyecto,
     Comando::Guardar,
     Comando::GuardarComo,
-    Comando::CargarSrt,
-    Comando::CargarAss,
-    Comando::ImportarAutosubs,
-    Comando::ReproducirPausa,
-    Comando::CaptionAnterior,
-    Comando::CaptionSiguiente,
-    Comando::RetrocederFino,
-    Comando::AvanzarFino,
-    Comando::Retroceder,
-    Comando::Avanzar,
-    Comando::NudgeIzquierda,
-    Comando::NudgeDerecha,
-    Comando::EditarTexto,
-    Comando::SimultaneoArriba,
-    Comando::SimultaneoAbajo,
-    Comando::AgregarFragmento,
-    Comando::Eliminar,
     Comando::Deshacer,
     Comando::Rehacer,
-    Comando::Copiar,
-    Comando::Pegar,
     Comando::Dividir,
-    Comando::Buscar,
+    Comando::Eliminar,
     Comando::Ajustes,
-    Comando::PanelSubtitulos,
-    Comando::PanelHablantes,
-    Comando::PanelEstilos,
     Comando::ExportarSrt,
     Comando::ExportarJson,
     Comando::ExportarAss,
-    Comando::Estilos,
     Comando::Ayuda,
 ];
 
-/// Etiqueta y atajo se devuelven separados: el atajo nunca viaja dentro del
-/// texto del botón, para que sea un nodo accesible independiente.
-fn texto(comando: Comando, textos: &Textos, atajos: &MapaAtajos) -> (String, String) {
-    let etiqueta = textos.comando(comando);
-    let atajo = atajos
-        .atajo(comando)
-        .map(|a| a.to_string())
-        .unwrap_or_default();
-    (etiqueta.to_owned(), atajo)
+/// Los comandos por sección, en el orden del registro. Un solo sitio decide
+/// qué obras aparecen en el menú, igual que el teclado usa `desde_keyboard`.
+pub fn comandos_de(seccion: Seccion) -> Vec<Comando> {
+    TODOS
+        .iter()
+        .copied()
+        .filter(|comando| comandos::seccion(*comando) == seccion)
+        .collect()
 }
 
 fn nombre_seccion(seccion: Seccion, textos: &Textos) -> &'static str {
@@ -75,24 +49,14 @@ fn nombre_seccion(seccion: Seccion, textos: &Textos) -> &'static str {
     }
 }
 
-/// Los comandos por sección, en el orden del registro. Un solo sitio decide
-/// qué obras aparecen en el menú, igual que el teclado usa `desde_keyboard`.
-pub fn comandos_de(seccion: Seccion) -> Vec<Comando> {
-    TODOS
-        .iter()
-        .copied()
-        .filter(|comando| comandos::seccion(*comando) == seccion)
-        .collect()
-}
-
-/// Barra de menú dibujada con egui. Un `MenuButton` por sección, con los
-/// comandos del registro; en el arranque solo aparecen los cuatro válidos.
+/// Barra de menú dibujada con egui. Cuatro secciones con lo esencial.
 pub fn mostrar(
     ui: &mut egui::Ui,
     en_inicio: bool,
     textos: &Textos,
     atajos: &MapaAtajos,
 ) -> Option<Comando> {
+    let _ = atajos;
     use crate::ui::tema;
 
     let mut elegido = None;
@@ -109,35 +73,25 @@ pub fn mostrar(
                     .min_size(egui::vec2(0.0, 24.0)),
             )
             .ui(ui, |ui| {
-                ui.set_min_width(226.0);
+                // Sin columna de atajos: el panel de Ajustes los muestra con
+                // el valor configurado. Menú compacto, ~160 px.
+                ui.set_min_width(160.0);
+                ui.set_max_width(160.0);
                 for comando in comandos_de(seccion) {
                     let habilitado = !en_inicio || comandos::disponible_en_inicio(comando);
-                    let (etiqueta, atajo) = texto(comando, textos, atajos);
-                    ui.horizontal(|ui| {
-                        let boton = ui.add_enabled(
-                            habilitado,
-                            egui::Button::new(
-                                egui::RichText::new(&etiqueta)
-                                    .font(tema::fuente(tema::Estilo::Base)),
-                            )
-                            .frame(false),
-                        );
-                        if !atajo.is_empty() {
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    ui.label(
-                                        egui::RichText::new(&atajo)
-                                            .font(tema::fuente(tema::Estilo::Mono)),
-                                    );
-                                },
-                            );
-                        }
-                        if boton.clicked() {
-                            elegido = Some(comando);
-                            ui.close();
-                        }
-                    });
+                    let etiqueta = textos.comando(comando);
+                    let boton = ui.add_enabled(
+                        habilitado,
+                        egui::Button::new(
+                            egui::RichText::new(tema::acortar(etiqueta, 22))
+                                .font(tema::fuente(tema::Estilo::Base)),
+                        )
+                        .frame(false),
+                    );
+                    if boton.clicked() {
+                        elegido = Some(comando);
+                        ui.close();
+                    }
                 }
             });
         }
@@ -180,12 +134,12 @@ mod tests {
     }
 
     #[test]
-    fn en_inicio_solo_hay_cuatro_acciones_habilitadas() {
+    fn en_inicio_solo_hay_tres_acciones_habilitadas() {
         let habilitadas = TODOS
             .iter()
             .copied()
             .filter(|comando| comandos::disponible_en_inicio(*comando))
             .count();
-        assert_eq!(habilitadas, 4);
+        assert_eq!(habilitadas, 3);
     }
 }

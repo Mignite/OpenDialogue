@@ -6,6 +6,7 @@
 use std::path::PathBuf;
 
 use egui_kittest::Harness;
+use egui_kittest::kittest::Queryable;
 use rod_app::inicio::{self, EstadoInicio};
 use rod_app::recientes::Reciente;
 
@@ -218,6 +219,20 @@ fn main() {
         rod_app::ui::tema::aplicar(&h.ctx);
         h.run();
         guardar(&mut h, "diagnostico-cabecera-1914");
+
+        let mut menu = egui_kittest::Harness::builder()
+            .wgpu()
+            .with_size(egui::vec2(1914.0, 500.0))
+            .build_ui(|ui| {
+                rod_app::ui::chrome::mostrar_menu_para_test(
+                    ui,
+                    &rod_app::textos::EN,
+                    &rod_app::comandos::MapaAtajos::por_defecto(),
+                );
+            });
+        menu.get_by_label("File").click();
+        menu.run();
+        guardar(&mut menu, "diagnostico-menu");
 
         capturar(
             "diagnostico-inicio-1914",

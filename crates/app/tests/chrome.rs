@@ -3,7 +3,7 @@ use rod_app::comandos::MapaAtajos;
 use rod_app::textos::ES;
 
 #[test]
-fn el_menu_separa_etiqueta_y_atajo() {
+fn el_menu_es_compacto_y_solo_muestra_etiquetas() {
     let mut harness = egui_kittest::Harness::builder()
         .with_size(egui::vec2(1440.0, 900.0))
         .build_ui(|ui| {
@@ -11,8 +11,8 @@ fn el_menu_separa_etiqueta_y_atajo() {
         });
     harness.get_by_label("Archivo").click();
     harness.run();
-    // La etiqueta es solo el comando; el atajo es un nodo aparte.
+    // Menú corto: sin columna de atajos (ésos están en Ajustes).
     harness.get_by_label("Guardar");
-    assert!(harness.query_by_label("Guardar    [Ctrl+S]").is_none());
-    harness.get_by_label("Ctrl+S");
+    assert_eq!(harness.query_all_by_label("Ctrl+S").count(), 0);
+    assert_eq!(harness.query_all_by_label("Cargar SRT").count(), 0);
 }

@@ -13,6 +13,9 @@
 - kittest no ejecuta el `PaintCallback` de mpv: las capturas finales del editor
   son headless con el monitor vacío. El «antes» real con video quedó en
   `docs/checklists/rediseno/antes-editor-1440.png`.
+- Minimizar quedó confirmado por el usuario: ya no crashea.
+- Menús: reducidos a cuatro (Archivo, Edición, Exportar, Ayuda) y a lo
+  esencial; sin columna de atajos y con ancho de 160 px (antes 226 px).
 - Cabecera: el usuario aclaró que el problema era el centrado **vertical**, no
   el horizontal. Se usa `horizontal_centered` y la referencia de FilmCraft
   (`storytold/filmcraft`, `crates/ui-egui/src/header.rs`): menú en
