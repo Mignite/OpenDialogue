@@ -40,6 +40,12 @@ pub struct Textos {
     pub texto_vacio_recientes: &'static str,
     pub guardado: &'static str,
     pub sin_guardar: &'static str,
+    pub seccion_archivo: &'static str,
+    pub seccion_edicion: &'static str,
+    pub seccion_ver: &'static str,
+    pub seccion_exportar: &'static str,
+    pub seccion_estilos: &'static str,
+    pub seccion_ayuda: &'static str,
 }
 
 pub const ES: Textos = Textos {
@@ -52,6 +58,12 @@ pub const ES: Textos = Textos {
     texto_vacio_recientes: "Todavía no hay proyectos. El primero aparece aquí al guardar.",
     guardado: "Guardado",
     sin_guardar: "Sin guardar",
+    seccion_archivo: "Archivo",
+    seccion_edicion: "Edición",
+    seccion_ver: "Ver",
+    seccion_exportar: "Exportar",
+    seccion_estilos: "Estilos",
+    seccion_ayuda: "Ayuda",
 };
 
 pub const EN: Textos = Textos {
@@ -64,6 +76,12 @@ pub const EN: Textos = Textos {
     texto_vacio_recientes: "No projects yet. The first one appears here when you save.",
     guardado: "Saved",
     sin_guardar: "Unsaved",
+    seccion_archivo: "File",
+    seccion_edicion: "Edit",
+    seccion_ver: "View",
+    seccion_exportar: "Export",
+    seccion_estilos: "Styles",
+    seccion_ayuda: "Help",
 };
 
 impl Textos {

@@ -1,4 +1,4 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+﻿#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -289,105 +289,24 @@ impl eframe::App for RustyDialogue {
             None => {}
         }
 
-        let mut comando_menu = None;
-        let cabecera = egui::Frame {
-            inner_margin: egui::Margin::symmetric(10, 4),
-            outer_margin: egui::Margin::ZERO,
-            corner_radius: egui::CornerRadius::ZERO,
-            shadow: egui::Shadow::NONE,
-            fill: ui::tema::FONDO,
-            stroke: egui::Stroke::new(1.0_f32, ui::tema::BORDE),
+        let proyecto = match &self.pantalla {
+            Pantalla::Editor(editor) => Some(editor_app::nombre_proyecto(editor)),
+            Pantalla::Inicio(_) => None,
         };
-        egui::TopBottomPanel::top("cabecera")
-            .frame(cabecera)
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 8.0;
-                    // Marca: un cuadrado de acento, contenido y sobrio.
-                    let (marca, _) =
-                        ui.allocate_exact_size(egui::vec2(18.0, 18.0), egui::Sense::hover());
-                    ui.painter()
-                        .rect_filled(marca, egui::CornerRadius::same(3), ui::tema::ACENTO);
-                    ui.painter().text(
-                        marca.center(),
-                        egui::Align2::CENTER_CENTER,
-                        "R",
-                        egui::FontId::proportional(10.0),
-                        egui::Color32::WHITE,
-                    );
-                    ui.label(
-                        egui::RichText::new("RUSTYDIALOGUE")
-                            .font(ui::tema::mono_public())
-                            .size(10.0)
-                            .color(ui::tema::SECUNDARIO),
-                    );
-                    ui.separator();
-
-                    let en_inicio = matches!(self.pantalla, Pantalla::Inicio(_));
-                    comando_menu = rod_app::menu::mostrar(ui, en_inicio);
-
-                    // Reservar primero el sitio de los controles: si la franja
-                    // de arrastre toma todo el ancho, los botones se salen del
-                    // rect de la cabecera y desaparecen por el borde.
-                    let ancho_botones = 3.0 * 26.0 + 2.0 * 4.0;
-                    let ancho_estado = if en_inicio { 0.0 } else { 122.0 };
-                    let reservado = ancho_botones + ancho_estado + 8.0;
-                    let ancho_arrastre = (ui.available_width() - reservado).max(4.0);
-
-                    // Franja arrastrable: sin marco nativo, el usuario mueve la
-                    // ventana por aquí y hace doble clic para maximizar.
-                    let (franja, respuesta) = ui.allocate_exact_size(
-                        egui::vec2(ancho_arrastre, 22.0),
-                        egui::Sense::click_and_drag(),
-                    );
-                    if respuesta.drag_started() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
-                    }
-                    if respuesta.double_clicked() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(
-                            !ctx.input(|entrada| entrada.viewport().maximized.unwrap_or(false)),
-                        ));
-                    }
-                    let _ = franja;
-
-                    let sucio = match &self.pantalla {
-                        Pantalla::Editor(editor) => rod_app::editor_app::sucio(editor),
-                        Pantalla::Inicio(_) => false,
-                    };
-                    if !en_inicio {
-                        ui::tema::chip(
-                            ui,
-                            if sucio { "● Sin guardar" } else { "Guardado" },
-                            if sucio {
-                                ui::tema::AMBAR
-                            } else {
-                                ui::tema::DIM
-                            },
-                        );
-                    }
-                    ui.spacing_mut().item_spacing.x = 4.0;
-                    if ui
-                        .add(egui::Button::new("—").min_size(egui::vec2(26.0, 22.0)))
-                        .clicked()
-                    {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-                    }
-                    if ui
-                        .add(egui::Button::new("□").min_size(egui::vec2(26.0, 22.0)))
-                        .clicked()
-                    {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(
-                            !ctx.input(|entrada| entrada.viewport().maximized.unwrap_or(false)),
-                        ));
-                    }
-                    if ui
-                        .add(egui::Button::new("✕").min_size(egui::vec2(26.0, 22.0)))
-                        .clicked()
-                    {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                    }
-                });
-            });
+        let sucio = match &self.pantalla {
+            Pantalla::Editor(editor) => editor_app::sucio(editor),
+            Pantalla::Inicio(_) => false,
+        };
+        let comando_menu = ui::chrome::mostrar(
+            ctx,
+            self.preferencias.idioma.textos(),
+            &self.preferencias.atajos,
+            ui::chrome::EstadoCabecera {
+                en_inicio: matches!(self.pantalla, Pantalla::Inicio(_)),
+                proyecto,
+                sucio,
+            },
+        );
         if let Some(comando) = comando_menu {
             self.aplicar_comando(comando);
         }

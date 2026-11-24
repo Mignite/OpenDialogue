@@ -37,6 +37,39 @@ fn capturar(nombre: &str, ancho: f32, alto: f32, estado: EstadoInicio) {
     rod_app::ui::tema::aplicar(&harness.ctx);
     harness.run();
 
+    guardar(&mut harness, nombre);
+}
+
+fn capturar_con_cabecera(nombre: &str, ancho: f32, alto: f32, estado: EstadoInicio) {
+    let mut harness = Harness::builder()
+        .wgpu()
+        .with_size(egui::vec2(ancho, alto))
+        .build_state(
+            |ctx, estado: &mut EstadoInicio| {
+                rod_app::ui::chrome::mostrar(
+                    ctx,
+                    &rod_app::textos::EN,
+                    &rod_app::comandos::MapaAtajos::por_defecto(),
+                    rod_app::ui::chrome::EstadoCabecera {
+                        en_inicio: true,
+                        proyecto: None,
+                        sucio: false,
+                    },
+                );
+                egui::CentralPanel::default()
+                    .frame(rod_app::ui::tema::panel(rod_app::ui::tema::FONDO))
+                    .show(ctx, |ui| {
+                        rod_app::ui::inicio::mostrar(ui, estado);
+                    });
+            },
+            estado,
+        );
+    rod_app::ui::tema::aplicar(&harness.ctx);
+    harness.run();
+    guardar(&mut harness, nombre);
+}
+
+fn guardar<S>(harness: &mut Harness<'_, S>, nombre: &str) {
     let imagen = harness.render().expect("renderiza con wgpu");
     let raiz =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/checklists/rediseno");
@@ -51,6 +84,12 @@ fn capturar(nombre: &str, ancho: f32, alto: f32, estado: EstadoInicio) {
 fn main() {
     let fase = std::env::args().nth(1).unwrap_or_else(|| "antes".into());
 
+    capturar_con_cabecera(
+        &format!("{fase}-cabecera-inicio"),
+        1440.0,
+        900.0,
+        inicio::nuevo(vec![reciente("RobloxTerror.cdp", 543, 7)], None),
+    );
     capturar(
         &format!("{fase}-inicio-vacio"),
         1440.0,

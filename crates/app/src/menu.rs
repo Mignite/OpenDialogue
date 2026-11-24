@@ -1,7 +1,8 @@
 //! Barra de menú dibujada por iced, construida desde el registro de comandos.
 //! El menú no decide nada: solo publica el `Comando` que el usuario eligió.
 
-use crate::comandos::{self, Comando, Seccion};
+use crate::comandos::{self, Comando, MapaAtajos, Seccion};
+use crate::textos::Textos;
 
 const SECCIONES: [Seccion; 6] = [
     Seccion::Archivo,
@@ -51,13 +52,25 @@ const TODOS: &[Comando] = &[
     Comando::Ayuda,
 ];
 
-fn texto(comando: Comando) -> String {
-    let etiqueta = crate::textos::Idioma::default().textos().comando(comando);
-    let atajo = comandos::atajo(comando);
-    if atajo.is_empty() {
-        etiqueta.to_owned()
-    } else {
-        format!("{etiqueta}    [{atajo}]")
+/// Etiqueta y atajo se devuelven separados: el atajo nunca viaja dentro del
+/// texto del botón, para que sea un nodo accesible independiente.
+fn texto(comando: Comando, textos: &Textos, atajos: &MapaAtajos) -> (String, String) {
+    let etiqueta = textos.comando(comando);
+    let atajo = atajos
+        .atajo(comando)
+        .map(|a| a.to_string())
+        .unwrap_or_default();
+    (etiqueta.to_owned(), atajo)
+}
+
+fn nombre_seccion(seccion: Seccion, textos: &Textos) -> &'static str {
+    match seccion {
+        Seccion::Archivo => textos.seccion_archivo,
+        Seccion::Edicion => textos.seccion_edicion,
+        Seccion::Ver => textos.seccion_ver,
+        Seccion::Exportar => textos.seccion_exportar,
+        Seccion::Estilos => textos.seccion_estilos,
+        Seccion::Ayuda => textos.seccion_ayuda,
     }
 }
 
@@ -73,38 +86,55 @@ pub fn comandos_de(seccion: Seccion) -> Vec<Comando> {
 
 /// Barra de menú dibujada con egui. Un `MenuButton` por sección, con los
 /// comandos del registro; en el arranque solo aparecen los cuatro válidos.
-pub fn mostrar(ui: &mut egui::Ui, en_inicio: bool) -> Option<Comando> {
+pub fn mostrar(
+    ui: &mut egui::Ui,
+    en_inicio: bool,
+    textos: &Textos,
+    atajos: &MapaAtajos,
+) -> Option<Comando> {
     use crate::ui::tema;
 
     let mut elegido = None;
     ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 2.0;
-        for (indice, seccion) in SECCIONES.into_iter().enumerate() {
-            if indice > 0 {
-                ui.separator();
-            }
-            let nombre = match seccion {
-                Seccion::Archivo => "Archivo",
-                Seccion::Edicion => "Edición",
-                Seccion::Ver => "Ver",
-                Seccion::Exportar => "Exportar",
-                Seccion::Estilos => "Estilos",
-                Seccion::Ayuda => "Ayuda",
-            };
+        ui.spacing_mut().item_spacing.x = tema::ESP_2;
+        for seccion in SECCIONES {
+            let nombre = nombre_seccion(seccion, textos);
             let etiqueta = egui::RichText::new(nombre)
-                .size(11.0)
-                .color(tema::SECUNDARIO);
-            ui.menu_button(etiqueta, |ui| {
+                .font(tema::fuente(tema::Estilo::Pequeno))
+                .color(tema::TEXTO_MENU);
+            let _ = egui::containers::menu::MenuButton::from_button(
+                egui::Button::new(etiqueta).frame(false),
+            )
+            .ui(ui, |ui| {
                 ui.set_min_width(226.0);
                 for comando in comandos_de(seccion) {
                     let habilitado = !en_inicio || comandos::disponible_en_inicio(comando);
-                    if ui
-                        .add_enabled(habilitado, egui::Button::new(texto(comando)).frame(false))
-                        .clicked()
-                    {
-                        elegido = Some(comando);
-                        ui.close();
-                    }
+                    let (etiqueta, atajo) = texto(comando, textos, atajos);
+                    ui.horizontal(|ui| {
+                        let boton = ui.add_enabled(
+                            habilitado,
+                            egui::Button::new(
+                                egui::RichText::new(&etiqueta)
+                                    .font(tema::fuente(tema::Estilo::Base)),
+                            )
+                            .frame(false),
+                        );
+                        if !atajo.is_empty() {
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.label(
+                                        egui::RichText::new(&atajo)
+                                            .font(tema::fuente(tema::Estilo::Mono)),
+                                    );
+                                },
+                            );
+                        }
+                        if boton.clicked() {
+                            elegido = Some(comando);
+                            ui.close();
+                        }
+                    });
                 }
             });
         }

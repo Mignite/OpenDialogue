@@ -398,6 +398,14 @@ pub fn buscando(state: &EditorApp) -> bool {
     state.player.seeking()
 }
 
+/// Nombre visible en la cabecera: el del video abierto.
+pub fn nombre_proyecto(state: &EditorApp) -> &str {
+    std::path::Path::new(&state.video_path)
+        .file_name()
+        .and_then(|nombre| nombre.to_str())
+        .unwrap_or(&state.video_path)
+}
+
 /// Seguro ante crash: cada 15 s, si hay cambios sin guardar, escribe una copia
 /// del proyecto en `recovery.json`. Falla en silencio a propósito: si el disco
 /// está lleno o no hay permisos, el aviso al usuario sigue siendo el guardado
