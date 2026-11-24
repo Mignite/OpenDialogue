@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn la_superficie_es_mas_redondeada_que_el_control() {
-        assert!(super::RADIO_SUPERFICIE > super::RADIO_CONTROL);
+        const { assert!(super::RADIO_SUPERFICIE > super::RADIO_CONTROL) };
     }
 
     #[test]
