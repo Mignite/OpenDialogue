@@ -3,11 +3,12 @@
 use std::path::{Path, PathBuf};
 
 use iced::alignment::{Horizontal, Vertical};
-use iced::widget::{column, container, row, text};
+use iced::widget::{button, column, container, row, text};
 use iced::{Element, Length, Subscription, Task};
 
 use rod_app::comandos::{self, Comando};
 use rod_app::editor_app::{self, EditorApp, MensajeEditor};
+use rod_app::iconos::{self, Icono};
 use rod_app::inicio::{self, EstadoInicio, MensajeInicio, Salida};
 use rod_app::menu;
 use rod_app::project_io::abrir_proyecto;
@@ -27,6 +28,18 @@ enum Mensaje {
     Editor(MensajeEditor),
     Comando(Comando),
     ArchivoSoltado(PathBuf),
+    ArrastrarVentana,
+    MinimizarVentana,
+    MaximizarVentana,
+    CerrarVentana,
+}
+
+/// La ventana no tiene barra nativa: cada botón pide el id de la ventana y
+/// ejecuta la acción sobre él. La app siempre tiene una sola ventana.
+fn accion_ventana(
+    accion: impl Fn(iced::window::Id) -> Task<Mensaje> + Send + 'static,
+) -> Task<Mensaje> {
+    iced::window::latest().and_then(accion)
 }
 
 fn nuevo() -> Pantalla {
@@ -122,6 +135,10 @@ fn despachar_salida(pantalla: &mut Pantalla, salida: Salida) -> Task<Mensaje> {
 
 fn actualizar(pantalla: &mut Pantalla, mensaje: Mensaje) -> Task<Mensaje> {
     match mensaje {
+        Mensaje::ArrastrarVentana => accion_ventana(iced::window::drag),
+        Mensaje::MinimizarVentana => accion_ventana(|id| iced::window::minimize(id, true)),
+        Mensaje::MaximizarVentana => accion_ventana(|id| iced::window::maximize(id, true)),
+        Mensaje::CerrarVentana => accion_ventana(iced::window::close),
         Mensaje::Comando(comando) => match pantalla {
             Pantalla::Editor(editor) => match comando {
                 Comando::NuevoProyecto | Comando::AbrirVideo => {
@@ -204,27 +221,44 @@ fn vista(pantalla: &Pantalla) -> Element<'_, Mensaje> {
             editor_app::view(editor).map(Mensaje::Editor),
         ),
     };
+    let marca = container(text("R").font(tema::DISPLAY).size(11))
+        .width(18)
+        .height(18)
+        .align_x(Horizontal::Center)
+        .align_y(Vertical::Center)
+        .style(tema::marca_solida);
     let barra = container(
         row![
-            container(text("R").font(tema::DISPLAY).size(11))
-                .width(18)
-                .height(18)
-                .align_x(Horizontal::Center)
-                .align_y(Vertical::Center)
-                .style(tema::marca_solida),
-            text("RUSTY OPEN DIALOGUE")
-                .font(tema::MONO)
-                .size(9)
-                .color(tema::SECUNDARIO),
+            button(row![marca, text("RustyDialogue").font(tema::MONO).size(10)].spacing(8))
+                .style(tema::boton_menu)
+                .on_press(Mensaje::ArrastrarVentana),
             menu::barra(en_inicio, Mensaje::Comando),
-            container(text(estado).font(tema::MONO).size(9).color(tema::DIM))
-                .width(Length::Fill)
-                .align_x(Horizontal::Right),
+            // Zona libre de la cabecera: arrastrar desde aquí mueve la ventana.
+            button(container("").width(Length::Fill).height(30))
+                .style(tema::boton_menu)
+                .on_press(Mensaje::ArrastrarVentana),
+            text(estado).font(tema::MONO).size(9).color(tema::DIM),
+            button(iconos::vista(Icono::Menos, 12, tema::SECUNDARIO))
+                .style(tema::boton_menu)
+                .on_press(Mensaje::MinimizarVentana)
+                .width(28)
+                .height(30),
+            button(iconos::vista(Icono::Ajustar, 12, tema::SECUNDARIO))
+                .style(tema::boton_menu)
+                .on_press(Mensaje::MaximizarVentana)
+                .width(28)
+                .height(30),
+            button(iconos::vista(Icono::Cerrar, 12, tema::TEXTO))
+                .style(tema::boton_menu)
+                .on_press(Mensaje::CerrarVentana)
+                .width(28)
+                .height(30),
         ]
-        .spacing(10)
+        .spacing(8)
         .align_y(Vertical::Center),
     )
     .height(30)
+    .padding([0, 10])
     .style(tema::fondo);
 
     container(column![barra, contenido])
@@ -257,7 +291,8 @@ fn suscripcion(pantalla: &Pantalla) -> Subscription<Mensaje> {
 
 fn main() -> iced::Result {
     iced::application(nuevo, actualizar, vista)
-        .title("Rusty Open Dialogue")
+        .title("RustyDialogue")
+        .decorations(false)
         .window_size([1600.0, 900.0])
         .subscription(suscripcion)
         .run()

@@ -398,3 +398,24 @@ cara.
 - **Regla rota a propósito:** la spec antigua fijaba radios ≤ 3 px; ahora el
   techo es 6 px para superficies. Sin sombras ni gradientes.
 
+## 2026-11-23 — cabecera propia y nombre RustyDialogue
+
+- **Petición del autor:** quitar la barra nativa de Windows, hacer la cabecera
+  en código, renombrar la app a `RustyDialogue` y arreglar el texto de la
+  derecha sin padding y los objetos descentrados.
+- **Problema:** `iced` dibujaba la barra del sistema con el título largo; el
+  estado de la derecha quedaba pegado al borde, y el contenido de los botones
+  de recientes se centraba dentro de la tarjeta en vez de alinearse a la izquierda.
+- **Alternativa descartada:** conservar la barra nativa y dejar el título vacío.
+  Seguía ocupando 30 px y no permitía los controles SVG de la misma familia que
+  el resto del chrome.
+- **Decisión:** `.decorations(false)` en el builder; cabecera de 30 px con
+  marca, menú, zona arrastrable, estado y botones minimizar/maximizar/cerrar.
+  Las acciones usan `window::latest().and_then(...)` (sin `unsafe` ni crates
+  nuevas). El contenido de cada tarjeta va dentro de un `container` de 196 px
+  para fijar la alineación izquierda; la cabecera gana 10 px de padding lateral.
+- **Verificación:** captura `slice-14-inicio-sin-barra.png` (ventana 1600×900,
+  sin barra nativa). Los clics en los botones de ventana no se automatizaron:
+  `mouse_event` afecta al proceso en primer plano y aquí solo se verifica con
+  `PrintWindow`, limitación ya documentada más arriba.
+

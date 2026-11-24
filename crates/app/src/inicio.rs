@@ -198,29 +198,32 @@ fn vista_recientes(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
             } else {
                 ruta
             };
-            button(column![
-                miniatura,
-                container(
-                    column![
-                        text(
-                            reciente
-                                .ruta
-                                .file_name()
-                                .unwrap_or_default()
-                                .to_string_lossy()
-                                .to_string()
-                        )
-                        .size(12),
-                        text(ruta).font(tema::MONO).size(9).color(tema::DIM),
-                        text(resumen_reciente(reciente))
-                            .font(tema::MONO)
-                            .size(9)
-                            .color(tema::SECUNDARIO),
-                    ]
-                    .spacing(4),
-                )
-                .padding([8, 10]),
-            ])
+            button(
+                container(column![
+                    miniatura,
+                    container(
+                        column![
+                            text(
+                                reciente
+                                    .ruta
+                                    .file_name()
+                                    .unwrap_or_default()
+                                    .to_string_lossy()
+                                    .to_string()
+                            )
+                            .size(12),
+                            text(ruta).font(tema::MONO).size(9).color(tema::DIM),
+                            text(resumen_reciente(reciente))
+                                .font(tema::MONO)
+                                .size(9)
+                                .color(tema::SECUNDARIO),
+                        ]
+                        .spacing(4),
+                    )
+                    .padding([8, 10]),
+                ])
+                .width(196),
+            )
             .style(tema::boton_secundario)
             .on_press(MensajeInicio::AbrirReciente(reciente.ruta.clone()))
             .width(196)
@@ -383,7 +386,7 @@ pub fn view(estado: &EstadoInicio) -> Element<'_, MensajeInicio> {
             .align_x(Horizontal::Center)
             .align_y(Vertical::Center)
             .style(tema::marca_solida),
-        text("Rusty Open Dialogue").size(18),
+        text("RustyDialogue").size(18),
         container("")
             .height(1)
             .width(Length::Fill)

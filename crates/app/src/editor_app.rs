@@ -2336,7 +2336,7 @@ fn status_bar(state: &EditorApp) -> Element<'_, MensajeEditor> {
     .size(9)
     .color(tema::SECUNDARIO);
     let mut fila = row![
-        text("● RUSTYOPENDIALOGUE").font(tema::MONO).size(9),
+        text("● RUSTYDIALOGUE").font(tema::MONO).size(9),
         text(state.video_path.clone()).font(tema::MONO).size(9),
         proyecto,
     ]
