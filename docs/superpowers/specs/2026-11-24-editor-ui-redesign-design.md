@@ -30,7 +30,8 @@ timeline, transporte, teclado) se diseña aquí heredando sus principios.
 4. Ningún valor de color, radio, espacio o tamaño fuera de `theme.rs`.
 5. 543 líneas y 7 hablantes se mueven fluido y sin repintar en reposo.
 6. Funciona de 1100 a 2560 px de ancho.
-7. Cada fase cierra con capturas antes/después generadas sin usar la pantalla.
+7. Cada fase cierra con capturas antes/después: headless para los paneles y
+   reales de pantalla para el editor con video.
 
 **Fuera de alcance.** Modelo de subtítulos, `.ass`, preview libass, exportación,
 `.cdp`, recovery, autosubs, presets. Se tocan solo para leer de ellos.
@@ -130,9 +131,10 @@ marcado con `*`:
 
 Reglas:
 - La paleta vive en `rod_core::color_hablante` como `paleta_identidad() -> [&str; 12]`.
-- `color_identidad(hablante, indice) -> Color32`: si `hablante.color` es un hex
-  válido **de la paleta**, ese; si no, `paleta[indice % 12]` con `indice` = su
-  posición en `proyecto.hablantes`. Determinista y sin campo nuevo en el `.cdp`
+- `color_identidad(hablante, indice) -> &'static str` (hex; `rod-core` no conoce
+  egui y devuelve cadena, que la UI convierte con `tema::color_de_hex`): si
+  `Hablante.color` es un hex válido **de la paleta**, ese; si no,
+  `paleta[indice % 12]` con `indice` = su posición en `proyecto.hablantes`. Determinista y sin campo nuevo en el `.cdp`
   (`Hablante.color` ya existe y ya se serializa). El color por defecto depende
   de la posición, así que reordenar hablantes a mano puede cambiar los colores
   por defecto; en la práctica el orden solo cambia al importar autosubs, que
@@ -276,10 +278,10 @@ cabecera 40
 `SidePanel` derecho con `resizable`, `TopBottomPanel` inferior con `resizable`,
 las dos colapsables (doble clic en el divisor, o el icono de la cabecera). Las
 medidas se persisten en `%APPDATA%\RustyOpenDialogue\preferencias.json`
-(`ui/preferencias.rs`, escritura atómica como `recientes.rs`, lectura tolerante:
-un archivo roto da valores por defecto). Se guarda: ancho del panel, alto del
-timeline, panel visible, `seguir`, zoom y desplazamiento del timeline, idioma y
-atajos (§11).
+(`crates/app/src/preferencias.rs`, escritura atómica como `recientes.rs`, lectura
+tolerante: un archivo roto da valores por defecto). Se guarda: ancho del panel,
+alto del timeline, panel visible, `seguir`, zoom y desplazamiento del timeline,
+idioma y atajos (§11).
 
 ### 6.2 Panel derecho
 
@@ -420,29 +422,38 @@ Objetivo medible: con el fixture de 543 líneas, `Context::run` sin GPU por deba
 de 8 ms de media y sin asignaciones por frame en el camino de pintado del
 timeline (los buffers se reutilizan).
 
-## 10. Verificación sin pantalla
+## 10. Verificación: headless + captura real
 
-El usuario necesita el PC, así que **no se captura la pantalla**. Se añade
-`egui_kittest = { version = "0.33", features = ["wgpu", "snapshot", "eframe"] }`
-como `dev-dependency` de `rod-app` y un binario de desarrollo
-`cargo run -p rod-app --example capturas` que:
+Dos caminos complementarios, decididos el 2026-11-24 cuando el usuario liberó
+el PC:
 
-1. Construye el estado real de Inicio (`EstadoInicio` con 0, 1 y 3 recientes) y
-   de Editor (fixture de 543 líneas y 7 hablantes, `gpu = None`).
-2. Renderiza a 1100×700, 1440×900 y 2560×1440 con `Harness::render()`. En el
-   idioma por defecto, y una pasada en español a 1100 px: las cadenas españolas
-   son las largas, así que ahí es donde se ve un desborde.
-3. Escribe PNG en `docs/checklists/rediseno/` con nombre estable por pantalla,
-   tamaño y fase (`editor-1440-fase3.png`, etc.).
+- **`egui_kittest` (headless)** para geometría, texto, tema, interacción y
+  capturas deterministas de paneles. Se añade
+  `egui_kittest = { version = "0.33", features = ["wgpu", "snapshot", "eframe"] }`
+  como `dev-dependency` de `rod-app`, con un ejemplo de desarrollo
+  `cargo run -p rod-app --example capturas` que construye el estado real de
+  Inicio (0, 1 y 3 recientes) y de Editor (fixture de 543 líneas y 7 hablantes,
+  `gpu = None`), renderiza con `Harness::render()` a 1100×700, 1440×900 y
+  2560×1440, y escribe PNG en `docs/checklists/rediseno/` con nombre estable por
+  pantalla, tamaño y fase. Una pasada extra en español a 1100 px: las cadenas
+  españolas son las largas y ahí se ve un desborde.
+- **Captura real de pantalla** para lo que kittest no puede pintar: el frame de
+  mpv se dibuja en un `PaintCallback` de wgpu, que el renderer de pruebas no
+  ejecuta, así que en las capturas headless el monitor sale vacío. El editor
+  completo (video + subtítulos superpuestos + timeline con waveform) se abre
+  con el clip de prueba, se captura la ventana a 1440×900 y se guarda con el
+  mismo esquema de nombres. Es también la única forma fiable de capturar el
+  «antes» del editor: el archivo que había no mostraba el editor.
 
-Los mismos `Harness` sirven de tests de interacción headless: doble clic en una
-fila abre el editor inline; `Esc` lo cierra sin cambios; arrastrar un clip
-cambia sus tiempos; `Ctrl+rueda` cambia la escala manteniendo el tiempo bajo el
-cursor. Nada de esto toca la pantalla ni abre una ventana.
+Los mismos `Harness` sirven de tests de interacción: doble clic en una fila abre
+el editor inline; `Esc` lo cierra sin cambios; arrastrar un clip cambia sus
+tiempos; `Ctrl+rueda` cambia la escala manteniendo el tiempo bajo el cursor.
+`Harness` fija `style.animation_time = 0.0` internamente, así que las
+animaciones de 120–160 ms se comprueban como valor del tema, no en la imagen.
 
 Tests unitarios nuevos:
-- `theme.rs`: cada par texto/fondo de §2.1 ≥ 4.5:1; todo `TextStyle` ≥ 11;
-  `RADIO_CONTROL < RADIO_SUPERFICIE`.
+- `tema.rs`: cada par texto/fondo de §2.1 ≥ 4.5:1; todo `TextStyle` ≥ 11;
+  `RADIO_CONTROL < RADIO_SUPERFICIE`; `style.animation_time` entre 0.12 y 0.16.
 - `color_hablante.rs`: la paleta tiene 12 colores únicos, ninguno es `ACENTO`;
   `color_identidad` es estable ante reordenamientos relativos y cae a la paleta
   ante hex inválido; `color_hablante` (preset) no cambia de comportamiento.
@@ -503,7 +514,7 @@ silenciosas, ni un `match` de 200 brazos en el punto de dibujo.
   de idioma para entenderla; quien subtitule en español lo pone en Ajustes una
   vez y queda guardado.
 
-### 11.2 Atajos (`comandos.rs` y `atajos.rs`)
+### 11.2 Atajos (`comandos.rs`)
 
 Hoy `desde_input` es un `match` fijo y `atajo()` devuelve cadenas sueltas; las
 dos se sustituyen por datos.
@@ -515,7 +526,10 @@ dos se sustituyen por datos.
   de casos de `desde_input` y compara). Las variantes de flecha son filas
   distintas (`Retroceder` = `←`, `RetrocederFino` = `Shift+←`), no una fila con
   modificadores: así el mapa es plano y una tecla nueva nunca cambia el sentido
-  de otra.
+  de otra. Los **alias del mismo comando** sí existen y son filas distintas
+  (`Ctrl+Shift+Z` y `Ctrl+Y` = Rehacer; `+` y `Shift+=` = VelocidadMas): lo que
+  se prohíbe es que una misma combinación pertenezca a dos comandos, no que un
+  comando tenga dos combinaciones.
 - `Comando::todas() -> &'static [Comando]` alimenta el panel: los comandos sin
   atajo de fábrica (`NuevoProyecto`, los de panel…) aparecen con «—» y se les
   puede asignar uno. Un test comprueba que `todas()` cubre el enum.
@@ -619,8 +633,8 @@ bloquear la fase.
 
 ## 14. Archivos
 
-Nuevos: `textos.rs`, `ui/tipografia.rs`, `ui/kit.rs`, `ui/chrome.rs`,
-`ui/atajos.rs`, `ui/ajustes.rs`, `ui/preferencias.rs`, `ui/toast.rs`,
+Nuevos: `textos.rs`, `preferencias.rs`, `ui/tipografia.rs`, `ui/kit.rs`,
+`ui/chrome.rs`, `ui/atajos.rs`, `ui/ajustes.rs`, `ui/toast.rs`,
 `crates/player/src/waveform.rs`, `crates/app/assets/fonts/` (+ OFL),
 `crates/app/examples/capturas.rs`.
 
