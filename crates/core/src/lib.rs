@@ -31,7 +31,7 @@ pub use autosubs::{
 pub use busqueda::{
     SegmentoTexto, coincide, normalizar_termino, partir_resaltado, reemplazar_todos,
 };
-pub use color_hablante::color_hablante;
+pub use color_hablante::{color_hablante, color_identidad, es_color_de_paleta, paleta_identidad};
 pub use editing::{
     DURACION_MINIMA, OverlapEntry, SNAP_THRESHOLD, build_overlap_report, clamp_caption_tiempos,
     clamp_delta_bloque, find_snap_block_delta, find_snap_time, format_overlap_report,

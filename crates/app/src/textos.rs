@@ -46,6 +46,13 @@ pub struct Textos {
     pub seccion_exportar: &'static str,
     pub seccion_estilos: &'static str,
     pub seccion_ayuda: &'static str,
+    pub nombre: &'static str,
+    pub tecla: &'static str,
+    pub color_identidad: &'static str,
+    pub color_subtitulo: &'static str,
+    pub agregar_hablante: &'static str,
+    pub quitar_de_la_seleccion: &'static str,
+    pub borrar_hablante: &'static str,
 }
 
 pub const ES: Textos = Textos {
@@ -64,6 +71,13 @@ pub const ES: Textos = Textos {
     seccion_exportar: "Exportar",
     seccion_estilos: "Estilos",
     seccion_ayuda: "Ayuda",
+    nombre: "Nombre",
+    tecla: "Tecla",
+    color_identidad: "Color de identidad",
+    color_subtitulo: "Color del subtítulo (preset)",
+    agregar_hablante: "Agregar hablante",
+    quitar_de_la_seleccion: "Quitar de la selección",
+    borrar_hablante: "Borrar hablante",
 };
 
 pub const EN: Textos = Textos {
@@ -82,6 +96,13 @@ pub const EN: Textos = Textos {
     seccion_exportar: "Export",
     seccion_estilos: "Styles",
     seccion_ayuda: "Help",
+    nombre: "Name",
+    tecla: "Key",
+    color_identidad: "Identity color",
+    color_subtitulo: "Subtitle color (preset)",
+    agregar_hablante: "Add speaker",
+    quitar_de_la_seleccion: "Clear speaker of selection",
+    borrar_hablante: "Delete speaker",
 };
 
 impl Textos {

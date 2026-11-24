@@ -50,6 +50,8 @@ pub const VELOCIDADES: [Velocidad; 6] = [
 pub enum CampoHablante {
     Nombre,
     Tecla,
+    /// Color de identidad de UI, siempre una de las doce muestras.
+    Color,
 }
 
 /// Campo de tiempo editable en el inspector de subtítulos.
@@ -1389,6 +1391,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
                 (CampoHablante::Tecla, Some(hablante)) => {
                     hablante.tecla != normalizar_tecla(&valor)
                 }
+                (CampoHablante::Color, Some(hablante)) => hablante.color != valor,
                 (_, None) => false,
             };
             if !cambia {
@@ -1405,6 +1408,17 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
                 }
                 CampoHablante::Tecla => {
                     state.editor.editar_tecla_hablante(&id, &valor);
+                }
+                CampoHablante::Color => {
+                    if let Some(hablante) = state
+                        .editor
+                        .proyecto_mut()
+                        .hablantes
+                        .iter_mut()
+                        .find(|hablante| hablante.id == id)
+                    {
+                        hablante.color = valor.clone();
+                    }
                 }
             }
             refrescar_preview(state);
