@@ -1,241 +1,366 @@
-//! La pantalla de arranque. Solo dibuja y devuelve la intención del usuario;
-//! `rod_app::inicio::update` sigue siendo quien decide qué hacer con ella.
+﻿//! Pantalla de arranque: riel, acciones, zona de arrastre y recientes.
 
-use egui::Ui;
+use egui::{Align2, Color32, RichText, Sense, Stroke, Vec2};
 
-use crate::inicio::{EstadoInicio, MensajeInicio, cantidad_visible};
-use crate::ui::tema;
+use crate::inicio::{EstadoInicio, MensajeInicio, OrdenRecientes, cantidad_visible};
+use crate::preferencias::Preferencias;
+use crate::recientes::Reciente;
+use crate::textos::Textos;
 
-pub fn mostrar(ui: &mut Ui, estado: &mut EstadoInicio) -> Option<MensajeInicio> {
-    // Hasta la tarea 9, la vista toma el idioma por defecto.
-    let textos = crate::textos::Idioma::default().textos();
+use super::kit::{self, Icono};
+use super::tema::{self, Estilo};
+
+/// Dibuja la pantalla. El booleano indica que se pidió abrir Ajustes.
+pub fn mostrar(
+    ui: &mut egui::Ui,
+    estado: &mut EstadoInicio,
+    textos: &Textos,
+    prefs: &mut Preferencias,
+) -> (Option<MensajeInicio>, bool) {
+    let _ = &prefs;
+    let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
+    ui.painter().rect_filled(rect, 0.0, tema::FONDO);
+
+    let ancho_riel = 220.0;
+    let riel = egui::Rect::from_min_size(rect.min, Vec2::new(ancho_riel, rect.height()));
+    let contenido =
+        egui::Rect::from_min_max(egui::pos2(rect.min.x + ancho_riel, rect.min.y), rect.max);
+
+    let abrir_ajustes = riel_de_navegacion(ui, riel, textos);
+
     let mut intencion = None;
-    let altura = ui.available_height();
+    ui.scope_builder(egui::UiBuilder::new().max_rect(contenido), |ui| {
+        ui.set_width(contenido.width());
+        ui.add_space(tema::ESP_72);
 
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        // Rail estrecho: identidad y navegación, sin repetir la cabecera.
-        ui.allocate_ui_with_layout(
-            egui::vec2(88.0, altura),
-            egui::Layout::top_down(egui::Align::Center),
-            |ui| {
-                ui.add_space(28.0);
-                let (marca, _) =
-                    ui.allocate_exact_size(egui::vec2(30.0, 30.0), egui::Sense::hover());
-                ui.painter()
-                    .rect_filled(marca, egui::CornerRadius::same(5), tema::ACENTO);
-                ui.painter().text(
-                    marca.center(),
-                    egui::Align2::CENTER_CENTER,
-                    "R",
-                    egui::FontId::proportional(16.0),
-                    egui::Color32::WHITE,
-                );
-                ui.add_space(24.0);
-                tema::etiqueta(ui, "INICIO");
-                ui.add_space(10.0);
-                tema::etiqueta(ui, "RECIENTES");
-                ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
-                    ui.label(
-                        egui::RichText::new("v0.9")
-                            .font(tema::mono_public())
-                            .size(9.0)
-                            .color(tema::DIM),
-                    );
-                });
-            },
+        ui.label(
+            RichText::new(textos.inicio_titulo)
+                .font(tema::fuente_segura(Estilo::Titulo))
+                .color(tema::TEXTO),
         );
-        ui.separator();
+        ui.add_space(tema::ESP_8);
+        ui.label(
+            RichText::new(textos.inicio_subtitulo)
+                .font(tema::fuente_segura(Estilo::Cuerpo))
+                .color(tema::TEXTO_2),
+        );
+        ui.add_space(tema::ESP_24);
 
-        // Una sola columna con ancho máximo, centrada: el contenido manda, no
-        // el lienzo vacío de una ventana de 1600 px.
-        let disponible = ui.available_width();
-        let ancho = disponible.min(1040.0);
-        ui.add_space(((disponible - ancho) / 2.0).max(0.0));
-        ui.allocate_ui_with_layout(
-            egui::vec2(ancho, altura),
-            egui::Layout::top_down(egui::Align::LEFT),
-            |ui| {
-                ui.add_space(70.0);
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = tema::ESP_8;
+            if kit::boton_primario(ui, textos.abrir_video, Icono::Video).clicked() {
+                intencion = Some(MensajeInicio::AbrirVideo);
+            }
+            if kit::boton_secundario(ui, textos.abrir_proyecto, Icono::Carpeta).clicked() {
+                intencion = Some(MensajeInicio::AbrirProyecto);
+            }
+            ui.label(
+                RichText::new("Ctrl+O")
+                    .font(tema::fuente(Estilo::Mono))
+                    .color(tema::TEXTO_3),
+            );
+        });
+
+        ui.add_space(tema::ESP_8);
+        zona_de_arrastre(ui, textos);
+
+        if let Some(aviso) = &estado.aviso {
+            ui.add_space(tema::ESP_16);
+            let aviso_color = Color32::from_rgba_premultiplied(
+                tema::PELIGRO.r() as u16 as u8,
+                tema::PELIGRO.g() as u16 as u8,
+                tema::PELIGRO.b() as u16 as u8,
+                30,
+            );
+            let marco = egui::Frame {
+                inner_margin: egui::Margin::symmetric(tema::ESP_12 as i8, tema::ESP_8 as i8),
+                fill: aviso_color,
+                ..egui::Frame::NONE
+            };
+            marco.show(ui, |ui| {
                 ui.label(
-                    egui::RichText::new("Edita subtítulos con precisión")
-                        .size(30.0)
-                        .strong()
+                    RichText::new(&aviso.texto)
+                        .font(tema::fuente(Estilo::Base))
                         .color(tema::TEXTO),
                 );
-                ui.add_space(6.0);
-                ui.label(
-                    egui::RichText::new("Abre un video o continúa un proyecto guardado.")
-                        .size(14.0)
-                        .color(tema::SECUNDARIO),
-                );
-                ui.add_space(26.0);
+            });
+        }
+        if let Some(mensaje) = &estado.mensaje {
+            ui.add_space(tema::ESP_8);
+            ui.label(
+                RichText::new(mensaje)
+                    .font(tema::fuente(Estilo::Base))
+                    .color(tema::PELIGRO),
+            );
+        }
 
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 10.0;
-                    let principal = ui.add(
-                        egui::Button::new(
-                            egui::RichText::new("Abrir video")
-                                .size(13.0)
-                                .strong()
-                                .color(egui::Color32::WHITE),
-                        )
-                        .fill(tema::ACENTO)
-                        .corner_radius(egui::CornerRadius::same(5))
-                        .min_size(egui::vec2(152.0, 38.0)),
-                    );
-                    if principal.clicked() {
-                        intencion = Some(MensajeInicio::AbrirVideo);
-                    }
-                    let secundario = ui.add(
-                        egui::Button::new(egui::RichText::new("Abrir proyecto").size(13.0))
-                            .fill(tema::PANEL)
-                            .corner_radius(egui::CornerRadius::same(5))
-                            .stroke(egui::Stroke::new(1.0_f32, tema::BORDE))
-                            .min_size(egui::vec2(140.0, 38.0)),
-                    );
-                    if secundario.clicked() {
-                        intencion = Some(MensajeInicio::AbrirProyecto);
+        ui.add_space(tema::ESP_40);
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new(textos.recientes)
+                    .font(tema::fuente(Estilo::Pequeno))
+                    .color(tema::TEXTO_2),
+            );
+            let orden_actual = match estado.orden {
+                OrdenRecientes::Recientes => textos.mas_recientes,
+                OrdenRecientes::Nombre => textos.orden_nombre,
+                OrdenRecientes::Lineas => textos.orden_lineas,
+            };
+            egui::ComboBox::from_id_salt("orden-recientes")
+                .selected_text(orden_actual)
+                .show_ui(ui, |ui| {
+                    for (orden, etiqueta) in [
+                        (OrdenRecientes::Recientes, textos.mas_recientes),
+                        (OrdenRecientes::Nombre, textos.orden_nombre),
+                        (OrdenRecientes::Lineas, textos.orden_lineas),
+                    ] {
+                        ui.selectable_value(&mut estado.orden, orden, etiqueta);
                     }
                 });
-                ui.add_space(10.0);
-                ui.label(
-                    egui::RichText::new("También puedes soltar un MP4, MKV, MOV o WebM aquí.")
-                        .size(11.0)
-                        .color(tema::DIM),
-                );
+        });
+        ui.add_space(tema::ESP_12);
 
-                if let Some(aviso) = &estado.aviso {
-                    ui.add_space(20.0);
-                    let marco = egui::Frame {
-                        inner_margin: egui::Margin::symmetric(14, 12),
-                        corner_radius: egui::CornerRadius::same(6),
-                        stroke: egui::Stroke::new(1.0_f32, tema::AMBAR),
-                        ..tema::panel(tema::LATERAL)
-                    };
-                    marco.show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("●").size(12.0).color(tema::AMBAR));
-                            ui.label(egui::RichText::new(&aviso.texto).size(12.0));
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    if ui.button("Descartar").clicked() {
-                                        intencion = Some(MensajeInicio::DescartarRecovery);
-                                    }
-                                    if ui.button("Recuperar").clicked() {
-                                        intencion = Some(MensajeInicio::Recuperar);
-                                    }
-                                },
-                            );
-                        });
-                    });
+        if estado.recientes.is_empty() {
+            kit::recuadro_punteado(ui, 104.0, textos.texto_vacio_recientes);
+        } else {
+            let destacado = estado.destacado;
+            let mut recientes: Vec<_> = estado.recientes.iter().collect();
+            match estado.orden {
+                OrdenRecientes::Recientes => {}
+                OrdenRecientes::Nombre => {
+                    recientes.sort_by_key(|r| r.ruta.to_string_lossy().into_owned())
                 }
-                if let Some(mensaje) = &estado.mensaje {
-                    ui.add_space(10.0);
-                    ui.label(egui::RichText::new(mensaje).size(12.0).color(tema::AMBAR));
-                }
-
-                ui.add_space(40.0);
-                tema::etiqueta(ui, "Recientes");
-                ui.add_space(10.0);
-                if estado.recientes.is_empty() {
-                    ui.label(
-                        egui::RichText::new(textos.texto_vacio_recientes)
-                            .size(12.0)
-                            .color(tema::DIM),
-                    );
-                } else {
-                    let visibles = cantidad_visible(estado.recientes.len(), estado.expandido);
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing = egui::vec2(12.0, 10.0);
-                        for reciente in estado.recientes.iter().take(visibles) {
-                            let respuesta = tema::panel(tema::PANEL).show(ui, |ui| {
-                                ui.set_min_size(egui::vec2(244.0, 104.0));
-                                ui.vertical(|ui| {
-                                    ui.add_space(2.0);
-                                    ui.label(
-                                        egui::RichText::new("R")
-                                            .font(tema::mono_public())
-                                            .size(11.0)
-                                            .color(tema::ACENTO),
-                                    );
-                                    ui.add_space(12.0);
-                                    ui.label(
-                                        egui::RichText::new(
-                                            reciente
-                                                .ruta
-                                                .file_name()
-                                                .map(|nombre| nombre.to_string_lossy().into_owned())
-                                                .unwrap_or_else(|| {
-                                                    reciente.ruta.display().to_string()
-                                                }),
-                                        )
-                                        .strong()
-                                        .size(13.0),
-                                    );
-                                    ui.add_space(4.0);
-                                    ui.label(
-                                        egui::RichText::new(format!(
-                                            "{} · {} · {}",
-                                            textos.lineas(reciente.lineas),
-                                            textos.hablantes(reciente.hablantes),
-                                            textos.fecha(&reciente.fecha)
-                                        ))
-                                        .font(tema::mono_public())
-                                        .size(10.0)
-                                        .color(tema::DIM),
-                                    );
-                                });
-                            });
-                            if respuesta.response.clicked() {
-                                intencion =
-                                    Some(MensajeInicio::AbrirReciente(reciente.ruta.clone()));
-                            }
-                        }
-                    });
-                    if estado.recientes.len() > 3 && ui.button("Ver todos").clicked() {
-                        intencion = Some(MensajeInicio::VerTodos);
+                OrdenRecientes::Lineas => recientes.sort_by_key(|r| std::cmp::Reverse(r.lineas)),
+            }
+            let visibles = cantidad_visible(recientes.len(), estado.expandido);
+            let ancho_celda = 260.0;
+            let espacio = tema::ESP_20;
+            let columnas = ((contenido.width() + espacio) / (ancho_celda + espacio))
+                .floor()
+                .max(1.0) as usize;
+            let ancho_tarjeta =
+                (contenido.width() - espacio * (columnas - 1) as f32) / columnas as f32;
+            egui::Grid::new("tarjetas-recientes")
+                .num_columns(columnas)
+                .spacing(Vec2::splat(espacio))
+                .show(ui, |ui| {
+                    for (indice, reciente) in recientes.into_iter().take(visibles).enumerate() {
+                        ui.set_width(ancho_tarjeta);
+                        tarjeta_reciente(
+                            ui,
+                            reciente,
+                            textos,
+                            ancho_tarjeta,
+                            Some(indice) == destacado,
+                            &mut intencion,
+                        );
+                        ui.end_row();
                     }
-                }
-            },
-        );
+                });
+            if estado.recientes.len() > 3 && ui.button("Ver todos").clicked() {
+                intencion = Some(MensajeInicio::VerTodos);
+            }
+        }
     });
-    intencion
+
+    (intencion, abrir_ajustes)
 }
 
-#[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
+fn riel_de_navegacion(ui: &mut egui::Ui, riel: egui::Rect, textos: &Textos) -> bool {
+    let painter = ui.painter();
+    painter.rect_filled(riel, 0.0, tema::RIEL);
+    painter.line_segment(
+        [
+            egui::pos2(riel.max.x, riel.min.y),
+            egui::pos2(riel.max.x, riel.max.y),
+        ],
+        Stroke::new(1.0_f32, tema::BORDE),
+    );
 
-    use crate::inicio;
-    use crate::recientes::Reciente;
-    use egui_kittest::kittest::Queryable;
+    let mut abrir_ajustes = false;
+    ui.scope_builder(
+        egui::UiBuilder::new().max_rect(riel.shrink(tema::ESP_12)),
+        |ui| {
+            ui.vertical(|ui| {
+                ui.add_space(tema::ESP_24);
+                for (etiqueta, icono, activo) in [
+                    (textos.inicio, Icono::Inicio2, true),
+                    (textos.recientes, Icono::Reloj, false),
+                ] {
+                    let respuesta = ui.add(
+                        egui::Button::new(
+                            RichText::new(format!("{}  {etiqueta}", kit::glifo(icono)))
+                                .font(tema::fuente(Estilo::Base))
+                                .color(if activo { tema::TEXTO } else { tema::TEXTO_2 }),
+                        )
+                        .frame(false)
+                        .min_size(Vec2::new(ui.available_width(), tema::ALTO_NAV)),
+                    );
+                    if activo {
+                        let barra = egui::Rect::from_min_max(
+                            egui::pos2(respuesta.rect.min.x - 6.0, respuesta.rect.min.y + 6.0),
+                            egui::pos2(respuesta.rect.min.x - 4.0, respuesta.rect.max.y - 6.0),
+                        );
+                        ui.painter().rect_filled(barra, 0.0, tema::ACENTO);
+                    }
+                }
+                kit::icono(ui, Icono::Ajustes);
+                if ui
+                    .add(
+                        egui::Button::new(
+                            RichText::new(textos.ajustes)
+                                .font(tema::fuente(Estilo::Base))
+                                .color(tema::TEXTO_2),
+                        )
+                        .frame(false)
+                        .min_size(Vec2::new(ui.available_width(), tema::ALTO_NAV)),
+                    )
+                    .clicked()
+                {
+                    abrir_ajustes = true;
+                }
+                ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+                    ui.label(
+                        RichText::new("v0.9")
+                            .font(tema::fuente(Estilo::Mono))
+                            .color(tema::TEXTO_3),
+                    );
+                });
+            });
+        },
+    );
+    abrir_ajustes
+}
 
-    fn tres_recientes() -> Vec<Reciente> {
-        (1..=3)
-            .map(|n| Reciente {
-                ruta: PathBuf::from(format!("C:/proyectos/{n}.cdp")),
-                lineas: n,
-                hablantes: 1,
-                fecha: Default::default(),
-                duracion: 0.0,
-                tira: Vec::new(),
-            })
-            .collect()
-    }
-
-    #[test]
-    fn arranque_muestra_tres_recientes_y_boton_abrir() {
-        let estado = inicio::nuevo(tres_recientes(), None);
-        let mut harness = egui_kittest::Harness::new_ui_state(
-            |ui, estado: &mut inicio::EstadoInicio| {
-                super::mostrar(ui, estado);
-            },
-            estado,
+fn zona_de_arrastre(ui: &mut egui::Ui, textos: &Textos) {
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 104.0), Sense::hover());
+    let sobre = ui.ctx().input(|entrada| {
+        entrada.raw.hovered_files.iter().any(|archivo| {
+            archivo
+                .path
+                .as_ref()
+                .and_then(|ruta| ruta.extension())
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| {
+                    ["mp4", "mkv", "mov", "webm"]
+                        .iter()
+                        .any(|valida| extension.eq_ignore_ascii_case(valida))
+                })
+        })
+    });
+    let color = if sobre {
+        tema::ACENTO
+    } else {
+        tema::BORDE_HOVER
+    };
+    let pintor = ui.painter();
+    let trazo = Stroke::new(1.5_f32, color);
+    let dash = tema::ESP_8;
+    let mut x = rect.min.x;
+    while x < rect.max.x {
+        pintor.line_segment(
+            [
+                egui::pos2(x, rect.min.y),
+                egui::pos2((x + dash).min(rect.max.x), rect.min.y),
+            ],
+            trazo,
         );
-        assert!(harness.query_by_label("Abrir video").is_some());
-        assert!(harness.query_by_label_contains("1.cdp").is_some());
-        assert!(harness.query_by_label_contains("4.cdp").is_none());
+        pintor.line_segment(
+            [
+                egui::pos2(x, rect.max.y),
+                egui::pos2((x + dash).min(rect.max.x), rect.max.y),
+            ],
+            trazo,
+        );
+        x += dash + tema::ESP_4;
     }
+    let mut y = rect.min.y;
+    while y < rect.max.y {
+        pintor.line_segment(
+            [
+                egui::pos2(rect.min.x, y),
+                egui::pos2(rect.min.x, (y + dash).min(rect.max.y)),
+            ],
+            trazo,
+        );
+        pintor.line_segment(
+            [
+                egui::pos2(rect.max.x, y),
+                egui::pos2(rect.max.x, (y + dash).min(rect.max.y)),
+            ],
+            trazo,
+        );
+        y += dash + tema::ESP_4;
+    }
+    pintor.text(
+        rect.center(),
+        Align2::CENTER_CENTER,
+        textos.arrastrar_video,
+        tema::fuente(Estilo::Base),
+        if sobre { tema::ACENTO } else { tema::TEXTO_2 },
+    );
+}
+
+fn tarjeta_reciente(
+    ui: &mut egui::Ui,
+    reciente: &Reciente,
+    textos: &Textos,
+    ancho: f32,
+    destacada: bool,
+    intencion: &mut Option<MensajeInicio>,
+) {
+    let color = reciente
+        .tira
+        .first()
+        .map(|(color, _)| tema::color(color))
+        .unwrap_or(tema::CONTROL);
+    let (respuesta, _) = kit::tarjeta(ui, |ui| {
+        ui.set_width(ancho - tema::ESP_16 * 2.0);
+        let (miniatura, _) =
+            ui.allocate_exact_size(Vec2::new(ui.available_width(), 96.0), Sense::hover());
+        ui.painter().rect_filled(miniatura, 0.0, tema::CONTROL);
+        ui.painter().rect_filled(
+            egui::Rect::from_min_max(
+                egui::pos2(miniatura.min.x, miniatura.max.y - 4.0),
+                miniatura.max,
+            ),
+            0.0,
+            color,
+        );
+        ui.label(
+            RichText::new(
+                reciente
+                    .ruta
+                    .file_name()
+                    .map(|nombre| nombre.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| reciente.ruta.display().to_string()),
+            )
+            .font(tema::fuente_segura(Estilo::CuerpoFuerte))
+            .color(tema::TEXTO),
+        );
+        ui.label(
+            RichText::new(format!(
+                "{} · {} · {}",
+                textos.lineas(reciente.lineas),
+                textos.hablantes(reciente.hablantes),
+                textos.fecha(&reciente.fecha)
+            ))
+            .font(tema::fuente(Estilo::Pequeno))
+            .color(tema::TEXTO_3),
+        );
+    });
+    if destacada {
+        ui.painter().rect_stroke(
+            respuesta.rect,
+            egui::CornerRadius::same(tema::RADIO_SUPERFICIE as u8),
+            Stroke::new(2.0_f32, tema::ACENTO),
+            egui::StrokeKind::Outside,
+        );
+    }
+    if respuesta.clicked() {
+        *intencion = Some(MensajeInicio::AbrirReciente(reciente.ruta.clone()));
+    }
+    respuesta.on_hover_ui(|ui| {
+        ui.label(reciente.ruta.display().to_string());
+    });
 }

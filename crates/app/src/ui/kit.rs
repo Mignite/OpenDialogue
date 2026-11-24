@@ -379,13 +379,15 @@ pub fn recuadro_punteado(ui: &mut Ui, alto: f32, texto: &str) {
         );
         barrido += dash + hueco;
     }
-    ui.painter().text(
-        rect.center(),
-        egui::Align2::CENTER_CENTER,
-        texto,
-        tema::fuente(Estilo::Base),
-        tema::TEXTO_3,
-    );
+    ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+        ui.centered_and_justified(|ui| {
+            ui.label(
+                egui::RichText::new(texto)
+                    .font(tema::fuente(Estilo::Base))
+                    .color(tema::TEXTO_3),
+            );
+        });
+    });
 }
 
 /// Tarjeta con superficie, borde y radio del tema.

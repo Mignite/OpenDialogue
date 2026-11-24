@@ -11,11 +11,37 @@ use crate::thumbnail;
 
 /// Lo que la vista necesita para dibujarse. Los recientes ya vienen resueltos
 /// (metadata leída del `.cdp` al arrancar); aquí no se toca ningún archivo.
+/// Criterio de orden de las tarjetas de recientes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OrdenRecientes {
+    /// Fecha de modificación, de más reciente a más viejo (el orden del índice).
+    #[default]
+    Recientes,
+    Nombre,
+    Lineas,
+}
+
 pub struct EstadoInicio {
     pub recientes: Vec<Reciente>,
     pub expandido: bool,
     pub aviso: Option<AvisoRecovery>,
     pub mensaje: Option<String>,
+    pub orden: OrdenRecientes,
+    /// Índice de la tarjeta con el foco del teclado.
+    pub destacado: Option<usize>,
+}
+
+impl EstadoInicio {
+    pub fn nuevo(recientes: Vec<Reciente>, aviso: Option<AvisoRecovery>) -> Self {
+        Self {
+            recientes,
+            expandido: false,
+            aviso,
+            mensaje: None,
+            orden: OrdenRecientes::default(),
+            destacado: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -42,12 +68,7 @@ pub enum Salida {
 }
 
 pub fn nuevo(recientes: Vec<Reciente>, aviso: Option<AvisoRecovery>) -> EstadoInicio {
-    EstadoInicio {
-        recientes,
-        expandido: false,
-        aviso,
-        mensaje: None,
-    }
+    EstadoInicio::nuevo(recientes, aviso)
 }
 
 /// El botón «Ver todos» solo aparece cuando hay más de tres recientes.

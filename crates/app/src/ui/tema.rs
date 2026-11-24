@@ -132,6 +132,18 @@ pub fn mono_public() -> FontId {
     fuente(Estilo::Mono)
 }
 
+/// Misma medida, pero con una familia siempre registrada. La usan las vistas
+/// que se pintan en tests sin `aplicar`: las familias con nombre solo existen
+/// después de instalar las fuentes.
+pub fn fuente_segura(estilo: Estilo) -> FontId {
+    let fuente = fuente(estilo);
+    let familia = match fuente.family {
+        egui::FontFamily::Name(_) => egui::FontFamily::Proportional,
+        otra => otra,
+    };
+    FontId::new(fuente.size, familia)
+}
+
 /// Convierte un `#RRGGBB` en color; un valor inválido cae a `TEXTO_2`.
 pub fn color(hex: &str) -> Color32 {
     color_de_hex(hex)

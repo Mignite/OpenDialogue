@@ -62,6 +62,12 @@ pub struct Textos {
     pub restablecer: &'static str,
     pub buscar: &'static str,
     pub pulsa_una_tecla: &'static str,
+    pub arrastrar_video: &'static str,
+    pub mas_recientes: &'static str,
+    pub orden_nombre: &'static str,
+    pub orden_lineas: &'static str,
+    pub abrir_otro: &'static str,
+    pub inicio: &'static str,
 }
 
 pub const ES: Textos = Textos {
@@ -96,6 +102,12 @@ pub const ES: Textos = Textos {
     restablecer: "Restablecer",
     buscar: "Buscar",
     pulsa_una_tecla: "Pulsa una tecla…",
+    arrastrar_video: "Suelta aquí un MP4, MKV, MOV o WebM",
+    mas_recientes: "Más recientes",
+    orden_nombre: "Nombre",
+    orden_lineas: "Líneas",
+    abrir_otro: "Abrir otro proyecto",
+    inicio: "Inicio",
 };
 
 pub const EN: Textos = Textos {
@@ -130,6 +142,12 @@ pub const EN: Textos = Textos {
     restablecer: "Reset",
     buscar: "Search",
     pulsa_una_tecla: "Press a key…",
+    arrastrar_video: "Drop an MP4, MKV, MOV or WebM here",
+    mas_recientes: "Most recent",
+    orden_nombre: "Name",
+    orden_lineas: "Lines",
+    abrir_otro: "Open another project",
+    inicio: "Home",
 };
 
 impl Textos {

@@ -1,4 +1,4 @@
-﻿//! Capturas deterministas de la UI con egui_kittest, sin abrir ventana.
+//! Capturas deterministas de la UI con egui_kittest, sin abrir ventana.
 //!
 //! Uso: `cargo run -p rod-app --example capturas -- antes`
 //! Las escribe en `docs/checklists/rediseno/`.
@@ -31,7 +31,8 @@ fn capturar(nombre: &str, ancho: f32, alto: f32, estado: EstadoInicio) {
                 let ctx = ui.ctx().clone();
                 let fondo = ctx.layer_painter(egui::LayerId::background());
                 fondo.rect_filled(ctx.content_rect(), 0.0, rod_app::ui::tema::FONDO);
-                rod_app::ui::inicio::mostrar(ui, estado);
+                let mut prefs = rod_app::preferencias::Preferencias::default();
+                rod_app::ui::inicio::mostrar(ui, estado, &rod_app::textos::EN, &mut prefs);
             },
             estado,
         );
@@ -61,7 +62,8 @@ fn capturar_con_cabecera(nombre: &str, ancho: f32, alto: f32, estado: EstadoInic
                 egui::CentralPanel::default()
                     .frame(rod_app::ui::tema::panel(rod_app::ui::tema::FONDO))
                     .show(ctx, |ui| {
-                        rod_app::ui::inicio::mostrar(ui, estado);
+                        let mut prefs = rod_app::preferencias::Preferencias::default();
+                        rod_app::ui::inicio::mostrar(ui, estado, &rod_app::textos::EN, &mut prefs);
                     });
             },
             estado,

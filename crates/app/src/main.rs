@@ -18,6 +18,7 @@ use rod_app::{recientes, recovery_io, ui};
 
 /// Las dos pantallas. El editor solo existe cuando se abrió un video o un
 /// proyecto: el arranque no construye mpv.
+#[allow(clippy::large_enum_variant)] // el editor es grande por mpv y el preview
 enum Pantalla {
     Inicio(EstadoInicio),
     Editor(Box<EditorApp>),
@@ -331,7 +332,13 @@ impl eframe::App for RustyDialogue {
                 egui::CentralPanel::default()
                     .frame(ui::tema::panel(ui::tema::FONDO))
                     .show(ctx, |ui| {
-                        mensaje_inicio = ui::inicio::mostrar(ui, estado);
+                        let textos = self.preferencias.idioma.textos();
+                        let (mensaje, abrir_ajustes) =
+                            ui::inicio::mostrar(ui, estado, textos, &mut self.preferencias);
+                        mensaje_inicio = mensaje;
+                        if abrir_ajustes {
+                            self.ajustes.abierto = true;
+                        }
                     });
             }
             Pantalla::Editor(editor) => {
