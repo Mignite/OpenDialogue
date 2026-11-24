@@ -1,0 +1,103 @@
+use egui::{Key, Modifiers};
+use rod_app::comandos::{Atajo, Comando, MapaAtajos};
+use rod_app::preferencias::Preferencias;
+use rod_app::textos::Idioma;
+
+fn mods(ctrl: bool, shift: bool, alt: bool) -> Modifiers {
+    Modifiers {
+        ctrl,
+        command: ctrl,
+        shift,
+        alt,
+        ..Default::default()
+    }
+}
+
+#[test]
+fn el_mapa_por_defecto_reproduce_los_atajos_de_hoy() {
+    let mapa = MapaAtajos::por_defecto();
+    for (tecla, ctrl, shift, alt, esperado) in [
+        (Key::S, true, false, false, Comando::Guardar),
+        (Key::S, true, true, false, Comando::GuardarComo),
+        (Key::Z, true, false, false, Comando::Deshacer),
+        (Key::Space, false, false, false, Comando::ReproducirPausa),
+        (Key::ArrowLeft, false, false, true, Comando::CaptionAnterior),
+        (Key::ArrowLeft, false, true, false, Comando::RetrocederFino),
+        (Key::C, false, false, false, Comando::Dividir),
+        (Key::Num7, false, false, false, Comando::Hablante(7)),
+    ] {
+        assert_eq!(
+            mapa.comando_de(tecla, mods(ctrl, shift, alt), false),
+            Some(esperado),
+            "{tecla:?}"
+        );
+    }
+}
+
+#[test]
+fn con_foco_en_un_campo_las_teclas_desnudas_no_disparan() {
+    let mapa = MapaAtajos::por_defecto();
+    assert_eq!(
+        mapa.comando_de(Key::Space, Modifiers::default(), true),
+        None
+    );
+    assert_eq!(mapa.comando_de(Key::C, Modifiers::default(), true), None);
+    assert_eq!(mapa.comando_de(Key::Num1, Modifiers::default(), true), None);
+    assert_eq!(
+        mapa.comando_de(Key::S, mods(true, false, false), true),
+        Some(Comando::Guardar)
+    );
+}
+
+#[test]
+fn no_hay_atajos_repetidos_y_asignar_uno_tomado_falla() {
+    let mut mapa = MapaAtajos::por_defecto();
+    assert_eq!(
+        mapa.comando_de(Key::S, mods(true, false, false), false),
+        Some(Comando::Guardar)
+    );
+    assert!(
+        mapa.asignar(
+            Comando::Deshacer,
+            Atajo {
+                tecla: Key::S,
+                ctrl: true,
+                shift: false,
+                alt: false,
+            }
+        )
+        .is_err()
+    );
+    mapa.intercambiar(Comando::Guardar, Comando::Deshacer);
+    assert_eq!(mapa.atajo(Comando::Deshacer).unwrap().to_string(), "Ctrl+S");
+}
+
+#[test]
+fn preferencias_rotas_dan_los_valores_de_fabrica() {
+    let dir = std::env::temp_dir().join(format!("rod-prefs-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let ruta = dir.join("preferencias.json");
+    std::fs::write(&ruta, "{ no es json").unwrap();
+    let prefs = Preferencias::cargar_en(&ruta);
+    assert_eq!(prefs.idioma, Idioma::En);
+    assert_eq!(prefs.atajo(Comando::Guardar).unwrap().to_string(), "Ctrl+S");
+}
+
+#[test]
+fn preferencias_hacen_round_trip() {
+    let dir = std::env::temp_dir().join(format!("rod-prefs-rt-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let ruta = dir.join("preferencias.json");
+    let mut prefs = Preferencias::default();
+    prefs.idioma = Idioma::Es;
+    prefs.ancho_panel = 348.0;
+    prefs.atajos = MapaAtajos::por_defecto();
+    prefs.guardar_en(&ruta).unwrap();
+    let cargadas = Preferencias::cargar_en(&ruta);
+    assert_eq!(cargadas.idioma, Idioma::Es);
+    assert_eq!(cargadas.ancho_panel, 348.0);
+    assert_eq!(
+        cargadas.atajo(Comando::Guardar).unwrap().to_string(),
+        "Ctrl+S"
+    );
+}

@@ -2620,6 +2620,7 @@ dependencies = [
  "rod-core",
  "rod-player",
  "rod-subs",
+ "serde",
  "serde_json",
  "ttf-parser",
  "wgpu",

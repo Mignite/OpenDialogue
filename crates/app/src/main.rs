@@ -5,10 +5,11 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::mpsc::{Receiver, Sender};
 
-use rod_app::comandos::{self, Comando};
+use rod_app::comandos::Comando;
 use rod_app::dialogos::{self, RespuestaDialogo};
 use rod_app::editor_app::{self, EditorApp, MensajeEditor};
 use rod_app::inicio::{self, EstadoInicio, MensajeInicio, Salida};
+use rod_app::preferencias::Preferencias;
 use rod_app::project_io::abrir_proyecto;
 use rod_app::tarea::Tarea;
 use rod_app::video::Gpu;
@@ -29,6 +30,7 @@ struct RustyDialogue {
     formato: wgpu::TextureFormat,
     /// Un único pipeline de composición para toda la sesión.
     gpu: Arc<Mutex<Option<Gpu>>>,
+    preferencias: Preferencias,
 }
 
 fn nuevo() -> Pantalla {
@@ -59,6 +61,7 @@ impl RustyDialogue {
             rx_dialogos,
             formato,
             gpu: Arc::new(Mutex::new(None)),
+            preferencias: Preferencias::cargar(),
         }
     }
 
@@ -221,6 +224,8 @@ impl eframe::App for RustyDialogue {
         }
 
         // Un único registro de atajos para menú y teclado.
+        let foco_en_texto = ctx.memory(|memoria| memoria.focused().is_some());
+        let atajos = &self.preferencias.atajos;
         let pulsaciones: Vec<Comando> = ctx.input(|entrada| {
             entrada
                 .events
@@ -231,7 +236,7 @@ impl eframe::App for RustyDialogue {
                         modifiers,
                         pressed: true,
                         ..
-                    } => comandos::desde_input(*key, *modifiers),
+                    } => atajos.comando_de(*key, *modifiers, foco_en_texto),
                     _ => None,
                 })
                 .collect()

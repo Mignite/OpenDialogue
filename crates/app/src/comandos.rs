@@ -1,4 +1,4 @@
-﻿//! Registro único de comandos: menú y teclado producen exactamente lo mismo.
+//! Registro único de comandos: menú y teclado producen exactamente lo mismo.
 //! Portado de `App.tsx:1528-1712` más Ctrl+O, añadido en la versión Rust.
 
 use egui::{Key, Modifiers};
@@ -194,23 +194,222 @@ pub fn atajo(comando: Comando) -> String {
     texto.to_owned()
 }
 
-/// Carácter lógico de una tecla de egui, en minúsculas. La rejilla de egui no
-/// tiene `Key::Character`: las letras y dígitos son variantes propias.
-fn character(key: Key) -> Option<char> {
-    match key {
-        Key::Equals => Some('='),
-        Key::Plus => Some('+'),
-        Key::Minus => Some('-'),
-        Key::Questionmark => Some('?'),
-        _ => {
-            let nombre = key.name();
-            let mut caracteres = nombre.chars();
-            match (caracteres.next(), caracteres.next()) {
-                (Some(letra), None) if letra.is_ascii_alphanumeric() => {
-                    Some(letra.to_ascii_lowercase())
-                }
-                _ => None,
+/// Error al intentar asignar una combinación que ya tiene otro comando.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Conflicto;
+
+/// Combinación de tecla y modificadores.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Atajo {
+    pub tecla: Key,
+    pub ctrl: bool,
+    pub shift: bool,
+    pub alt: bool,
+}
+
+impl Atajo {
+    fn desde(tecla: Key, m: Modifiers) -> Self {
+        Self {
+            tecla,
+            ctrl: m.ctrl || m.command || m.mac_cmd,
+            shift: m.shift,
+            alt: m.alt,
+        }
+    }
+}
+
+impl std::fmt::Display for Atajo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.ctrl {
+            write!(f, "Ctrl+")?;
+        }
+        if self.shift {
+            write!(f, "Shift+")?;
+        }
+        if self.alt {
+            write!(f, "Alt+")?;
+        }
+        write!(f, "{}", self.tecla.name())
+    }
+}
+
+/// Mapa configurable de comandos a atajos. Puede tener alias (varios atajos
+/// para el mismo comando), pero nunca una tecla compartida por dos comandos.
+#[derive(Debug, Clone)]
+pub struct MapaAtajos {
+    filas: Vec<(Comando, Atajo)>,
+}
+
+impl Default for MapaAtajos {
+    fn default() -> Self {
+        Self::por_defecto()
+    }
+}
+
+impl MapaAtajos {
+    fn fila(comando: Comando, tecla: Key, ctrl: bool, shift: bool, alt: bool) -> (Comando, Atajo) {
+        (
+            comando,
+            Atajo {
+                tecla,
+                ctrl,
+                shift,
+                alt,
+            },
+        )
+    }
+
+    /// Los atajos que hoy produce `desde_input`, en filas planas.
+    pub fn por_defecto() -> Self {
+        let mut filas = vec![
+            Self::fila(Comando::Guardar, Key::S, true, false, false),
+            Self::fila(Comando::GuardarComo, Key::S, true, true, false),
+            Self::fila(Comando::Buscar, Key::F, true, false, false),
+            Self::fila(Comando::AbrirProyecto, Key::O, true, false, false),
+            Self::fila(Comando::Deshacer, Key::Z, true, false, false),
+            Self::fila(Comando::Rehacer, Key::Z, true, true, false),
+            Self::fila(Comando::Rehacer, Key::Y, true, false, false),
+            Self::fila(Comando::Copiar, Key::C, true, false, false),
+            Self::fila(Comando::Pegar, Key::V, true, false, false),
+            Self::fila(Comando::NudgeIzquierda, Key::ArrowLeft, true, true, false),
+            Self::fila(Comando::NudgeDerecha, Key::ArrowRight, true, true, false),
+            Self::fila(Comando::ReproducirPausa, Key::Space, false, false, false),
+            Self::fila(Comando::CaptionAnterior, Key::ArrowLeft, false, false, true),
+            Self::fila(
+                Comando::CaptionSiguiente,
+                Key::ArrowRight,
+                false,
+                false,
+                true,
+            ),
+            Self::fila(Comando::RetrocederFino, Key::ArrowLeft, false, true, false),
+            Self::fila(Comando::AvanzarFino, Key::ArrowRight, false, true, false),
+            Self::fila(Comando::Retroceder, Key::ArrowLeft, false, false, false),
+            Self::fila(Comando::Avanzar, Key::ArrowRight, false, false, false),
+            Self::fila(Comando::SimultaneoArriba, Key::ArrowUp, false, false, false),
+            Self::fila(
+                Comando::SimultaneoAbajo,
+                Key::ArrowDown,
+                false,
+                false,
+                false,
+            ),
+            Self::fila(Comando::Eliminar, Key::Delete, false, false, false),
+            Self::fila(Comando::EditarTexto, Key::E, false, false, false),
+            Self::fila(Comando::AgregarFragmento, Key::A, false, false, false),
+            Self::fila(Comando::Dividir, Key::C, false, false, false),
+            Self::fila(Comando::Ayuda, Key::Questionmark, false, false, false),
+            Self::fila(Comando::Ayuda, Key::F1, false, false, false),
+            Self::fila(Comando::VelocidadMas, Key::Plus, false, false, false),
+            Self::fila(Comando::VelocidadMas, Key::Equals, false, true, false),
+            Self::fila(Comando::VelocidadMenos, Key::Minus, false, false, false),
+        ];
+        for n in 1..=9 {
+            if let Some(tecla) = Key::from_name(&n.to_string()) {
+                filas.push(Self::fila(Comando::Hablante(n), tecla, false, false, false));
             }
+        }
+        Self { filas }
+    }
+
+    /// Primer comando que coincide. Con foco en texto, las teclas desnudas
+    /// no disparan: solo pasan las combinaciones con Ctrl o Alt.
+    pub fn comando_de(&self, tecla: Key, modif: Modifiers, foco_en_texto: bool) -> Option<Comando> {
+        let atajo = Atajo::desde(tecla, modif);
+        if foco_en_texto && !atajo.ctrl && !atajo.alt {
+            return None;
+        }
+        self.filas
+            .iter()
+            .find(|(_, candidato)| *candidato == atajo)
+            .map(|(comando, _)| *comando)
+    }
+
+    /// Atajo principal de un comando, para menús y panel de atajos.
+    pub fn atajo(&self, comando: Comando) -> Option<Atajo> {
+        self.filas
+            .iter()
+            .find(|(c, _)| *c == comando)
+            .map(|(_, a)| *a)
+    }
+
+    /// Asigna un atajo. Fallar si otra combinación ya lo usa.
+    pub fn asignar(&mut self, comando: Comando, atajo: Atajo) -> Result<(), Conflicto> {
+        if self.filas.iter().any(|(c, a)| *a == atajo && *c != comando) {
+            return Err(Conflicto);
+        }
+        self.filas.retain(|(c, _)| *c != comando);
+        self.filas.push((comando, atajo));
+        Ok(())
+    }
+
+    /// Intercambia los atajos principales de dos comandos.
+    pub fn intercambiar(&mut self, a: Comando, b: Comando) {
+        let ia = self.filas.iter().position(|(c, _)| *c == a);
+        let ib = self.filas.iter().position(|(c, _)| *c == b);
+        if let (Some(ia), Some(ib)) = (ia, ib) {
+            let temporal = self.filas[ia].1;
+            self.filas[ia].1 = self.filas[ib].1;
+            self.filas[ib].1 = temporal;
+        }
+    }
+
+    pub fn restablecer(&mut self, comando: Comando) {
+        let defecto = Self::por_defecto();
+        self.filas.retain(|(c, _)| *c != comando);
+        self.filas
+            .extend(defecto.filas.iter().filter(|(c, _)| *c == comando).cloned());
+    }
+
+    pub fn restablecer_todo(&mut self) {
+        *self = Self::por_defecto();
+    }
+
+    /// Serialización portable: el comando y la tecla se guardan por nombre.
+    pub(crate) fn guardadas(&self) -> Vec<(String, crate::preferencias::AtajoGuardado)> {
+        self.filas
+            .iter()
+            .map(|(c, a)| {
+                (
+                    format!("{c:?}"),
+                    crate::preferencias::AtajoGuardado {
+                        tecla: a.tecla.name().to_owned(),
+                        ctrl: a.ctrl,
+                        shift: a.shift,
+                        alt: a.alt,
+                    },
+                )
+            })
+            .collect()
+    }
+
+    pub(crate) fn desde_guardadas(filas: &[(String, crate::preferencias::AtajoGuardado)]) -> Self {
+        let mut mapa = Self { filas: Vec::new() };
+        for (nombre, guardado) in filas {
+            let Some(comando) = Comando::todas()
+                .iter()
+                .copied()
+                .find(|c| format!("{c:?}") == *nombre)
+            else {
+                continue;
+            };
+            let Some(tecla) = Key::from_name(&guardado.tecla) else {
+                continue;
+            };
+            mapa.filas.push((
+                comando,
+                Atajo {
+                    tecla,
+                    ctrl: guardado.ctrl,
+                    shift: guardado.shift,
+                    alt: guardado.alt,
+                },
+            ));
+        }
+        if mapa.filas.is_empty() {
+            Self::por_defecto()
+        } else {
+            mapa
         }
     }
 }
@@ -219,72 +418,7 @@ fn character(key: Key) -> Option<char> {
 /// la tecla y los modificadores del evento; el foco lo decide egui, igual que
 /// lo decidía `iced::keyboard::listen()`.
 pub fn desde_input(key: Key, modifiers: Modifiers) -> Option<Comando> {
-    let ctrl = modifiers.ctrl || modifiers.command || modifiers.mac_cmd;
-    let shift = modifiers.shift;
-    let alt = modifiers.alt;
-
-    if ctrl {
-        match character(key) {
-            Some('s') => {
-                return Some(if shift {
-                    Comando::GuardarComo
-                } else {
-                    Comando::Guardar
-                });
-            }
-            Some('f') => return Some(Comando::Buscar),
-            Some('o') => return Some(Comando::AbrirProyecto),
-            Some('z') => {
-                return Some(if shift {
-                    Comando::Rehacer
-                } else {
-                    Comando::Deshacer
-                });
-            }
-            Some('y') => return Some(Comando::Rehacer),
-            Some('c') => return Some(Comando::Copiar),
-            Some('v') => return Some(Comando::Pegar),
-            _ => {}
-        }
-        if shift && key == Key::ArrowLeft {
-            return Some(Comando::NudgeIzquierda);
-        }
-        if shift && key == Key::ArrowRight {
-            return Some(Comando::NudgeDerecha);
-        }
-        return None;
-    }
-
-    match key {
-        Key::Space => Some(Comando::ReproducirPausa),
-        Key::ArrowLeft => Some(if shift {
-            Comando::RetrocederFino
-        } else if alt {
-            Comando::CaptionAnterior
-        } else {
-            Comando::Retroceder
-        }),
-        Key::ArrowRight => Some(if shift {
-            Comando::AvanzarFino
-        } else if alt {
-            Comando::CaptionSiguiente
-        } else {
-            Comando::Avanzar
-        }),
-        Key::ArrowUp => Some(Comando::SimultaneoArriba),
-        Key::ArrowDown => Some(Comando::SimultaneoAbajo),
-        Key::Delete => Some(Comando::Eliminar),
-        _ => match character(key)?.to_ascii_lowercase() {
-            'e' => Some(Comando::EditarTexto),
-            'a' => Some(Comando::AgregarFragmento),
-            'c' => Some(Comando::Dividir),
-            '?' => Some(Comando::Ayuda),
-            '+' | '=' => Some(Comando::VelocidadMas),
-            '-' | '_' => Some(Comando::VelocidadMenos),
-            numero @ '1'..='9' => Some(Comando::Hablante(numero as u8 - b'0')),
-            _ => None,
-        },
-    }
+    MapaAtajos::por_defecto().comando_de(key, modifiers, false)
 }
 
 #[cfg(test)]
