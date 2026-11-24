@@ -41,6 +41,24 @@ fn mono() -> egui::FontFamily {
     }
 }
 
+/// Color semántico de un hablante. Un valor ausente o mal escrito cae al
+/// gris secundario, nunca al azul: el azul es de la chrome.
+pub fn color_de_hex(valor: &str) -> Color32 {
+    let hexadecimal = valor.strip_prefix('#').unwrap_or(valor);
+    if hexadecimal.len() != 6 {
+        return SECUNDARIO;
+    }
+    let componentes = [0, 2, 4].map(|inicio| {
+        hexadecimal
+            .get(inicio..inicio + 2)
+            .and_then(|par| u8::from_str_radix(par, 16).ok())
+    });
+    match componentes {
+        [Some(r), Some(g), Some(b)] => Color32::from_rgb(r, g, b),
+        _ => SECUNDARIO,
+    }
+}
+
 pub fn estilo() -> Style {
     let mut estilo = Style::default();
     let mut visuals = Visuals::dark();

@@ -45,7 +45,7 @@ impl std::fmt::Display for Velocidad {
     }
 }
 
-const VELOCIDADES: [Velocidad; 6] = [
+pub const VELOCIDADES: [Velocidad; 6] = [
     Velocidad(0.5),
     Velocidad(0.75),
     Velocidad(1.0),
@@ -171,88 +171,88 @@ pub enum MensajeEditor {
 }
 
 pub struct EditorApp {
-    editor: EstadoEditor,
-    player: rod_player::Player,
-    subtitles: rod_subs::Subtitulos,
-    pixels: Vec<u8>,
-    layers: Arc<Vec<Capa>>,
-    duration: f64,
-    position: f64,
+    pub(crate) editor: EstadoEditor,
+    pub(crate) player: rod_player::Player,
+    pub(crate) subtitles: rod_subs::Subtitulos,
+    pub(crate) pixels: Vec<u8>,
+    pub(crate) layers: Arc<Vec<Capa>>,
+    pub(crate) duration: f64,
+    pub(crate) position: f64,
     /// El usuario tiene el slider tomado: `time-pos` no debe pisar el thumb.
-    arrastrando: bool,
-    paused: bool,
-    video_path: String,
-    audio_tracks: Vec<AudioTrack>,
-    selected_audio: Option<AudioTrack>,
-    velocidad: Velocidad,
+    pub(crate) arrastrando: bool,
+    pub(crate) paused: bool,
+    pub(crate) video_path: String,
+    pub(crate) audio_tracks: Vec<AudioTrack>,
+    pub(crate) selected_audio: Option<AudioTrack>,
+    pub(crate) velocidad: Velocidad,
     /// Lo que hay en el `text_input` del caption seleccionado.
-    borrador: String,
+    pub(crate) borrador: String,
     /// Borradores de entrada y salida del caption seleccionado.
-    borrador_inicio: String,
-    borrador_fin: String,
+    pub(crate) borrador_inicio: String,
+    pub(crate) borrador_fin: String,
     /// Pestaña visible de la columna derecha.
-    panel: Panel,
+    pub(crate) panel: Panel,
     /// Campo de hablante que está recibiendo teclas. iced no da un evento de
     /// foco por widget, así que la sesión se cierra al tocar cualquier otra
     /// cosa: es el equivalente al `onFocus={onCommit}` del oráculo (una sesión
     /// de tecleo = un paso de historial).
-    editando_hablante: Option<(String, CampoHablante)>,
+    pub(crate) editando_hablante: Option<(String, CampoHablante)>,
     /// Arrastre en curso en el timeline. Vive en la app y no en el canvas
     /// porque el historial y el proyecto también viven aquí.
-    arrastre: Option<timeline::Arrastre>,
+    pub(crate) arrastre: Option<timeline::Arrastre>,
     /// Ventana visible del timeline (inicio y escala).
-    vista: Vista,
+    pub(crate) vista: Vista,
     /// Ancho del canvas del timeline, que lo publica el propio canvas. Sin él
     /// no se puede saber cuántos segundos caben (pan, seguimiento, zoom).
-    ancho_timeline: f32,
+    pub(crate) ancho_timeline: f32,
     /// La vista persigue al playhead mientras se reproduce. Se apaga al usar
     /// la rueda o la barra, y se enciende con el botón.
-    seguir: bool,
+    pub(crate) seguir: bool,
     /// Inicio hacia el que se desliza la vista, si hay un seguimiento en curso.
-    objetivo_vista: Option<f64>,
+    pub(crate) objetivo_vista: Option<f64>,
     /// Modificadores del teclado. La rueda no los lleva en su evento, así que
     /// el «Shift para acercar» se decide con este espejo.
-    modificadores: egui::Modifiers,
+    pub(crate) modificadores: egui::Modifiers,
     /// Dónde se guardó el proyecto. `None` = nunca se guardó: «Guardar» pide
     /// ruta y «Guardar como» la vuelve a pedir.
-    ruta_proyecto: Option<PathBuf>,
+    pub(crate) ruta_proyecto: Option<PathBuf>,
     /// El proyecto tal como está en disco (o como arrancó la app). Es la línea
     /// base del «hay cambios sin guardar»: el playhead no cuenta, porque se
     /// mueve solo al reproducir y marcaría el proyecto sucio 60 veces por
     /// segundo.
-    limpio: Proyecto,
+    pub(crate) limpio: Proyecto,
     /// Copia automática pendiente de aceptar. Se lee una sola vez, al
     /// arrancar; el texto se formatea ahí mismo para no leer el reloj en cada
     /// frame.
-    recovery: Option<AvisoRecovery>,
+    pub(crate) recovery: Option<AvisoRecovery>,
     /// Epoch ms de la última escritura del recovery (`None` = ninguna todavía)
     /// y del último chequeo del autosave. El chequeo va a 1 Hz: comparar el
     /// proyecto entero en cada frame para nada es tirar CPU.
-    ultima_escritura: Option<f64>,
-    ultimo_chequeo: f64,
+    pub(crate) ultima_escritura: Option<f64>,
+    pub(crate) ultimo_chequeo: f64,
     /// Presets `.ass` cargados al arrancar. Los usa el preview y el export por
     /// igual: son la única fuente de estilos de un caption con hablante.
-    presets: Vec<PresetAss>,
+    pub(crate) presets: Vec<PresetAss>,
     /// Ruta del archivo compartido con el oráculo, resuelta una vez al arrancar.
-    ruta_presets: PathBuf,
+    pub(crate) ruta_presets: PathBuf,
     /// Preset abierto en el panel de estilos. Si el archivo traía presets, el
     /// primero; `None` solo si el panel no tiene nada que mostrar (no pasa:
     /// siempre hay al menos la semilla).
-    preset_seleccionado: Option<String>,
+    pub(crate) preset_seleccionado: Option<String>,
     /// Texto a medias de los campos numéricos, por id de preset y campo. Sin
     /// esto, escribir `72.5` se quedaría en `72` al llegar al punto.
-    borradores_preset: HashMap<(String, CampoPreset), String>,
+    pub(crate) borradores_preset: HashMap<(String, CampoPreset), String>,
     /// Resultado de la última acción que no tiene otro lugar donde contarse
     /// (exportar, por ahora). iced no tiene toasts; la barra de estado es el
     /// sitio donde el usuario ya mira el estado del proyecto.
-    mensaje: Option<String>,
+    pub(crate) mensaje: Option<String>,
     /// La miniatura del reciente faltaba al abrir: se genera con el primer
     /// frame que rasterice mpv, no con el buffer vacío del constructor.
-    miniatura_pendiente: bool,
+    pub(crate) miniatura_pendiente: bool,
     /// Portapapeles interno para Ctrl+C/V entre captions.
-    portapapeles: String,
+    pub(crate) portapapeles: String,
     /// Contenido del SRT leído mientras se pide el TXT gemelo del autosubs.
-    pendiente_srt: Option<String>,
+    pub(crate) pendiente_srt: Option<String>,
 }
 
 pub fn subscription(_state: &EditorApp) -> Subscription<MensajeEditor> {
@@ -408,7 +408,7 @@ fn reemplazar_player(
 /// ¿El proyecto en memoria difiere del que está en disco? Solo cuentan los
 /// captions y los hablantes: el playhead se mueve al reproducir y no es una
 /// edición.
-fn sucio(state: &EditorApp) -> bool {
+pub fn sucio(state: &EditorApp) -> bool {
     let proyecto = state.editor.proyecto();
     proyecto.captions != state.limpio.captions || proyecto.hablantes != state.limpio.hablantes
 }
