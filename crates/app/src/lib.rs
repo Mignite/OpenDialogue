@@ -15,4 +15,5 @@ pub mod tarea;
 pub mod tema;
 pub mod thumbnail;
 pub mod timeline;
+pub mod ui;
 pub mod video;
