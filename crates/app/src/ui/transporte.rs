@@ -1,81 +1,116 @@
-//! Transporte compacto: play/pause, stepping, reloj y velocidad.
+//! Transporte del editor: iconos, timecode grande y velocidad.
 
-use egui::Ui;
+use egui::{RichText, Vec2};
 
-use crate::editor_app::{EditorApp, MensajeEditor, VELOCIDADES};
-use crate::ui::iconos;
-use crate::ui::tema;
+use crate::comandos::{Comando, MapaAtajos};
+use crate::editor_app::{EditorApp, MensajeEditor, VELOCIDADES, sucio};
+use crate::textos::Textos;
+use crate::ui::kit::{self, Icono};
+use crate::ui::tema::{self, Estilo};
 
-fn boton_transporte(ui: &mut Ui, texto: &str) -> bool {
-    ui.add(
-        egui::Button::new(
-            egui::RichText::new(texto)
-                .font(tema::mono_public())
-                .size(11.0)
-                .color(tema::SECUNDARIO),
-        )
-        .fill(tema::LATERAL)
-        .corner_radius(egui::CornerRadius::same(4))
-        .min_size(egui::vec2(30.0, 24.0)),
-    )
-    .clicked()
-}
-
-pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
+pub fn mostrar(
+    ui: &mut egui::Ui,
+    state: &mut EditorApp,
+    textos: &Textos,
+    atajos: &MapaAtajos,
+) -> Vec<MensajeEditor> {
+    let _ = textos;
+    let _ = atajos;
     let mut mensajes = Vec::new();
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        let (rect, respuesta) =
-            ui.allocate_exact_size(egui::vec2(26.0, 24.0), egui::Sense::click());
-        ui.painter()
-            .rect_filled(rect, egui::CornerRadius::same(4), tema::LATERAL);
-        iconos::pintar(ui, rect.shrink(4.0), tema::TEXTO, state.paused);
+    ui.horizontal_centered(|ui| {
+        ui.spacing_mut().item_spacing.x = tema::ESP_4;
+
+        if kit::icon_button(ui, Icono::Inicio, false, "Inicio", None).clicked() {
+            mensajes.push(MensajeEditor::Step(-state.duration));
+        }
+        if kit::icon_button(ui, Icono::CuadroAnterior, false, "Cuadro anterior", None).clicked() {
+            mensajes.push(MensajeEditor::Step(-0.04));
+        }
+
+        let respuesta = ui.add(
+            egui::Button::new(
+                RichText::new(kit::glifo(if state.paused {
+                    Icono::Play
+                } else {
+                    Icono::Pausa
+                }))
+                .font(egui::FontId::proportional(20.0))
+                .color(tema::TEXTO),
+            )
+            .fill(tema::CONTROL)
+            .corner_radius(egui::CornerRadius::same(tema::RADIO_CONTROL as u8))
+            .min_size(Vec2::splat(tema::ALTO_BOTON)),
+        );
         if respuesta.clicked() {
             mensajes.push(MensajeEditor::PlayPause);
         }
 
-        if boton_transporte(ui, "◀") {
-            mensajes.push(MensajeEditor::Step(-5.0));
+        if kit::icon_button(ui, Icono::CuadroSiguiente, false, "Cuadro siguiente", None).clicked() {
+            mensajes.push(MensajeEditor::Step(0.04));
         }
-        if boton_transporte(ui, "▶") {
-            mensajes.push(MensajeEditor::Step(5.0));
+        if kit::icon_button(ui, Icono::Fin, false, "Fin", None).clicked() {
+            mensajes.push(MensajeEditor::Step(state.duration));
         }
 
-        ui.add_space(6.0);
+        ui.add_space(tema::ESP_8);
         ui.label(
-            egui::RichText::new(format!(
-                "{} / {}",
-                rod_core::format_time(state.position),
-                rod_core::format_time(state.duration)
-            ))
-            .font(tema::mono_public())
-            .size(11.0)
-            .color(tema::TEXTO),
+            RichText::new(rod_core::format_time(state.position))
+                .font(tema::fuente(Estilo::TimecodeGrande))
+                .color(tema::TEXTO),
+        );
+        ui.label(
+            RichText::new(format!("/ {}", rod_core::format_time(state.duration)))
+                .font(tema::fuente(Estilo::Pequeno))
+                .color(tema::TEXTO_3),
         );
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let velocidad = ui.add(
-                egui::Button::new(
-                    egui::RichText::new(state.velocidad.to_string())
-                        .font(tema::mono_public())
-                        .size(10.0)
-                        .color(tema::ACENTO),
-                )
-                .fill(egui::Color32::TRANSPARENT)
-                .corner_radius(egui::CornerRadius::same(4))
-                .stroke(egui::Stroke::new(1.0_f32, tema::BORDE)),
-            );
-            if velocidad.clicked() {
-                let actual = VELOCIDADES
-                    .iter()
-                    .position(|candidata| *candidata == state.velocidad)
-                    .unwrap_or(2);
-                mensajes.push(MensajeEditor::Velocidad(
-                    VELOCIDADES[(actual + 1) % VELOCIDADES.len()],
-                ));
-            }
-            tema::etiqueta(ui, "VELOCIDAD");
+            egui::ComboBox::from_id_salt("velocidad")
+                .selected_text(state.velocidad.to_string())
+                .show_ui(ui, |ui| {
+                    for velocidad in VELOCIDADES {
+                        if ui
+                            .selectable_value(
+                                &mut state.velocidad,
+                                velocidad,
+                                velocidad.to_string(),
+                            )
+                            .clicked()
+                        {
+                            mensajes.push(MensajeEditor::Velocidad(velocidad));
+                        }
+                    }
+                });
+            kit::icono(ui, Icono::Volumen);
+            kit::icon_button(ui, Icono::Bucle, state.seguir, "Seguir al playhead", None);
         });
     });
     mensajes
+}
+
+/// Barra de estado de 24 px bajo el transporte.
+pub fn barra_estado(ui: &mut egui::Ui, state: &EditorApp, textos: &Textos) {
+    ui.horizontal(|ui| {
+        ui.set_height(24.0);
+        ui.spacing_mut().item_spacing.x = tema::ESP_8;
+        ui.label(
+            RichText::new(format!(
+                "{} · {} · {}",
+                textos.lineas(state.editor.proyecto().captions.len()),
+                textos.hablantes(state.editor.proyecto().hablantes.len()),
+                textos.comando(Comando::Buscar)
+            ))
+            .font(tema::fuente(Estilo::Pequeno))
+            .color(tema::TEXTO_3),
+        );
+        ui.label(
+            RichText::new(if sucio(state) {
+                textos.sin_guardar
+            } else {
+                textos.guardado
+            })
+            .font(tema::fuente(Estilo::Pequeno))
+            .color(tema::TEXTO_3),
+        );
+    });
 }

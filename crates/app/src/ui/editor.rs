@@ -1,4 +1,4 @@
-//! Vista del editor en egui. Compone el preview, la barra de transporte, los
+﻿//! Vista del editor en egui. Compone el preview, la barra de transporte, los
 //! paneles laterales y la barra de estado. Devuelve **todos** los mensajes del
 //! frame: sobrescribirlos habría dejado los botones inertes.
 
@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use egui::Ui;
 
 use crate::comandos::MapaAtajos;
-use crate::editor_app::{EditorApp, MensajeEditor, Panel, sucio};
+use crate::editor_app::{EditorApp, MensajeEditor, Panel};
 use crate::preferencias::Preferencias;
 use crate::textos::Textos;
 use crate::ui::kit;
@@ -142,44 +142,14 @@ pub fn mostrar(
         crate::ui::video::pintar(ui, rect, frame, formato, gpu);
     }
 
-    mensajes.extend(transporte::mostrar(ui, state));
+    mensajes.extend(transporte::mostrar(
+        ui,
+        state,
+        textos,
+        &crate::comandos::MapaAtajos::por_defecto(),
+    ));
 
-    ui.separator();
-    ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 10.0;
-        ui.label(
-            egui::RichText::new("OpenDialogue")
-                .font(tema::mono_public())
-                .color(tema::DIM)
-                .size(9.0),
-        );
-        let sucio = sucio(state);
-        ui.label(egui::RichText::new("●").size(9.0).color(if sucio {
-            tema::AMBAR
-        } else {
-            tema::DIM
-        }));
-        ui.label(
-            egui::RichText::new(if sucio {
-                textos.sin_guardar
-            } else {
-                textos.guardado
-            })
-            .font(tema::mono_public())
-            .size(10.0)
-            .color(if sucio { tema::AMBAR } else { tema::SECUNDARIO }),
-        );
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if let Some(texto) = &state.mensaje {
-                ui.label(
-                    egui::RichText::new(texto)
-                        .size(11.0)
-                        .color(tema::SECUNDARIO),
-                );
-            }
-        });
-    });
+    transporte::barra_estado(ui, state, textos);
     mensajes
 }
 

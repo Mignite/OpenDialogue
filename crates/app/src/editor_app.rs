@@ -255,6 +255,11 @@ impl EditorApp {
         self.inline.is_some()
     }
 
+    /// Posición del playhead, para el transporte y las pruebas.
+    pub fn set_position(&mut self, posicion: f64) {
+        self.position = posicion;
+    }
+
     /// Proyecto en memoria, solo lectura.
     pub fn proyecto(&self) -> &rod_core::Proyecto {
         self.editor.proyecto()
