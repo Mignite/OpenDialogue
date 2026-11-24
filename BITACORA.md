@@ -463,3 +463,24 @@ cara.
   ni licencias nuevas. Se aplicó con `.default_font(tema::CUERPO)`.
 - Captura: `slice-15-inicio-fuente.png`.
 
+---
+
+## 2026-11-24 — migración del front-end a egui
+
+- **Petición del autor:** iced tomó mucho trabajo para la interfaz; egui ofrece
+  mejores capacidades de UI y la base de los proyectos ArtCraft sirve como
+  referencia fuerte. Se mantiene el renderer propio con libass.
+- **Decisión:** egui solo como front-end. Se descarta `egui-sharkplayer`: usa
+  `libmpv2` 6.0 (aquí 7.0.1), crea otro contexto mpv y con `wgpu` hace un
+  roundtrip del frame por RAM. `rod-player` y `rod-subs` siguen mandando.
+- **Alternativa descartada:** egui 0.35 (wgpu 29) obligaría a reescribir
+  `video/mod.rs`. Se ancla egui 0.33 porque `egui-wgpu` 0.33 depende de
+  `wgpu 27.0.1`, la versión ya fijada en `Cargo.lock`. Los `.wgsl` no cambian.
+- **Decisión:** la composición sigue en GPU mediante un `egui_wgpu::CallbackFn`,
+  no en CPU con `Lienzo`: duplicaría el compositor y cambiaría el resultado de
+  píxel sin ventaja.
+- **Alcance:** `egui_dock` queda fuera; los paneles siguen fijos. El trabajo se
+  hace en el worktree `C:/Dev/RustyOpenDialogue-egui` para no tocar los 7
+  archivos modificados que quedaron en `main`.
+- **Dónde queda:** `docs/superpowers/specs/2026-11-24-egui-migracion-design.md`.
+
