@@ -1,5 +1,103 @@
 # Bitácora
 
+## 2026-11-25 — Reorganización de la edición de subtítulos
+
+- Spec `docs/superpowers/specs/2026-11-25-editor-subtitulos-design.md` y plan
+  `docs/superpowers/plans/2026-11-25-editor-subtitulos.md`, ejecutados en 4
+  tareas TDD con ledger en `.superpowers/sdd/2026-11-25-editor-subtitulos/`.
+- Texto en un solo sitio: nueva barra en `ui/texto.rs`; desaparecen el inspector
+  inferior y el editor inline de la lista. El tipeo se agrupa en un paso de
+  historial que se cierra con Enter, pérdida de foco o ~1 s; Esc revierte.
+  Alternativas descartadas: mantener el inspector (dos sitios de edición) y
+  un borrador que se aplicara solo al salir (no era «en vivo»).
+- Acciones: toolbar de 32 px en la timeline, menú contextual en fila y clip,
+  atajos `[` `]` `S` `M` `Supr` y `E`. Todas pasan por `Comando` →
+  `editor_app::update`, así que ratón, menú y teclado no divergen.
+- Multiselección: marquesina con Shift+arrastrar en timeline y Ctrl/Shift+clic
+  en lista comparten `state.editor.seleccion`. Borrar en grupo no pide
+  confirmación extra (decisión propia: el plan la había inventado y la spec
+  solo pide toast con «Deshacer»).
+- Pulido: tokens nuevos en `tema.rs`, badges en pestañas, tres botones fantasma
+  en el transporte, dropdown de 56 px, preview a sangre y clip sin hablante
+  con gris/punteado (el acento gana si está seleccionado). No se tocó
+  `ass.rs`: el overlay sigue siendo exactamente el `.ass` exportado; el autor
+  decidió que el video no muestre quién habla.
+- Rendimiento: el menú contextual de clip solo se registra bajo el puntero y
+  los de fila; con 543 líneas el pintado volvió a pasar el límite de 30 ms
+  en debug (en release, objetivo 8 ms, pasa).
+- Verificación: `cargo test --workspace` y `cargo clippy -p rod-app -- -D
+  warnings` limpios; capturas `revision-editor-{1100,1440,2560}.png` y
+  `revision-transporte.png` sin superposiciones.
+
+
+## 2026-11-25 — Ventana y scroll
+
+- Ventana no redimensionable: `with_decorations(false)` hace que winit quite
+  `WS_SIZEBOX` del estilo (`window_state.rs:435-436`), así que aunque
+  `resizable` sea `true` por defecto no hay bordes del SO que arrastrar.
+  Medido: `WM_NCLBUTTONDOWN` con `HTRIGHT` dejaba la ventana en 1600×900;
+  `ViewportCommand::BeginResize` tampoco respondía.
+  Intentos descartados: (1) tiras `egui` con `InnerSize`/`OuterPosition` —
+  el Area en foreground se comía los clics de la cabecera y, al reposicionarse
+  la ventana cada frame, el arrastre se reiniciaba y parpadeaba; (2) deltas
+  incrementales — mitigaba el salto pero no eliminaba el jitter.
+  Solución final, igual que PhotoCraft: subclass de `WM_NCHITTEST` en
+  `ui/borde.rs`, que devuelve HTLEFT/HTRIGHT/HTTOP… al DefWindowProc y deja
+  que Windows haga el resize nativo. `unsafe` justificado: winit 0.30 no
+  expone el window procedure; se aísla en un `extern "system"` que solo lee
+  `GetWindowRect` y delega el resto. `raw-window-handle` solo para obtener
+  el HWND de `eframe::Frame`. Verificado arrastrando de verdad con Win32:
+  1620 → 1760 px, monótono, sin rebotes. Las esquinas y lados se cubren
+  con la función pura `borde_en`, con tests unitarios.
+- «Ver todos» sin scroll: `inicio::mostrar` dibujaba en `available_size()` y
+  el contenido desbordaba pantalla. Añadido `ScrollArea::vertical`. El primer
+  intento seguía sin moverse: el `scope_builder(max_rect(contenido))` interno
+  usaba coordenadas absolutas y anulaba la traslación del ScrollArea. Ahora
+  el contenido se centra con `ui.horizontal` + `add_space` y un `ui.vertical`
+  con `set_width`, sin `max_rect` fijo (probar `top_down_justified(Center)`
+  rompía el centrado de los `ui.horizontal` internos). Regresión en
+  `tests/inicio.rs` (rueda -600 mueve el último proyecto de y=1771 a y=1171).
+- Las tiras egui también enseñaron que un `Area` en `Order::Foreground` con
+  `interactable(true)` captura `Sense::click()` en toda la ventana: hay que
+  poner `interactable(false)`, `movable(false)` y `sense(Sense::empty())`.
+
+## 2026-11-25 — Cabecera, Ajustes y recientes
+
+- Botones de ventana: `Button.fill(TRANSPARENT)` no basta; egui pinta
+  `widgets.inactive.weak_bg_fill` detrás del glifo, de ahí los cuadrados
+  grises. Descartado seguir anulando `visuals`: el glifo se dibuja con
+  `painter.text` sobre un rect con `Sense::click()` y el realce es un chip
+  interior. En reposo no hay caja.
+- Engranaje retirado por decisión del autor: Ajustes queda en Edit → Ajustes
+  y Ctrl+,. Hubo que añadir `Comando::Ajustes` a `disponible_en_inicio`:
+  antes esa entrada estaba deshabilitada en Inicio y, sin engranaje, no
+  había forma de abrir la capa.
+- Ajustes se cerraba en el mismo frame en que se abría: el
+  `pointer.button_clicked` del clic del menú se leía como clic fuera.
+  Descartado contar frames, porque el clic del menú se suelta después;
+  `abrir()` marca `recien_abierto` y se ignoran clics hasta que no quede
+  ningún botón pulsado. Regresión en `tests/ajustes.rs`.
+- Tarjetas de recientes: solo el marco tenía `Sense::click()`; miniatura,
+  título y metadatos se quedaban con el hover. El título deja de ser botón
+  y un `ui.interact` sobre toda la burbuja se registra al final del dibujo.
+  El «···» se pinta después, en la esquina de la miniatura: antes caía fuera
+  de la tarjeta y ahora su menú sigue siendo clicable sin abrir el proyecto
+  (regresión en `tests/inicio.rs`).
+- Recientes clavados: solo `guardar_en` escribía el índice. Al abrir un
+  proyecto, `Salida::Proyecto` llama a `recientes::registrar` para que suba
+  al tope de la lista.
+- Rectángulo fantasma alrededor de la tarjeta: la celda reservada medía
+  `ALTO_TARJETA = 210`, pero el `Frame` crece con la miniatura y el texto
+  (~273 px a 360 de ancho). El borde dibujado a mano y el rect de clic usaban
+  la celda, así que la zona baja de la burbuja no abría nada. Descartado
+  subir la constante: con ventanas anchas la miniatura vuelve a desbordar.
+  La tarjeta toma su rect del `Frame` y la fila usa `ui.horizontal` para que
+  el alto lo marque el contenido. `set_width` debe ir en un `Ui` hijo por
+  tarjeta: en el `Ui` de la fila limita toda la fila y solo cabe la primera.
+  Regresión con clic 40 px bajo los metadatos en `tests/inicio.rs`.
+- Verificación: `cargo test --workspace`, `cargo fmt --all -- --check`,
+  `cargo clippy -p rod-app -- -D warnings` y capturas `revision-*`.
+
 ## 2026-11-24 — Rediseño visual (fases 1–5)
 
 - `Hablante.color` pasa a ser identidad de UI (12 muestras fijas); el texto del
