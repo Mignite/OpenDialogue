@@ -97,7 +97,8 @@ impl RustyDialogue {
 
     fn abrir(&mut self, editor: Result<EditorApp, String>) -> bool {
         match editor {
-            Ok(editor) => {
+            Ok(mut editor) => {
+                editor.snap = self.preferencias.snap;
                 self.pantalla = Pantalla::Editor(Box::new(editor));
                 true
             }
@@ -245,6 +246,12 @@ impl RustyDialogue {
                 let tarea = editor_app::update(editor, mensaje);
                 self.ejecutar_tarea(tarea);
             }
+        }
+        if comando == Comando::AlternarSnap
+            && let Pantalla::Editor(editor) = &self.pantalla
+        {
+            self.preferencias.snap = editor.snap;
+            let _ = self.preferencias.guardar();
         }
     }
 }

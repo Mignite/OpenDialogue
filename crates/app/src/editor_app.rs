@@ -99,6 +99,9 @@ pub enum MensajeEditor {
     EditarEnVivo(String, String),
     TerminarEdicionTexto,
     UnirConSiguiente(String),
+    MarcarEntrada,
+    MarcarSalida,
+    AlternarSnap,
     SeleccionarTodosHablante(String),
     /// Entrada/salida del caption seleccionado. Se aplica al confirmar; un
     /// valor inválido o invertido se descarta sin tocar el proyecto.
@@ -319,6 +322,8 @@ pub struct EditorApp {
     /// La vista persigue al playhead mientras se reproduce. Se apaga al usar
     /// la rueda o la barra, y se enciende con el botón.
     pub(crate) seguir: bool,
+    /// Ajustar bordes de clip y playhead al arrastrar.
+    pub snap: bool,
     /// Inicio hacia el que se desliza la vista, si hay un seguimiento en curso.
     pub(crate) objetivo_vista: Option<f64>,
     /// Modificadores del teclado. La rueda no los lleva en su evento, así que
@@ -477,6 +482,7 @@ impl EditorApp {
             // de paso, ajusta la ventana al video.
             ancho_timeline: 0.0,
             seguir: true,
+            snap: true,
             objetivo_vista: None,
             modificadores: egui::Modifiers::default(),
             ruta_proyecto: ruta,
@@ -940,8 +946,15 @@ fn ejecutar_comando(state: &mut EditorApp, comando: Comando) -> Tarea {
         C::NudgeDerecha => nudge_seleccion(state, 0.1),
         C::AgregarFragmento => agregar_fragmento(state),
         C::Dividir => dividir_en_playhead(state),
-        // Estos comandos se conectan a sus mensajes en la fase de timeline.
-        C::Unir | C::Entrada | C::Salida | C::AlternarSnap => Tarea::Ninguna,
+        C::Entrada => update(state, MensajeEditor::MarcarEntrada),
+        C::Salida => update(state, MensajeEditor::MarcarSalida),
+        C::AlternarSnap => update(state, MensajeEditor::AlternarSnap),
+        C::Unir => {
+            let id = state.editor.seleccion.first().cloned();
+            id.map_or(Tarea::Ninguna, |id| {
+                update(state, MensajeEditor::UnirConSiguiente(id))
+            })
+        }
         C::CaptionAnterior => ciclar_caption(state, -1),
         C::CaptionSiguiente => ciclar_caption(state, 1),
         C::SimultaneoArriba => ciclar_simultaneo(state, -1),
@@ -1095,6 +1108,33 @@ fn agregar_fragmento(state: &mut EditorApp) -> Tarea {
     state.editor.agregar(caption);
     refrescar_preview(state);
     Tarea::Ninguna
+}
+
+/// `[` fija la entrada y `]` la salida en el playhead, sobre la selección.
+fn marcar_tiempo(state: &mut EditorApp, entrada: bool) {
+    let Some(id) = state.editor.seleccion.first().cloned() else {
+        return;
+    };
+    let Some(caption) = state
+        .editor
+        .proyecto()
+        .captions
+        .iter()
+        .find(|caption| caption.id == id)
+        .cloned()
+    else {
+        return;
+    };
+    let t = state.position.clamp(0.0, state.duration);
+    let (inicio, fin) = if entrada {
+        (t.min(caption.fin), caption.fin)
+    } else {
+        (caption.inicio, t.max(caption.inicio))
+    };
+    state
+        .editor
+        .editar_tiempos(&id, inicio, fin, state.duration);
+    refrescar_preview(state);
 }
 
 fn dividir_en_playhead(state: &mut EditorApp) -> Tarea {
@@ -1554,6 +1594,9 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             }
             refrescar_preview(state);
         }
+        MensajeEditor::MarcarEntrada => marcar_tiempo(state, true),
+        MensajeEditor::MarcarSalida => marcar_tiempo(state, false),
+        MensajeEditor::AlternarSnap => state.snap = !state.snap,
         MensajeEditor::SeleccionarTodosHablante(hablante) => {
             let ids: Vec<_> = state
                 .editor
@@ -1903,7 +1946,13 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
                             state.position,
                         );
                         let ids = arrastre.ids_de_marquesina(state.editor.proyecto(), marco);
-                        state.editor.reemplazar_seleccion(ids);
+                        if state.modificadores.shift {
+                            for id in ids {
+                                state.editor.alternar_seleccion(&id);
+                            }
+                        } else {
+                            state.editor.reemplazar_seleccion(ids);
+                        }
                         sincronizar_borrador(state);
                     }
                 }

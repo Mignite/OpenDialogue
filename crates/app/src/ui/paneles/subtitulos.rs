@@ -185,15 +185,33 @@ fn dibujar_lista(
                             respuesta.on_hover_text(&caption.texto);
                             ui.horizontal(|ui| {
                                 ui.spacing_mut().item_spacing.x = tema::ESP_4;
-                                ui.label(
-                                    RichText::new(format!(
-                                        "{} → {}",
-                                        tiempo_corto(caption.inicio),
-                                        tiempo_corto(caption.fin)
-                                    ))
-                                    .font(tema::fuente(Estilo::Timecode))
-                                    .color(tema::TEXTO_3),
-                                );
+                                let tiempos = ui
+                                    .add(
+                                        egui::Label::new(
+                                            RichText::new(format!(
+                                                "{} → {}",
+                                                tiempo_corto(caption.inicio),
+                                                tiempo_corto(caption.fin)
+                                            ))
+                                            .font(tema::fuente(Estilo::Timecode))
+                                            .color(tema::TEXTO_3),
+                                        )
+                                        .sense(Sense::click()),
+                                    )
+                                    .on_hover_text("Doble clic: fijar entrada");
+                                let id = caption.id.clone();
+                                tiempos.context_menu(|ui| {
+                                    if ui.button(textos.comando(Comando::Entrada)).clicked() {
+                                        mensajes.push(MensajeEditor::Seleccionar(id.clone()));
+                                        mensajes.push(MensajeEditor::Comando(Comando::Entrada));
+                                        ui.close();
+                                    }
+                                    if ui.button(textos.comando(Comando::Salida)).clicked() {
+                                        mensajes.push(MensajeEditor::Seleccionar(id.clone()));
+                                        mensajes.push(MensajeEditor::Comando(Comando::Salida));
+                                        ui.close();
+                                    }
+                                });
                                 ui.label(
                                     RichText::new(crate::editor_app::duracion_texto(
                                         caption.inicio,
@@ -226,6 +244,10 @@ fn dibujar_lista(
                         mensajes.push(MensajeEditor::Seleccionar(caption.id.clone()));
                         mensajes.push(MensajeEditor::Comando(Comando::EditarTexto));
                     }
+                    let id = caption.id.clone();
+                    respuesta.context_menu(|ui| {
+                        crate::ui::timeline::menu_contexto(ui, &id, mensajes, textos);
+                    });
                 }
             });
     });

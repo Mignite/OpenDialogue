@@ -112,8 +112,8 @@ pub fn show(
         .max_height(alto_abajo)
         .frame(tema::panel(tema::FONDO))
         .show(ctx, |ui| {
-            kit::panel_header(ui, textos.timeline);
-            mensajes.extend(crate::ui::timeline::mostrar(ui, state));
+            mensajes.extend(crate::ui::timeline::toolbar(ui, state, textos));
+            mensajes.extend(crate::ui::timeline::mostrar(ui, state, textos));
         });
     medidas.alto_timeline = abajo.response.rect.height();
 

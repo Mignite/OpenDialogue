@@ -1,12 +1,98 @@
-﻿//! Timeline dibujada con `egui::Painter`: regla con marcas, carriles con
+//! Timeline dibujada con `egui::Painter`: regla con marcas, carriles con
 //! nombre, clips con el color del hablante y playhead. El significado de cada
 //! gesto sigue en `timeline::pulsar`, que es código probado.
 
 use egui::{Ui, Vec2};
 
+use crate::comandos::Comando;
 use crate::editor_app::{EditorApp, MensajeEditor};
+use crate::textos::Textos;
 use crate::timeline::{self, ALTO_CARRIL, ALTO_REGLA, Mensaje};
+use crate::ui::kit::{self, Icono};
 use crate::ui::tema::{self, Estilo};
+
+/// Barra de herramientas de 32 px: etiqueta a la izquierda y acciones a la
+/// derecha. Ratón, menú contextual y atajos emiten los mismos comandos.
+pub fn toolbar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<MensajeEditor> {
+    let mut mensajes = Vec::new();
+    ui.allocate_ui_with_layout(
+        Vec2::new(ui.available_width(), tema::ALTO_TOOLBAR_TIMELINE),
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| {
+            ui.spacing_mut().item_spacing.x = tema::ESP_4;
+            tema::etiqueta(ui, textos.timeline.to_uppercase());
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let mut zoom = state.vista.escala as f32;
+                ui.add(
+                    egui::Slider::new(&mut zoom, 20.0..=500.0)
+                        .show_value(false)
+                        .handle_shape(egui::style::HandleShape::Rect { aspect_ratio: 0.5 }),
+                );
+                if (zoom as f64 - state.vista.escala).abs() > 0.01 {
+                    mensajes.push(MensajeEditor::Zoom(zoom as f64));
+                }
+                if kit::icon_button(ui, Icono::Bucle, state.seguir, textos.seguir, None).clicked() {
+                    mensajes.push(MensajeEditor::Seguir);
+                }
+                if kit::icon_button(
+                    ui,
+                    Icono::Punto,
+                    state.snap,
+                    textos.comando(Comando::AlternarSnap),
+                    None,
+                )
+                .clicked()
+                {
+                    mensajes.push(MensajeEditor::Comando(Comando::AlternarSnap));
+                }
+                if kit::icon_button(ui, Icono::Unir, false, textos.comando(Comando::Unir), None)
+                    .clicked()
+                {
+                    mensajes.push(MensajeEditor::Comando(Comando::Unir));
+                }
+                if kit::icon_button(
+                    ui,
+                    Icono::Dividir,
+                    false,
+                    textos.comando(Comando::Dividir),
+                    None,
+                )
+                .clicked()
+                {
+                    mensajes.push(MensajeEditor::Comando(Comando::Dividir));
+                }
+                if kit::icon_button(
+                    ui,
+                    Icono::Papelera,
+                    false,
+                    textos.comando(Comando::Eliminar),
+                    None,
+                )
+                .clicked()
+                {
+                    mensajes.push(MensajeEditor::Comando(Comando::Eliminar));
+                }
+            });
+        },
+    );
+    mensajes
+}
+
+/// Menú contextual compartido por filas y clips.
+pub fn menu_contexto(ui: &mut Ui, id: &str, mensajes: &mut Vec<MensajeEditor>, textos: &Textos) {
+    if ui.button(textos.comando(Comando::Eliminar)).clicked() {
+        mensajes.push(MensajeEditor::Comando(Comando::Eliminar));
+        ui.close();
+    }
+    if ui.button(textos.comando(Comando::Dividir)).clicked() {
+        mensajes.push(MensajeEditor::Comando(Comando::Dividir));
+        ui.close();
+    }
+    if ui.button(textos.comando(Comando::Unir)).clicked() {
+        mensajes.push(MensajeEditor::UnirConSiguiente(id.to_owned()));
+        ui.close();
+    }
+}
 
 /// Margen izquierdo para los nombres de carril. El eje empieza después.
 const GUTTER: f32 = 104.0;
@@ -44,7 +130,7 @@ fn paso_de_regla(escala: f64) -> f64 {
     60.0
 }
 
-pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
+pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<MensajeEditor> {
     let (rect, respuesta) = ui.allocate_exact_size(
         Vec2::new(ui.available_width(), ui.available_height()),
         egui::Sense::click_and_drag(),
@@ -249,6 +335,19 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
                 tema::fuente(Estilo::Pequeno),
                 tema::TEXTO,
             );
+        }
+        // Solo registramos el widget del menú bajo el puntero: registrar un
+        // interact por clip con 543 líneas cuesta varios ms por frame.
+        if ui.rect_contains_pointer(clip) {
+            let id = caption.id.clone();
+            let respuesta = ui.interact(
+                clip,
+                ui.make_persistent_id(("clip", &id)),
+                egui::Sense::click(),
+            );
+            respuesta.context_menu(|ui| {
+                menu_contexto(ui, &id, &mut mensajes, textos);
+            });
         }
     }
 
