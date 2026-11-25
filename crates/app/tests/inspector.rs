@@ -28,7 +28,9 @@ fn editor() -> EditorApp {
 
 fn campo(h: &mut egui_kittest::Harness<'_, EditorApp>) {
     h.state_mut().texto.foco = true;
-    h.run();
+    for _ in 0..3 {
+        h.step();
+    }
 }
 
 fn escribir(h: &mut egui_kittest::Harness<'_, EditorApp>, texto: &str) {
@@ -36,7 +38,9 @@ fn escribir(h: &mut egui_kittest::Harness<'_, EditorApp>, texto: &str) {
         .events
         .push(egui::Event::Text(texto.to_owned()));
     h.step();
-    h.run();
+    for _ in 0..3 {
+        h.step();
+    }
 }
 
 #[test]
@@ -95,13 +99,17 @@ fn shift_enter_deja_linea_y_enter_termina_la_edicion() {
     campo(&mut h);
     escribir(&mut h, " Hola");
     h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Enter);
-    h.run();
+    for _ in 0..3 {
+        h.step();
+    }
     escribir(&mut h, "mundo");
     assert_eq!(
         h.state().proyecto().captions[0].texto,
         "texto original Hola\nmundo"
     );
     h.key_press(egui::Key::Enter);
-    h.run();
+    for _ in 0..3 {
+        h.step();
+    }
     assert!(!h.state().texto.foco);
 }

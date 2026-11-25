@@ -85,6 +85,8 @@ pub struct Arrastre {
     pub respaldo: Option<Instantanea>,
     /// La app ya registró el paso de historial de este arrastre.
     pub con_historial: bool,
+    /// Si el ajuste a bordes/playhead está activo en este gesto.
+    pub snap: bool,
 }
 
 /// Lo que un arrastre necesita saber del mundo además del proyecto: dónde está
@@ -128,12 +130,21 @@ impl Arrastre {
     /// reproductor es la forma habitual de pegar dos captions.
     pub fn aplicar(&self, proyecto: &mut Proyecto, marco: Marco) -> bool {
         match &self.modo {
-            Modo::Borde { id, asa, original } => aplicar_borde(proyecto, marco, id, *asa, original),
+            Modo::Borde { id, asa, original } => {
+                aplicar_borde(proyecto, marco, id, *asa, original, self.snap)
+            }
             Modo::Bloque {
                 originales,
                 origen,
                 fila_origen,
-            } => aplicar_bloque(proyecto, marco, originales, *origen, *fila_origen),
+            } => aplicar_bloque(
+                proyecto,
+                marco,
+                originales,
+                *origen,
+                *fila_origen,
+                self.snap,
+            ),
             Modo::Marquesina { .. } => false,
         }
     }
@@ -168,7 +179,13 @@ pub enum Respuesta {
     },
 }
 
-pub fn pulsar(proyecto: &Proyecto, vista: Vista, punto: Punto, seleccion: &[String]) -> Respuesta {
+pub fn pulsar(
+    proyecto: &Proyecto,
+    vista: Vista,
+    punto: Punto,
+    seleccion: &[String],
+    snap: bool,
+) -> Respuesta {
     let Some(carril) = carril_en(punto.y) else {
         return Respuesta::Buscar(vista.tiempo_de(punto.x).max(0.0));
     };
@@ -191,6 +208,7 @@ pub fn pulsar(proyecto: &Proyecto, vista: Vista, punto: Punto, seleccion: &[Stri
                 modo: Modo::Marquesina { origen: punto },
                 respaldo: None,
                 con_historial: false,
+                snap,
             },
             seleccion: seleccion.to_vec(),
         };
@@ -219,6 +237,7 @@ pub fn pulsar(proyecto: &Proyecto, vista: Vista, punto: Punto, seleccion: &[Stri
                 },
                 respaldo: Some(Instantanea::de_proyecto(proyecto)),
                 con_historial: false,
+                snap,
             },
             seleccion: vec![caption.id.clone()],
         };
@@ -251,6 +270,7 @@ pub fn pulsar(proyecto: &Proyecto, vista: Vista, punto: Punto, seleccion: &[Stri
             },
             respaldo: Some(Instantanea::de_proyecto(proyecto)),
             con_historial: false,
+            snap,
         },
         seleccion: ids,
     }
@@ -262,6 +282,7 @@ fn aplicar_borde(
     id: &str,
     asa: Asa,
     original: &Original,
+    snap: bool,
 ) -> bool {
     if !proyecto.captions.iter().any(|caption| caption.id == id) {
         return false;
@@ -270,7 +291,11 @@ fn aplicar_borde(
     let pedido = marco.vista.tiempo_de(marco.punto.x);
     let id_ajeno = [id];
     let imanes = [marco.playhead];
-    let tiempo = find_snap_time(pedido, &id_ajeno, &proyecto.captions, &imanes).unwrap_or(pedido);
+    let tiempo = if snap {
+        find_snap_time(pedido, &id_ajeno, &proyecto.captions, &imanes).unwrap_or(pedido)
+    } else {
+        pedido
+    };
 
     // El clamp es explícito por asa: `clamp_caption_tiempos` empuja el borde
     // contrario cuando la duración mínima no cabe, y aquí eso movería el borde
@@ -314,6 +339,7 @@ fn aplicar_bloque(
     originales: &[Original],
     origen: Punto,
     fila_origen: i32,
+    snap: bool,
 ) -> bool {
     let Some(inicio_min) = originales.iter().map(|o| o.inicio).reduce(f64::min) else {
         return false;
@@ -328,14 +354,18 @@ fn aplicar_bloque(
     }
 
     let ids: Vec<&str> = originales.iter().map(|o| o.id.as_str()).collect();
-    let snap = find_snap_block_delta(
-        inicio_min + delta,
-        fin_max + delta,
-        &ids,
-        &proyecto.captions,
-        Some(marco.playhead),
-    );
-    let delta = a_milisegundos(delta + snap);
+    let ajuste = if snap {
+        find_snap_block_delta(
+            inicio_min + delta,
+            fin_max + delta,
+            &ids,
+            &proyecto.captions,
+            Some(marco.playhead),
+        )
+    } else {
+        0.0
+    };
+    let delta = a_milisegundos(delta + ajuste);
 
     let shift = fila_de_carril(marco.punto.y, proyecto.hablantes.len()) - fila_origen;
     let filas: BTreeMap<String, i32> = originales
@@ -446,7 +476,7 @@ mod tests {
     }
 
     fn empezar(proyecto: &Proyecto, p: Punto, seleccion: &[String]) -> (Arrastre, Vec<String>) {
-        match pulsar(proyecto, vista(), p, seleccion) {
+        match pulsar(proyecto, vista(), p, seleccion, true) {
             Respuesta::Empezar {
                 arrastre,
                 seleccion,
@@ -466,7 +496,7 @@ mod tests {
 
     #[test]
     fn pulsar_en_la_regla_pide_buscar() {
-        match pulsar(&proyecto(), vista(), Punto::new(100.0, 4.0), &[]) {
+        match pulsar(&proyecto(), vista(), Punto::new(100.0, 4.0), &[], true) {
             Respuesta::Buscar(t) => assert!((t - 2.0).abs() < 1e-9),
             otro => panic!("se esperaba Buscar, llegó {otro:?}"),
         }

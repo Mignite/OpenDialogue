@@ -60,7 +60,7 @@ fn marquesina_y_lista_comparten_seleccion() {
         x: vista.x_de(2.5),
         y: timeline::ALTO_REGLA + 10.0,
     };
-    let respuesta = timeline::pulsar(app.proyecto(), vista, punto, &[]);
+    let respuesta = timeline::pulsar(app.proyecto(), vista, punto, &[], true);
     let arrastre = match respuesta {
         timeline::Respuesta::Empezar { arrastre, .. } => arrastre,
         _ => panic!("se esperaba marquesina"),

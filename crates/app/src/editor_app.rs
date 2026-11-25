@@ -85,6 +85,11 @@ pub enum MensajeEditor {
     Soltar,
     Step(f64),
     Seleccionar(String),
+    SeleccionarConModificador {
+        id: String,
+        ctrl: bool,
+        shift: bool,
+    },
     BorrarSeleccion,
     Deshacer,
     Rehacer,
@@ -97,6 +102,8 @@ pub enum MensajeEditor {
     CancelarInline,
     /// Aplicación en vivo del inspector (un paso de deshacer por sesión).
     EditarEnVivo(String, String),
+    /// Restaura el texto original sin crear un paso de historial.
+    RevertirTexto(String, String),
     TerminarEdicionTexto,
     UnirConSiguiente(String),
     MarcarEntrada,
@@ -250,12 +257,20 @@ impl EstadoTexto {
         state.texto.lineas = 1;
     }
 
+    /// Marquesina con Shift: añade sin quitar lo ya seleccionado.
+    pub fn sumar_seleccion(state: &mut EditorApp, ids: Vec<String>) {
+        for id in ids {
+            if !state.editor.seleccion.contains(&id) {
+                state.editor.seleccion.push(id);
+            }
+        }
+    }
+
     /// Esc: vuelve al texto que había al enfocar y suelta el foco.
     pub fn revertir(state: &mut EditorApp) {
         let original = state.texto.original.clone();
         if let Some(id) = Self::objetivo(state) {
-            update(state, MensajeEditor::EditarEnVivo(id, original.clone()));
-            update(state, MensajeEditor::TerminarEdicionTexto);
+            update(state, MensajeEditor::RevertirTexto(id, original.clone()));
         }
         state.texto.borrador = original;
         state.texto.foco = false;
@@ -321,7 +336,7 @@ pub struct EditorApp {
     pub(crate) ancho_timeline: f32,
     /// La vista persigue al playhead mientras se reproduce. Se apaga al usar
     /// la rueda o la barra, y se enciende con el botón.
-    pub(crate) seguir: bool,
+    pub seguir: bool,
     /// Ajustar bordes de clip y playhead al arrastrar.
     pub snap: bool,
     /// Inicio hacia el que se desliza la vista, si hay un seguimiento en curso.
@@ -378,6 +393,11 @@ impl EditorApp {
     /// Acceso a la selección compartida por lista y timeline.
     pub fn editor_mut(&mut self) -> &mut EstadoEditor {
         &mut self.editor
+    }
+
+    /// Espejo de los modificadores del teclado, para la marquesina con Shift.
+    pub fn set_modificadores(&mut self, modificadores: egui::Modifiers) {
+        self.modificadores = modificadores;
     }
 
     /// Hay una fila en edición inline.
@@ -976,7 +996,8 @@ fn ejecutar_comando(state: &mut EditorApp, comando: Comando) -> Tarea {
                 state.mensaje = Some("Selecciona un solo subtítulo para editar su texto".into());
                 Tarea::Ninguna
             } else {
-                Tarea::EnfocarTexto
+                state.texto.foco = true;
+                Tarea::Ninguna
             }
         }
         C::Buscar => {
@@ -1547,6 +1568,31 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
                 eprintln!("no se pudo hacer seek: {error}");
             }
         }
+        MensajeEditor::SeleccionarConModificador { id, ctrl, shift } => {
+            if ctrl {
+                state.editor.alternar_seleccion(&id);
+            } else if shift {
+                let captions = &state.editor.proyecto().captions;
+                let destino = captions
+                    .iter()
+                    .position(|caption| caption.id == id)
+                    .unwrap_or(0);
+                let origen = state
+                    .editor
+                    .seleccion
+                    .last()
+                    .and_then(|last| captions.iter().position(|caption| &caption.id == last))
+                    .unwrap_or(destino);
+                let (a, b) = (origen.min(destino), origen.max(destino));
+                state.editor.reemplazar_seleccion(
+                    captions[a..=b]
+                        .iter()
+                        .map(|caption| caption.id.clone())
+                        .collect(),
+                );
+            }
+            sincronizar_borrador(state);
+        }
         MensajeEditor::Seleccionar(id) => {
             state.editor.seleccionar_uno(&id);
             sincronizar_borrador(state);
@@ -1613,6 +1659,11 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
                 state.editor.registrar_historial();
                 state.editando_texto = Some(id.clone());
             }
+            state.editor.editar_texto(&id, texto);
+            refrescar_preview(state);
+        }
+        MensajeEditor::RevertirTexto(id, texto) => {
+            state.editando_texto = None;
             state.editor.editar_texto(&id, texto);
             refrescar_preview(state);
         }
@@ -1883,6 +1934,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
                     state.vista,
                     punto,
                     &state.editor.seleccion,
+                    state.snap,
                 );
                 match respuesta {
                     timeline::Respuesta::Buscar(tiempo) => buscar(state, tiempo),
@@ -1947,9 +1999,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
                         );
                         let ids = arrastre.ids_de_marquesina(state.editor.proyecto(), marco);
                         if state.modificadores.shift {
-                            for id in ids {
-                                state.editor.alternar_seleccion(&id);
-                            }
+                            EstadoTexto::sumar_seleccion(state, ids);
                         } else {
                             state.editor.reemplazar_seleccion(ids);
                         }

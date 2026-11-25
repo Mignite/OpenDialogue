@@ -99,6 +99,7 @@ impl RustyDialogue {
         match editor {
             Ok(mut editor) => {
                 editor.snap = self.preferencias.snap;
+                editor.seguir = self.preferencias.seguir;
                 self.pantalla = Pantalla::Editor(Box::new(editor));
                 true
             }
@@ -207,12 +208,6 @@ impl RustyDialogue {
             self.panel_atajos.abierto = true;
             return;
         }
-        if comando == Comando::EditarTexto {
-            if let Pantalla::Editor(editor) = &mut self.pantalla {
-                editor.texto.foco = true;
-            }
-            return;
-        }
         match &mut self.pantalla {
             Pantalla::Inicio(estado) => {
                 let mensaje = match comando {
@@ -289,7 +284,10 @@ impl eframe::App for RustyDialogue {
         let capturando_teclado = self.ajustes.abierto
             || self.panel_atajos.abierto
             || matches!(&self.pantalla, Pantalla::Editor(editor) if editor.texto_inline_activo());
-        let foco_en_texto = ctx.memory(|memoria| memoria.focused().is_some()) || capturando_teclado;
+        // Solo el campo de texto del subtítulo consume las teclas desnudas:
+        // el foco en un botón, slider o buscador no debe bloquear Espacio/E/S/M.
+        let foco_en_texto = matches!(&self.pantalla, Pantalla::Editor(editor) if editor.texto.foco)
+            || capturando_teclado;
         let atajos = &self.preferencias.atajos;
         let pulsaciones: Vec<Comando> = if capturando_teclado {
             Vec::new()
@@ -417,6 +415,12 @@ impl eframe::App for RustyDialogue {
             self.preferencias.panel_visible = medidas.panel_visible;
             let _ = self.preferencias.guardar();
         }
+        if let Pantalla::Editor(editor) = &self.pantalla
+            && editor.seguir != self.preferencias.seguir
+        {
+            self.preferencias.seguir = editor.seguir;
+            let _ = self.preferencias.guardar();
+        }
         if let Some(mensaje) = mensaje_inicio {
             let (tarea, salida) = match &mut self.pantalla {
                 Pantalla::Inicio(estado) => inicio::update(estado, mensaje),
@@ -427,9 +431,12 @@ impl eframe::App for RustyDialogue {
                 self.despachar_salida(salida);
             }
         }
-        let borro = mensajes_editor
-            .iter()
-            .any(|mensaje| matches!(mensaje, MensajeEditor::BorrarSeleccion));
+        let borro = mensajes_editor.iter().any(|mensaje| {
+            matches!(
+                mensaje,
+                MensajeEditor::BorrarSeleccion | MensajeEditor::Comando(Comando::Eliminar)
+            )
+        });
         for mensaje in mensajes_editor {
             if let Pantalla::Editor(editor) = &mut self.pantalla {
                 let tarea = editor_app::update(editor, mensaje);

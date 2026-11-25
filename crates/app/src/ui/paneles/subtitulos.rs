@@ -244,7 +244,16 @@ fn dibujar_lista(
                     });
 
                     if respuesta.clicked() {
-                        mensajes.push(MensajeEditor::Seleccionar(caption.id.clone()));
+                        let modif = ui.input(|entrada| entrada.modifiers);
+                        if modif.ctrl || modif.shift {
+                            mensajes.push(MensajeEditor::SeleccionarConModificador {
+                                id: caption.id.clone(),
+                                ctrl: modif.ctrl,
+                                shift: modif.shift,
+                            });
+                        } else {
+                            mensajes.push(MensajeEditor::Seleccionar(caption.id.clone()));
+                        }
                     }
                     if respuesta.double_clicked() {
                         mensajes.push(MensajeEditor::Seleccionar(caption.id.clone()));

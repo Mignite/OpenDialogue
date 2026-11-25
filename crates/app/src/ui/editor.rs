@@ -120,7 +120,9 @@ pub fn show(
             mensajes.extend(crate::ui::timeline::toolbar(ui, state, textos));
             mensajes.extend(crate::ui::timeline::mostrar(ui, state, textos));
         });
-    medidas.alto_timeline = abajo.response.rect.height();
+    if crate::ui::texto::alto_extra(state, ctx.content_rect().width()) == 0.0 {
+        medidas.alto_timeline = abajo.response.rect.height();
+    }
 
     egui::CentralPanel::default()
         .frame(tema::panel(tema::FONDO))

@@ -7,9 +7,22 @@ use egui::{Color32, Ui, Vec2};
 use crate::comandos::Comando;
 use crate::editor_app::{EditorApp, MensajeEditor};
 use crate::textos::Textos;
-use crate::timeline::{self, ALTO_CARRIL, ALTO_REGLA, Mensaje};
+use crate::timeline::{self, ALTO_CARRIL, ALTO_REGLA, Mensaje, Vista};
 use crate::ui::kit::{self, Icono};
 use crate::ui::tema::{self, Estilo};
+
+/// El slider va en 0–100; `Vista.escala` está en segundos/píxel, así que el
+/// mapeo es logarítmico entre los límites de la vista.
+pub fn zoom_desde_slider(valor: f32) -> f64 {
+    let t = f64::from(valor.clamp(0.0, 100.0)) / 100.0;
+    Vista::ESCALA_MINIMA * (Vista::ESCALA_MAXIMA / Vista::ESCALA_MINIMA).powf(t)
+}
+
+pub fn slider_desde_zoom(escala: f64) -> f32 {
+    let escala = escala.clamp(Vista::ESCALA_MINIMA, Vista::ESCALA_MAXIMA);
+    (100.0 * (escala / Vista::ESCALA_MINIMA).ln()
+        / (Vista::ESCALA_MAXIMA / Vista::ESCALA_MINIMA).ln()) as f32
+}
 
 /// Barra de herramientas de 32 px: etiqueta a la izquierda y acciones a la
 /// derecha. Ratón, menú contextual y atajos emiten los mismos comandos.
@@ -22,14 +35,15 @@ pub fn toolbar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
             ui.spacing_mut().item_spacing.x = tema::ESP_4;
             tema::etiqueta(ui, textos.timeline.to_uppercase());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let mut zoom = state.vista.escala as f32;
+                let mut zoom = slider_desde_zoom(state.vista.escala);
                 ui.add(
-                    egui::Slider::new(&mut zoom, 20.0..=500.0)
+                    egui::Slider::new(&mut zoom, 0.0..=100.0)
                         .show_value(false)
                         .handle_shape(egui::style::HandleShape::Rect { aspect_ratio: 0.5 }),
                 );
-                if (zoom as f64 - state.vista.escala).abs() > 0.01 {
-                    mensajes.push(MensajeEditor::Zoom(zoom as f64));
+                let nueva = zoom_desde_slider(zoom);
+                if (nueva - state.vista.escala).abs() > 1e-9 {
+                    mensajes.push(MensajeEditor::Zoom(state.vista.escala / nueva));
                 }
                 if kit::icon_button(ui, Icono::Bucle, state.seguir, textos.seguir, None).clicked() {
                     mensajes.push(MensajeEditor::Seguir);
@@ -80,6 +94,8 @@ pub fn toolbar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
 
 /// Menú contextual compartido por filas y clips.
 pub fn menu_contexto(ui: &mut Ui, id: &str, mensajes: &mut Vec<MensajeEditor>, textos: &Textos) {
+    // El menú actúa sobre lo que el usuario señaló, no sobre la selección previa.
+    mensajes.push(MensajeEditor::Seleccionar(id.to_owned()));
     if ui.button(textos.comando(Comando::Eliminar)).clicked() {
         mensajes.push(MensajeEditor::Comando(Comando::Eliminar));
         ui.close();

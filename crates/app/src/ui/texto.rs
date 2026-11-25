@@ -1,5 +1,7 @@
 //! Barra única de edición del texto de un subtítulo, bajo el video.
 
+use std::time::Duration;
+
 use egui::{Key, RichText, TextEdit, Vec2};
 
 use crate::editor_app::{EditorApp, EstadoTexto, MensajeEditor};
@@ -10,6 +12,11 @@ use crate::ui::tema::{self, Estilo};
 /// Alto extra que la barra añade al transporte cuando crece a varias líneas.
 pub fn alto_extra(state: &EditorApp, _ancho: f32) -> f32 {
     (state.texto.lineas.saturating_sub(1)) as f32 * tema::ALTO_BARRA_TEXTO
+}
+
+/// Una sesión de tipeo se cierra sola tras ~1 s sin teclear.
+pub fn sesion_vencida(ultimo: Option<std::time::Instant>, ahora: std::time::Instant) -> bool {
+    ultimo.is_some_and(|instante| ahora.duration_since(instante) > Duration::from_millis(1000))
 }
 
 fn cps(state: &EditorApp) -> f32 {
@@ -136,25 +143,34 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
         if solicitar_foco {
             respuesta.request_focus();
         }
+        let mut cerrada = false;
         if respuesta.has_focus() {
-            if state.texto.original.is_empty() && state.texto.ultimo_tipeo.is_none() {
-                state.texto.original = state.texto.borrador.clone();
-            }
             if objetivo.is_some() && state.texto.borrador != state.texto.original {
                 update_texto(state);
             }
-            if !state.texto.borrador.is_empty() {
+            if respuesta.changed() {
                 state.texto.ultimo_tipeo = Some(std::time::Instant::now());
             }
-            if ui.input(|entrada| entrada.key_pressed(Key::Enter) && !entrada.modifiers.shift) {
+            if sesion_vencida(state.texto.ultimo_tipeo, std::time::Instant::now()) {
+                EstadoTexto::cerrar_sesion(state);
+                respuesta.surrender_focus();
+                cerrada = true;
+            } else if state.texto.ultimo_tipeo.is_some() {
+                ui.ctx().request_repaint_after(Duration::from_millis(200));
+            }
+            if !cerrada
+                && ui.input(|entrada| entrada.key_pressed(Key::Enter) && !entrada.modifiers.shift)
+            {
                 if state.texto.borrador.ends_with('\n') {
                     state.texto.borrador.pop();
                 }
                 EstadoTexto::cerrar_sesion(state);
                 respuesta.surrender_focus();
-            } else if ui.input(|entrada| entrada.key_pressed(Key::Escape)) {
+                cerrada = true;
+            } else if !cerrada && ui.input(|entrada| entrada.key_pressed(Key::Escape)) {
                 EstadoTexto::revertir(state);
                 respuesta.surrender_focus();
+                cerrada = true;
             } else {
                 state.texto.lineas =
                     (state.texto.borrador.matches('\n').count().clamp(0, 2) + 1) as u8;
@@ -163,7 +179,7 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
         if respuesta.lost_focus() && state.texto.foco {
             EstadoTexto::cerrar_sesion(state);
         }
-        if !solicitar_foco && !state.texto.foco {
+        if !cerrada && !solicitar_foco && !state.texto.foco {
             state.texto.foco = respuesta.has_focus();
         }
         state.texto.nueva_linea = objetivo.is_none();
