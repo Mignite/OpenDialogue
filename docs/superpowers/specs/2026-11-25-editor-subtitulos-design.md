@@ -25,11 +25,11 @@ superposiciones y ningún texto baje de 11 px.
    **confirma y devuelve el foco a la timeline**; solo crea una línea de 2 s si
    no hay ninguna bajo el playhead. Esc revierte lo escrito desde que se
    enfocó y devuelve el foco. Shift+Enter inserta salto de línea.
-3. El overlay de subtítulos sigue siendo el render de `ass.rs`: fuente, relleno,
-   contorno y sombra del preset. El color de identidad del hablante es **solo
-   UI sobre el video**: barra vertical de 3 px junto al bloque y chip con el
-   nombre mientras la línea está seleccionada. Toggle «Mostrar tinte de
-   hablante» en el menú Ver, activo por defecto. `ass.rs` no se toca.
+3. El overlay de subtítulos es exactamente el render de `ass.rs`: fuente,
+   relleno, contorno, sombra y márgenes del preset. **No se añade ninguna
+   marca de identidad de hablante sobre el video**: ni barra de color ni chip
+   con el nombre, ni toggle en el menú Ver. La distinción entre hablantes sale
+   de los estilos ASS, que también se exportan. `ass.rs` no se toca.
 4. El icono del grupo derecho que hoy dice «Bucle» controla «Seguir al
    playhead»: se renombra a Seguir, con icono y tooltip correctos. No se
    implementa loop de reproducción en esta spec.
@@ -52,7 +52,7 @@ ui/texto.rs            barra de edición + chip de hablante + CPS (nuevo)
 ui/paneles/subtitulos.rs  búsqueda + lista a todo el alto (sin inspector)
 ui/timeline.rs         toolbar de 32 px + pistas + clips + menú contextual
 ui/transporte.rs       transporte 56 px + campo flexible + grupo derecho
-ui/video.rs / editor.rs  preview a sangre + tinte de hablante (UI)
+ui/video.rs / editor.rs  preview a sangre (sin marcas de UI sobre el video)
 ui/tema.rs             todos los tokens nuevos
 comandos.rs            Comando para In/Out, Eliminar, Dividir, Unir, Seguir, Snap
 editor_app.rs          EstadoTexto + manejo único de esos comandos + historial
@@ -133,7 +133,7 @@ que muta el proyecto y empuja un paso de historial por gesto.
 | Waveform | Normalizar al pico; barras espejadas de 2 px con 1 px de hueco, gris-azulado; pista 56 px. |
 | Clip sin hablante | Relleno gris 15 % y borde punteado `#666`; seleccionado, borde sólido de acento (el acento gana). |
 | Zona vacía bajo Audio | «Asigna un hablante para ver su pista» en secundario, u ocultar. |
-| Overlay | Texto idéntico al `.ass`; barra de identidad 3 px + chip de nombre sobre la línea seleccionada; toggle en Ver. |
+| Overlay | Texto idéntico al `.ass` (incluye contorno y márgenes del preset); sin barra ni chip de identidad sobre el video. |
 | Barra de título | «Saved»/«Unsaved» con punto de estado (secundario/ámbar) delante del texto. |
 | Divisores | 1 px `#2E2E2E`; splitter 4 px entre video y panel con hover azul. |
 
@@ -175,14 +175,11 @@ también verificar el render real con video para el overlay.
   actualizar la misma selección; si se implementan por separado, las dos vistas
   se desincronizan.
 
-## 8. Pendiente de revisión
+## 8. Decisiones cerradas
 
-Única pregunta abierta: el chip con el nombre del hablante que se dibuja sobre
-el video, ¿debe aparecer **solo cuando hay una línea seleccionada**, o también
-cuando no hay selección pero hay una línea bajo el playhead? (Hoy la spec
-supone lo primero; la barra vertical de color sí aparece para la línea activa
-en ambos casos, si el toggle «Mostrar tinte de hablante» está activo.)
-
-Resueltas: `1–9` no consumen teclas con el foco en el campo; `E` enfoca el
-campo; borrar con confirmación y multiselección en lista y timeline entran en
-alcance.
+- `1–9` no consumen teclas con el foco en el campo; `E` enfoca el campo.
+- Borrar con confirmación y multiselección en lista y timeline entran en
+  alcance.
+- El video no muestra quién habla: no hay barra ni chip de identidad sobre el
+  preview. La distinción entre hablantes la dan los estilos ASS, igual que en
+  el export.
