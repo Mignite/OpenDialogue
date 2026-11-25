@@ -17,6 +17,14 @@
   pestañas de 36 px con badges; lista con búsqueda y panel fijo de inspector;
   Speakers con tarjetas y paleta saturada en popover; Styles con vista previa
   y campos rotulados; `Apply` desaparece (edición en vivo).
+- Sidebar que crecía sola: en cada fila, `add_space(available - ALTO_CHIP)`
+  para el lápiz sumaba el espaciado del layout y desbordaba `min_rect`; el
+  `SidePanel` guardaba ese rect como estado y volvía a aplicarlo al frame
+  siguiente (+1 px/frame hasta el máximo). El lápiz ahora se coloca con
+  `ui.put` en un rect explícito (`icon_button_en`), sin consumir ancho del
+  layout. Regresión en `tests/editor.rs` con el tema aplicado (sin él el bug
+  no aparece). El ancho se acota al persistir y un valor fuera de rango se
+  descarta.
 - Corrección de la lista de subtítulos: el `ScrollArea` anidado comía el alto
   y el inspector se pintaba encima. Ahora cada zona tiene un rect explícito
   (barra 36 px / lista acotada / inspector fijo); las filas son de 44 px con

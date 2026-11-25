@@ -243,20 +243,23 @@ fn dibujar_lista(
                                         .font(tema::fuente(Estilo::Pequeno))
                                         .color(tema::TEXTO_3),
                                     );
-                                    ui.add_space(ui.available_width() - tema::ALTO_CHIP);
-                                    if kit::icon_button(
-                                        ui,
-                                        Icono::Editar,
-                                        false,
-                                        textos.editar,
-                                        None,
-                                    )
-                                    .clicked()
-                                    {
-                                        state.inline =
-                                            Some((caption.id.clone(), caption.texto.clone()));
-                                    }
                                 });
+                                // El lápiz se coloca en un rect explícito: un
+                                // `add_space(available - ancho)` desbordaba el
+                                // min_rect del SidePanel 1 px por frame.
+                                let boton = egui::Rect::from_min_max(
+                                    egui::pos2(
+                                        fila.max.x - tema::ALTO_CHIP - tema::ESP_4,
+                                        fila.max.y - tema::ALTO_CHIP - tema::ESP_2,
+                                    ),
+                                    egui::pos2(fila.max.x - tema::ESP_4, fila.max.y - tema::ESP_2),
+                                );
+                                if kit::icon_button_en(ui, boton, Icono::Editar, textos.editar)
+                                    .clicked()
+                                {
+                                    state.inline =
+                                        Some((caption.id.clone(), caption.texto.clone()));
+                                }
                             }
                         });
                     });

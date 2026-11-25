@@ -35,8 +35,16 @@ impl Default for MedidasEditor {
 
 impl From<&Preferencias> for MedidasEditor {
     fn from(prefs: &Preferencias) -> Self {
+        // Un ancho fuera de rango es un valor corrupto (p. ej. el crecido
+        // por el bug del lápiz): se descarta en vez de arrastrar el panel.
+        let ancho = if !(tema::ANCHO_PANEL_MIN..=tema::ANCHO_PANEL_MAX).contains(&prefs.ancho_panel)
+        {
+            tema::ANCHO_PANEL_DEFECTO
+        } else {
+            prefs.ancho_panel
+        };
         Self {
-            ancho_panel: prefs.ancho_panel,
+            ancho_panel: ancho,
             alto_timeline: prefs.alto_timeline,
             panel_visible: prefs.panel_visible,
         }
@@ -83,7 +91,12 @@ pub fn show(
                     Panel::Estilos => mensajes.extend(estilos::mostrar(ui, state, textos)),
                 }
             });
-        medidas.ancho_panel = lado.response.rect.width();
+        // El rect devuelto incluye el marco: nunca debe exceder el máximo.
+        medidas.ancho_panel = lado
+            .response
+            .rect
+            .width()
+            .clamp(tema::ANCHO_PANEL_MIN, tema::ANCHO_PANEL_MAX);
     }
 
     let abajo = egui::TopBottomPanel::bottom("timeline")

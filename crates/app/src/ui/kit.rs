@@ -1,7 +1,7 @@
 ﻿//! Componentes compartidos. Ningún widget suelto en las vistas: tamaños,
 //! colores y tipografía vienen siempre de `tema`.
 
-use egui::{Color32, CornerRadius, FontId, Response, RichText, Sense, Stroke, Ui, Vec2};
+use egui::{Color32, CornerRadius, FontId, Rect, Response, RichText, Sense, Stroke, Ui, Vec2};
 
 use super::tema::{self, Estilo};
 use crate::editor_app::Panel;
@@ -182,6 +182,26 @@ pub fn icon_button(
         if let Some(atajo) = atajo {
             ui.label(RichText::new(atajo).font(tema::fuente(Estilo::Mono)));
         }
+    })
+}
+
+/// Icono colocado en un rect explícito: no consume ancho del layout, así que
+/// no puede desbordar el `min_rect` del panel que lo contiene.
+pub fn icon_button_en(ui: &mut Ui, rect: Rect, icono: Icono, tooltip: &str) -> Response {
+    let respuesta = ui.put(
+        rect,
+        egui::Button::new(
+            RichText::new(glifo(icono))
+                .font(FontId::proportional(tema::TAMANO_ICONO))
+                .color(tema::TEXTO_2),
+        )
+        .fill(Color32::TRANSPARENT)
+        .stroke(Stroke::NONE)
+        .corner_radius(CornerRadius::same(tema::RADIO_CONTROL as u8))
+        .min_size(rect.size()),
+    );
+    respuesta.on_hover_ui(|ui| {
+        ui.label(RichText::new(tooltip).font(tema::fuente(Estilo::Base)));
     })
 }
 
