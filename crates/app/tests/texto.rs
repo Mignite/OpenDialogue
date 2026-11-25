@@ -116,7 +116,7 @@ fn campo_crece_a_tres_lineas_y_empuja_timeline() {
     let mut app = editor();
     app.texto.lineas = 3;
     let medidas = rod_app::ui::editor::MedidasEditor::default();
-    let alto = rod_app::ui::editor::alto_timeline(&app, &medidas, tema::ANIMACION);
+    let alto = rod_app::ui::editor::alto_timeline(&app, &medidas, tema::ANIMACION, 1440.0);
     assert_eq!(app.texto.lineas, 3);
     assert!(
         alto <= medidas.alto_timeline - 2.0 * tema::ALTO_BARRA_TEXTO + 0.001,

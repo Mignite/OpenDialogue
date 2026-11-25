@@ -1,4 +1,17 @@
 use rod_app::timeline::{Vista, escala_anclada, iman, paso_de_regla, tiempo_bajo_cursor};
+use rod_app::ui::tema;
+
+#[test]
+fn clip_sin_hablante_seleccionado_usa_acento() {
+    assert_eq!(
+        rod_app::ui::timeline::color_borde_clip(None, true),
+        tema::ACENTO
+    );
+    assert_eq!(
+        rod_app::ui::timeline::color_borde_clip(None, false),
+        tema::COLOR_SIN_HABLANTE
+    );
+}
 
 #[test]
 fn la_regla_cambia_de_paso_segun_el_zoom() {

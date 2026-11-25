@@ -52,8 +52,13 @@ impl From<&Preferencias> for MedidasEditor {
 }
 
 /// Alto de la timeline: el campo de texto puede quitarle altura al crecer.
-pub fn alto_timeline(state: &EditorApp, medidas: &MedidasEditor, _animacion: f32) -> f32 {
-    (medidas.alto_timeline - crate::ui::texto::alto_extra(state)).max(160.0)
+pub fn alto_timeline(
+    state: &EditorApp,
+    medidas: &MedidasEditor,
+    _animacion: f32,
+    ancho: f32,
+) -> f32 {
+    (medidas.alto_timeline - crate::ui::texto::alto_extra(state, ancho)).max(160.0)
 }
 
 /// Distribución: inspector a la derecha, timeline abajo, monitor al centro.
@@ -104,7 +109,7 @@ pub fn show(
             .clamp(tema::ANCHO_PANEL_MIN, tema::ANCHO_PANEL_MAX);
     }
 
-    let alto_abajo = alto_timeline(state, medidas, tema::ANIMACION);
+    let alto_abajo = alto_timeline(state, medidas, tema::ANIMACION, ctx.content_rect().width());
     let abajo = egui::TopBottomPanel::bottom("timeline")
         .resizable(true)
         .default_height(alto_abajo)
@@ -137,17 +142,14 @@ pub fn mostrar(
 
     // Preview real: el mismo pipeline de video + libass que antes, ahora a
     // través de un paint callback de egui_wgpu.
-    let alto = (ui.available_height() - 56.0).max(180.0);
+    let alto = (ui.available_height()
+        - tema::ALTO_TRANSPORTE
+        - crate::ui::texto::alto_extra(state, ui.available_width()))
+    .max(180.0);
     let (rect, _) =
         ui.allocate_exact_size(egui::vec2(ui.available_width(), alto), egui::Sense::hover());
     ui.painter()
-        .rect_filled(rect, egui::CornerRadius::same(6), tema::SUPERFICIE);
-    ui.painter().rect_stroke(
-        rect,
-        egui::CornerRadius::same(6),
-        egui::Stroke::new(1.0_f32, tema::BORDE),
-        egui::StrokeKind::Inside,
-    );
+        .rect_filled(rect, egui::CornerRadius::ZERO, tema::COLOR_FONDO_VIDEO);
     if !state.pixels.is_empty() {
         let frame = crate::video::Frame {
             pixels: Arc::new(state.pixels.clone()),

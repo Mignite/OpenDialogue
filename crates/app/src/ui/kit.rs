@@ -151,7 +151,7 @@ pub fn icon_button(
     tooltip: &str,
     atajo: Option<&str>,
 ) -> Response {
-    let tamaño = Vec2::splat(tema::ALTO_CHIP);
+    let tamaño = Vec2::splat(tema::ANCHO_BOTON_28);
     let respuesta = ui.add(
         egui::Button::new(
             RichText::new(glifo(icono))
@@ -171,7 +171,7 @@ pub fn icon_button(
         ui.painter().rect_filled(
             respuesta.rect,
             CornerRadius::same(tema::RADIO_CONTROL as u8),
-            tema::ELEVADO,
+            tema::COLOR_HOVER,
         );
     }
     if respuesta.has_focus() {
@@ -289,7 +289,15 @@ pub fn tab_bar(
                 .frame(false),
             );
             if let Some(n) = contador {
-                ui.label(RichText::new(n.to_string()).font(tema::fuente(Estilo::Pequeno)));
+                egui::Frame {
+                    inner_margin: egui::Margin::symmetric(5, 1),
+                    fill: tema::COLOR_HOVER,
+                    corner_radius: tema::radio_control(),
+                    ..egui::Frame::NONE
+                }
+                .show(ui, |ui| {
+                    ui.label(RichText::new(n.to_string()).font(tema::fuente(Estilo::Pequeno)));
+                });
             }
             if es_activa {
                 let subrayado = egui::Rect::from_min_max(
@@ -306,6 +314,14 @@ pub fn tab_bar(
             }
         }
     });
+    let y = ui.cursor().top();
+    ui.painter().line_segment(
+        [
+            egui::pos2(ui.max_rect().min.x, y),
+            egui::pos2(ui.max_rect().max.x, y),
+        ],
+        egui::Stroke::new(1.0_f32, tema::COLOR_BORDE),
+    );
     elegida
 }
 

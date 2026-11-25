@@ -82,6 +82,7 @@ pub const COLOR_FONDO_VIDEO: Color32 = Color32::from_rgb(0x0F, 0x0F, 0x0F);
 pub const COLOR_BORDE: Color32 = Color32::from_rgb(0x2E, 0x2E, 0x2E);
 pub const COLOR_HOVER: Color32 = Color32::from_rgb(0x2C, 0x2C, 0x2C);
 pub const COLOR_SIN_HABLANTE: Color32 = Color32::from_rgb(0x66, 0x66, 0x66);
+pub const COLOR_WAVEFORM: Color32 = Color32::from_rgb(0x3A, 0x4A, 0x5A);
 pub const ALTO_TABS: f32 = 36.0;
 pub const SEPARACION_TABS: f32 = 16.0;
 pub const ALTO_TARJETA_HABLANTE: f32 = 56.0;

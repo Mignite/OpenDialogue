@@ -2,7 +2,7 @@
 //! nombre, clips con el color del hablante y playhead. El significado de cada
 //! gesto sigue en `timeline::pulsar`, que es código probado.
 
-use egui::{Ui, Vec2};
+use egui::{Color32, Ui, Vec2};
 
 use crate::comandos::Comando;
 use crate::editor_app::{EditorApp, MensajeEditor};
@@ -118,6 +118,41 @@ pub fn playhead(state: &EditorApp) -> f64 {
     } else {
         0.0
     }
+}
+
+fn pintar_borde_punteado(painter: &egui::Painter, rect: egui::Rect, color: Color32) {
+    const PASO: f32 = 12.0;
+    let mut x = rect.min.x;
+    while x < rect.max.x {
+        painter.line_segment(
+            [
+                egui::pos2(x.min(rect.max.x), rect.min.y),
+                egui::pos2((x + 3.0).min(rect.max.x), rect.min.y),
+            ],
+            egui::Stroke::new(1.0_f32, color),
+        );
+        painter.line_segment(
+            [
+                egui::pos2(x.min(rect.max.x), rect.max.y),
+                egui::pos2((x + 3.0).min(rect.max.x), rect.max.y),
+            ],
+            egui::Stroke::new(1.0_f32, color),
+        );
+        x += PASO;
+    }
+}
+
+/// Un clip seleccionado siempre gana; sin hablante y sin selección usa el gris.
+pub fn color_borde_clip(
+    hablante: Option<(usize, &rod_core::Hablante)>,
+    seleccionado: bool,
+) -> egui::Color32 {
+    if seleccionado {
+        return tema::ACENTO;
+    }
+    hablante.map_or(tema::COLOR_SIN_HABLANTE, |(indice, hablante)| {
+        tema::color(rod_core::color_identidad(hablante, indice))
+    })
 }
 
 /// Paso de regla redondo: 0,5 / 1 / 2 / 5 / 10 s según el zoom.
@@ -247,19 +282,38 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
         );
     }
 
+    if hablantes.is_empty() {
+        painter.text(
+            egui::pos2(
+                gutter.max.x + tema::ESP_8,
+                rect.min.y + ALTO_REGLA + ALTO_CARRIL + tema::ESP_8,
+            ),
+            egui::Align2::LEFT_TOP,
+            textos.pista_sin_hablantes,
+            tema::fuente(Estilo::Pequeno),
+            tema::TEXTO_2,
+        );
+    }
+
     // Waveform apagada en el carril de audio: se pinta de los picos ya
     // decodificados, nunca se recalcula por frame.
     if let Some(picos) = &state.picos {
         let base = rect.min.y + ALTO_REGLA;
         let altura = ALTO_CARRIL - 6.0;
-        let color_onda = tema::color("#3A4A5A");
-        for xpx in (0..area.width() as i32).step_by(2) {
+        let pico = picos
+            .max
+            .iter()
+            .copied()
+            .fold(0.0_f32, |a, b| a.max(b))
+            .max(0.001);
+        let color_onda = tema::COLOR_WAVEFORM;
+        for xpx in (0..area.width() as i32).step_by(3) {
             let segundo = vista.tiempo_de(xpx as f32);
             let indice = (segundo * picos.por_segundo as f64) as usize;
             let Some(&valor) = picos.max.get(indice) else {
                 continue;
             };
-            let alto = (valor.clamp(0.0, 1.0) * altura * 0.5).max(1.0);
+            let alto = ((valor / pico).clamp(0.0, 1.0) * altura * 0.5).max(1.0);
             let x = area.min.x + xpx as f32;
             let centro = base + ALTO_CARRIL / 2.0;
             painter.line_segment(
@@ -286,6 +340,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
     }
 
     // Clips: el color del hablante manda; el azul marca selección.
+    let puntero = ui.ctx().input(|entrada| entrada.pointer.latest_pos());
     for caption in state.editor.proyecto().captions.iter() {
         let fila = rod_core::caption_row_index(caption.hablante_id.as_deref(), hablantes);
         if fila >= filas {
@@ -301,32 +356,35 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
             egui::pos2(x0.max(area.min.x), y),
             egui::pos2(x1.min(area.max.x), y + ALTO_CARRIL - 14.0),
         );
-        let color = caption
-            .hablante_id
-            .as_deref()
-            .and_then(|id| {
-                hablantes
-                    .iter()
-                    .position(|hablante| hablante.id == id)
-                    .map(|indice| (indice, &hablantes[indice]))
-            })
-            .map(|(indice, hablante)| tema::color(rod_core::color_identidad(hablante, indice)))
-            .unwrap_or(tema::DIM);
+        let identidad = caption.hablante_id.as_deref().and_then(|id| {
+            hablantes
+                .iter()
+                .position(|hablante| hablante.id == id)
+                .map(|indice| (indice, &hablantes[indice]))
+        });
         let seleccionado = state.editor.seleccion.contains(&caption.id);
-        painter.rect_filled(
-            clip,
-            egui::CornerRadius::same(3),
-            color.gamma_multiply(0.42),
-        );
-        painter.rect_stroke(
-            clip,
-            egui::CornerRadius::same(3),
-            egui::Stroke::new(
-                if seleccionado { 2.0_f32 } else { 1.0_f32 },
-                if seleccionado { tema::ACENTO } else { color },
-            ),
-            egui::StrokeKind::Inside,
-        );
+        let color = identidad.map_or(tema::DIM, |(indice, hablante)| {
+            tema::color(rod_core::color_identidad(hablante, indice))
+        });
+        let relleno = if identidad.is_some() {
+            color.gamma_multiply(0.22)
+        } else {
+            Color32::from_white_alpha(38) // gris al 15 %
+        };
+        painter.rect_filled(clip, egui::CornerRadius::same(tema::RADIO_CLIP), relleno);
+        if identidad.is_none() && !seleccionado && state.editor.proyecto().captions.len() <= 120 {
+            pintar_borde_punteado(painter, clip, tema::COLOR_SIN_HABLANTE);
+        } else {
+            painter.rect_stroke(
+                clip,
+                egui::CornerRadius::same(tema::RADIO_CLIP),
+                egui::Stroke::new(
+                    if seleccionado { 2.0_f32 } else { 1.0_f32 },
+                    color_borde_clip(identidad, seleccionado),
+                ),
+                egui::StrokeKind::Inside,
+            );
+        }
         if clip.width() > 56.0 {
             painter.text(
                 clip.min + egui::vec2(5.0, 4.0),
@@ -338,7 +396,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
         }
         // Solo registramos el widget del menú bajo el puntero: registrar un
         // interact por clip con 543 líneas cuesta varios ms por frame.
-        if ui.rect_contains_pointer(clip) {
+        if puntero.is_some_and(|punto| clip.contains(punto)) {
             let id = caption.id.clone();
             let respuesta = ui.interact(
                 clip,

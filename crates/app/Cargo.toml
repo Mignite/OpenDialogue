@@ -9,6 +9,7 @@ rod-player.workspace = true
 rod-subs.workspace = true
 egui = { workspace = true }
 eframe = { workspace = true, features = ["wgpu"] }
+raw-window-handle = "0.6"
 wgpu = { workspace = true }
 rfd = "0.15"
 serde_json = "1"

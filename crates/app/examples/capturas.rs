@@ -194,6 +194,25 @@ fn main() {
         rod_app::textos::Idioma::En,
     );
 
+    if fase == "revision" {
+        for ancho in [1100_u32, 1440, 2560] {
+            capturar_editor(
+                &format!("revision-editor-{ancho}"),
+                ancho as f32,
+                900.0,
+                rod_app::textos::Idioma::En,
+                Some(rod_app::editor_app::Panel::Subtitulos),
+            );
+        }
+        capturar_editor(
+            "revision-transporte",
+            1440.0,
+            900.0,
+            rod_app::textos::Idioma::En,
+            Some(rod_app::editor_app::Panel::Subtitulos),
+        );
+    }
+
     if fase == "diagnostico" {
         // Miniatura sintética para comprobar que se pinta opaca.
         let appdata = std::env::temp_dir().join("rod-diagnostico-appdata");

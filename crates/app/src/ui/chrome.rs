@@ -19,6 +19,11 @@ pub fn mostrar_menu_para_test(ui: &mut egui::Ui, textos: &Textos, atajos: &MapaA
     menu::mostrar(ui, false, textos, atajos);
 }
 
+/// Color del punto de estado delante de «Saved»/«Unsaved».
+pub fn color_punto_estado(sucio: bool) -> egui::Color32 {
+    if sucio { tema::AMBAR } else { tema::TEXTO_2 }
+}
+
 /// Dibuja la cabecera y devuelve el comando elegido en los menús.
 pub fn mostrar(
     ctx: &egui::Context,
@@ -85,6 +90,14 @@ pub fn mostrar(
                     // Centro real de la ventana, no de la franja de arrastre:
                     // la franja empieza tras los menús y acababa desplazando
                     // el título hacia la derecha.
+                    let centro = ui.max_rect().center();
+                    let ancho_estimado =
+                        texto.len() as f32 * tema::fuente(Estilo::Pequeno).size * 0.5;
+                    ui.painter().circle_filled(
+                        egui::pos2(centro.x - ancho_estimado * 0.5 - tema::ESP_8, centro.y),
+                        3.0,
+                        color_punto_estado(estado.sucio),
+                    );
                     ui.painter().text(
                         ui.max_rect().center(),
                         egui::Align2::CENTER_CENTER,

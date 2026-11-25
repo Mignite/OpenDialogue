@@ -36,6 +36,18 @@ fn comandos_de_vista(harness: &egui_kittest::Harness<'_, ()>) -> Vec<egui::Viewp
 }
 
 #[test]
+fn estado_guardado_lleva_punto() {
+    assert_eq!(
+        rod_app::ui::chrome::color_punto_estado(true),
+        rod_app::ui::tema::AMBAR
+    );
+    assert_eq!(
+        rod_app::ui::chrome::color_punto_estado(false),
+        rod_app::ui::tema::TEXTO_2
+    );
+}
+
+#[test]
 fn el_menu_es_compacto_y_solo_muestra_etiquetas() {
     let mut harness = egui_kittest::Harness::builder()
         .with_size(egui::vec2(1440.0, 900.0))

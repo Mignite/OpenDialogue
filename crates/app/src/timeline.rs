@@ -34,7 +34,7 @@ impl Punto {
 /// Altura de la regla de tiempo (arriba del todo).
 pub const ALTO_REGLA: f32 = 26.0;
 /// Altura de cada carril.
-pub const ALTO_CARRIL: f32 = 46.0;
+pub const ALTO_CARRIL: f32 = 56.0;
 // Los tres números del seguimiento vienen del oráculo (`utils/constants.ts`):
 // cuando el playhead cruza el 92 % de la ventana, la ventana se recoloca para
 // dejarlo al 8 % del borde izquierdo, y el desplazamiento se interpola un 12 %

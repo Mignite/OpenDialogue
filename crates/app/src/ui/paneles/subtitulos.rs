@@ -1,4 +1,4 @@
-﻿//! Pestaña Subtítulos: búsqueda y lista a todo el alto.
+//! Pestaña Subtítulos: búsqueda y lista a todo el alto.
 //! El texto se edita en la barra bajo el video (`ui/texto.rs`).
 
 use egui::{RichText, Sense, Stroke, Vec2};
@@ -31,7 +31,9 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
                 mensajes.push(MensajeEditor::Comando(Comando::AgregarFragmento));
             }
             let _ = egui::containers::menu::MenuButton::from_button(
-                egui::Button::new("···").frame(false),
+                egui::Button::new("···")
+                    .frame(false)
+                    .min_size(Vec2::splat(tema::ANCHO_BOTON_28)),
             )
             .ui(ui, |ui| {
                 ui.set_min_width(tema::ANCHO_FILTRO);
@@ -182,7 +184,9 @@ fn dibujar_lista(
                                 )
                                 .selectable(false),
                             );
-                            respuesta.on_hover_text(&caption.texto);
+                            if respuesta.hovered() {
+                                respuesta.on_hover_text(&caption.texto);
+                            }
                             ui.horizontal(|ui| {
                                 ui.spacing_mut().item_spacing.x = tema::ESP_4;
                                 let tiempos = ui
@@ -200,18 +204,20 @@ fn dibujar_lista(
                                     )
                                     .on_hover_text("Doble clic: fijar entrada");
                                 let id = caption.id.clone();
-                                tiempos.context_menu(|ui| {
-                                    if ui.button(textos.comando(Comando::Entrada)).clicked() {
-                                        mensajes.push(MensajeEditor::Seleccionar(id.clone()));
-                                        mensajes.push(MensajeEditor::Comando(Comando::Entrada));
-                                        ui.close();
-                                    }
-                                    if ui.button(textos.comando(Comando::Salida)).clicked() {
-                                        mensajes.push(MensajeEditor::Seleccionar(id.clone()));
-                                        mensajes.push(MensajeEditor::Comando(Comando::Salida));
-                                        ui.close();
-                                    }
-                                });
+                                if ui.rect_contains_pointer(tiempos.rect) {
+                                    tiempos.context_menu(|ui| {
+                                        if ui.button(textos.comando(Comando::Entrada)).clicked() {
+                                            mensajes.push(MensajeEditor::Seleccionar(id.clone()));
+                                            mensajes.push(MensajeEditor::Comando(Comando::Entrada));
+                                            ui.close();
+                                        }
+                                        if ui.button(textos.comando(Comando::Salida)).clicked() {
+                                            mensajes.push(MensajeEditor::Seleccionar(id.clone()));
+                                            mensajes.push(MensajeEditor::Comando(Comando::Salida));
+                                            ui.close();
+                                        }
+                                    });
+                                }
                                 ui.label(
                                     RichText::new(crate::editor_app::duracion_texto(
                                         caption.inicio,
@@ -245,9 +251,11 @@ fn dibujar_lista(
                         mensajes.push(MensajeEditor::Comando(Comando::EditarTexto));
                     }
                     let id = caption.id.clone();
-                    respuesta.context_menu(|ui| {
-                        crate::ui::timeline::menu_contexto(ui, &id, mensajes, textos);
-                    });
+                    if ui.rect_contains_pointer(fila) {
+                        respuesta.context_menu(|ui| {
+                            crate::ui::timeline::menu_contexto(ui, &id, mensajes, textos);
+                        });
+                    }
                 }
             });
     });

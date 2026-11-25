@@ -8,6 +8,11 @@ use crate::textos::Textos;
 use crate::ui::kit::{self, Icono};
 use crate::ui::tema::{self, Estilo};
 
+/// Ancho del selector de velocidad; el dropdown por defecto de egui era ~85 px.
+pub fn ancho_dropdown() -> f32 {
+    tema::ANCHO_DROPDOWN_VELOCIDAD
+}
+
 pub fn mostrar(
     ui: &mut egui::Ui,
     state: &mut EditorApp,
@@ -68,6 +73,7 @@ pub fn mostrar(
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             egui::ComboBox::from_id_salt("velocidad")
+                .width(ancho_dropdown())
                 .selected_text(state.velocidad.to_string())
                 .show_ui(ui, |ui| {
                     for velocidad in VELOCIDADES {
@@ -83,7 +89,7 @@ pub fn mostrar(
                         }
                     }
                 });
-            kit::icono(ui, Icono::Volumen);
+            let _ = kit::icon_button(ui, Icono::Volumen, false, "Volumen", None);
             kit::icon_button(ui, Icono::Bucle, state.seguir, "Seguir al playhead", None);
         });
     });

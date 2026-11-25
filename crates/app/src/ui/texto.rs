@@ -8,8 +8,8 @@ use crate::ui::kit;
 use crate::ui::tema::{self, Estilo};
 
 /// Alto extra que la barra añade al transporte cuando crece a varias líneas.
-pub fn alto_extra(state: &EditorApp) -> f32 {
-    ((state.texto.lineas.saturating_sub(1)) as f32 * tema::ALTO_BARRA_TEXTO).max(0.0)
+pub fn alto_extra(state: &EditorApp, _ancho: f32) -> f32 {
+    (state.texto.lineas.saturating_sub(1)) as f32 * tema::ALTO_BARRA_TEXTO
 }
 
 fn cps(state: &EditorApp) -> f32 {
@@ -99,21 +99,39 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
         });
         let _ = chip;
 
-        let ancho_cps = 64.0;
+        let mostrar_cps = ui.available_width() >= tema::ANCHO_MINIMO_TEXTO;
+        let ancho_cps = if mostrar_cps { 64.0 } else { 0.0 };
         let ancho = (ui.available_width() - ancho_cps - tema::ESP_8).max(tema::ESP_72);
+        // Con una sola línea usamos el TextEdit simple (más barato); si el
+        // usuario pide salto, cambiamos a multicampo en este mismo frame para
+        // que egui inserte el '\n' en la posición correcta del cursor.
+        if ui.input(|entrada| entrada.key_pressed(Key::Enter) && entrada.modifiers.shift) {
+            state.texto.lineas = state.texto.lineas.saturating_add(1).min(3);
+        }
         let lineas = state.texto.lineas.clamp(1, 3) as usize;
-        let respuesta = ui.add(
-            TextEdit::multiline(&mut state.texto.borrador)
-                .hint_text(if objetivo.is_some() {
-                    ""
-                } else {
-                    textos.sin_seleccion
-                })
-                .font(tema::fuente(Estilo::Cuerpo))
-                .desired_rows(lineas)
-                .min_size(Vec2::new(ancho, tema::ALTO_BARRA_TEXTO * lineas as f32))
-                .frame(false),
-        );
+        let pista = if objetivo.is_some() {
+            ""
+        } else {
+            textos.sin_seleccion
+        };
+        let respuesta = if lineas == 1 {
+            ui.add(
+                TextEdit::singleline(&mut state.texto.borrador)
+                    .hint_text(pista)
+                    .font(tema::fuente(Estilo::Cuerpo))
+                    .desired_width(ancho)
+                    .frame(false),
+            )
+        } else {
+            ui.add(
+                TextEdit::multiline(&mut state.texto.borrador)
+                    .hint_text(pista)
+                    .font(tema::fuente(Estilo::Cuerpo))
+                    .desired_rows(lineas)
+                    .min_size(Vec2::new(ancho, tema::ALTO_BARRA_TEXTO * lineas as f32))
+                    .frame(false),
+            )
+        };
         let solicitar_foco = state.texto.foco && !respuesta.has_focus();
         if solicitar_foco {
             respuesta.request_focus();
@@ -150,18 +168,20 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
         }
         state.texto.nueva_linea = objetivo.is_none();
 
-        let valor = cps(state);
-        let color = if valor > tema::CPS_MAXIMO {
-            tema::AMBAR
-        } else {
-            tema::TEXTO_2
-        };
-        ui.add_space(tema::ESP_4);
-        ui.label(
-            RichText::new(format!("{:.1} CPS", valor))
-                .font(tema::fuente(Estilo::Pequeno))
-                .color(color),
-        );
+        if mostrar_cps {
+            let valor = cps(state);
+            let color = if valor > tema::CPS_MAXIMO {
+                tema::AMBAR
+            } else {
+                tema::TEXTO_2
+            };
+            ui.add_space(tema::ESP_4);
+            ui.label(
+                RichText::new(format!("{:.1} CPS", valor))
+                    .font(tema::fuente(Estilo::Pequeno))
+                    .color(color),
+            );
+        }
     });
     mensajes
 }

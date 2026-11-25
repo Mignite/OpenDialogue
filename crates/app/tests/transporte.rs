@@ -4,6 +4,15 @@ use rod_app::editor_app::EditorApp;
 use rod_app::textos::ES;
 
 #[test]
+fn dropdown_de_velocidad_tiene_ancho_definido() {
+    assert_eq!(
+        rod_app::ui::transporte::ancho_dropdown(),
+        rod_app::ui::tema::ANCHO_DROPDOWN_VELOCIDAD
+    );
+    assert_eq!(rod_app::ui::transporte::ancho_dropdown(), 56.0);
+}
+
+#[test]
 fn el_timecode_sale_de_format_time_y_hay_controles() {
     let video = concat!(
         env!("CARGO_MANIFEST_DIR"),
