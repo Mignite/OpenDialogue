@@ -26,6 +26,6 @@ fn plurales_en_los_dos_idiomas() {
 
 #[test]
 fn las_fechas_son_relativas_y_se_tradicen() {
-    assert_eq!(EN.fecha(&FechaRelativa { dias: 1 }), "yesterday");
-    assert_eq!(ES.fecha(&FechaRelativa { dias: 3 }), "hace 3 días");
+    assert_eq!(EN.fecha(&FechaRelativa { dias: 1, horas: 24 }), "yesterday");
+    assert_eq!(ES.fecha(&FechaRelativa { dias: 0, horas: 2 }), "hace 2 h");
 }

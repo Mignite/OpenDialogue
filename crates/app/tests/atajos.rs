@@ -35,6 +35,15 @@ fn el_mapa_por_defecto_reproduce_los_atajos_de_hoy() {
 }
 
 #[test]
+fn ctrl_comma_abre_ajustes() {
+    let mapa = MapaAtajos::por_defecto();
+    assert_eq!(
+        mapa.comando_de(Key::Comma, mods(true, false, false), false),
+        Some(Comando::Ajustes)
+    );
+}
+
+#[test]
 fn con_foco_en_un_campo_las_teclas_desnudas_no_disparan() {
     let mapa = MapaAtajos::por_defecto();
     assert_eq!(

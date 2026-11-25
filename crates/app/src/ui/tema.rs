@@ -51,6 +51,40 @@ pub const ESP_24: f32 = 24.0;
 pub const ESP_32: f32 = 32.0;
 pub const ESP_40: f32 = 40.0;
 pub const ESP_48: f32 = 48.0;
+/// Espacio extra entre letras, en ems (0.04 em para etiquetas).
+pub const LETRA_ESPACIADO: f32 = 0.04;
+pub const ANCHO_CONTENEDOR: f32 = 960.0;
+pub const ANCHO_TARJETA: f32 = 260.0;
+pub const ALTO_ZONA: f32 = 96.0;
+pub const ALTO_BARRA_COLOR: f32 = 4.0;
+pub const TAMANO_PUNTO: f32 = 8.0;
+pub const TAMANO_ICONO_GRANDE: f32 = 20.0;
+pub const TAMANO_TITULO: f32 = 32.0;
+pub const ANCHO_SUBRAYADO: f32 = 72.0;
+pub const ANCHO_FILTRO: f32 = 160.0;
+pub const ALTO_TARJETA: f32 = 210.0;
+pub const ALTO_BOTON_CHICO: f32 = 28.0;
+pub const GROSOR_PUNTEADO: f32 = 1.5;
+/// Fondo de la zona de arrastre.
+pub const FONDO_ZONA: Color32 = Color32::from_rgb(0x1E, 0x1E, 0x1E);
+/// Duración de las transiciones de hover.
+pub const ANIMACION: f32 = 0.14;
+
+/// Interpolación lineal de colores para transiciones cortas.
+pub fn mezclar(a: Color32, b: Color32, t: f32) -> Color32 {
+    let t = t.clamp(0.0, 1.0);
+    let canal = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t).round() as u8;
+    Color32::from_rgba_unmultiplied(
+        canal(a.r(), b.r()),
+        canal(a.g(), b.g()),
+        canal(a.b(), b.b()),
+        canal(a.a(), b.a()),
+    )
+}
+
+pub fn radio_superficie() -> egui::CornerRadius {
+    egui::CornerRadius::same(RADIO_SUPERFICIE as u8)
+}
 pub const ESP_72: f32 = 72.0;
 
 pub const ALTO_CHIP: f32 = 24.0;

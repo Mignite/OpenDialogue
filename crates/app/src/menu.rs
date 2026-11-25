@@ -64,35 +64,50 @@ pub fn mostrar(
         ui.spacing_mut().item_spacing.x = tema::ESP_12;
         for seccion in SECCIONES {
             let nombre = nombre_seccion(seccion, textos);
-            let etiqueta = egui::RichText::new(nombre)
-                .font(tema::fuente(tema::Estilo::Pequeno))
-                .color(tema::TEXTO_MENU);
-            let _ = egui::containers::menu::MenuButton::from_button(
-                egui::Button::new(etiqueta)
-                    .frame(false)
-                    .min_size(egui::vec2(0.0, 24.0)),
-            )
-            .ui(ui, |ui| {
-                // Sin columna de atajos: el panel de Ajustes los muestra con
-                // el valor configurado. Menú compacto, ~160 px.
-                ui.set_min_width(160.0);
-                ui.set_max_width(160.0);
-                for comando in comandos_de(seccion) {
-                    let habilitado = !en_inicio || comandos::disponible_en_inicio(comando);
-                    let etiqueta = textos.comando(comando);
-                    let boton = ui.add_enabled(
-                        habilitado,
-                        egui::Button::new(
-                            egui::RichText::new(tema::acortar(etiqueta, 22))
-                                .font(tema::fuente(tema::Estilo::Base)),
-                        )
-                        .frame(false),
-                    );
-                    if boton.clicked() {
-                        elegido = Some(comando);
-                        ui.close();
+            let fuente = tema::fuente(tema::Estilo::Base);
+            let ancho_texto = ui
+                .painter()
+                .layout_no_wrap(nombre.to_owned(), fuente.clone(), tema::TEXTO_MENU)
+                .size()
+                .x;
+            // Menú de texto: sin relleno en reposo, fondo #2C2C2C en hover.
+            ui.scope(|ui| {
+                ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
+                ui.visuals_mut().widgets.inactive.weak_bg_fill = egui::Color32::TRANSPARENT;
+                ui.visuals_mut().widgets.inactive.bg_stroke = egui::Stroke::NONE;
+                ui.visuals_mut().widgets.hovered.bg_fill = tema::CONTROL;
+                ui.visuals_mut().widgets.hovered.weak_bg_fill = tema::CONTROL;
+                ui.visuals_mut().widgets.hovered.bg_stroke = egui::Stroke::NONE;
+                let etiqueta = egui::RichText::new(nombre)
+                    .font(fuente)
+                    .color(tema::TEXTO_MENU);
+                let _ = egui::containers::menu::MenuButton::from_button(
+                    egui::Button::new(etiqueta)
+                        .corner_radius(tema::radio_superficie())
+                        .min_size(egui::vec2(ancho_texto + 20.0, 24.0)),
+                )
+                .ui(ui, |ui| {
+                    // Sin columna de atajos: el panel de Ajustes los muestra con
+                    // el valor configurado. Menú compacto, ~160 px.
+                    ui.set_min_width(160.0);
+                    ui.set_max_width(160.0);
+                    for comando in comandos_de(seccion) {
+                        let habilitado = !en_inicio || comandos::disponible_en_inicio(comando);
+                        let etiqueta = textos.comando(comando);
+                        let boton = ui.add_enabled(
+                            habilitado,
+                            egui::Button::new(
+                                egui::RichText::new(tema::acortar(etiqueta, 22))
+                                    .font(tema::fuente(tema::Estilo::Base)),
+                            )
+                            .frame(false),
+                        );
+                        if boton.clicked() {
+                            elegido = Some(comando);
+                            ui.close();
+                        }
                     }
-                }
+                });
             });
         }
     });

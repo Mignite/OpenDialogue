@@ -59,7 +59,8 @@ pub fn mostrar(
 
                 // Reservar primero el sitio de los controles: si la franja de
                 // arrastre toma todo el ancho, los botones se salen del rect.
-                let ancho_botones = 3.0 * tema::ANCHO_BOTON_VENTANA;
+                let ancho_botones =
+                    3.0 * tema::ANCHO_BOTON_VENTANA + tema::ALTO_CONTROL + tema::ESP_8;
                 let ancho_arrastre = (ui.available_width() - ancho_botones).max(4.0);
                 let (_franja, respuesta) = ui.allocate_exact_size(
                     egui::vec2(ancho_arrastre, tema::ALTO_CABECERA - 8.0),
@@ -92,6 +93,21 @@ pub fn mostrar(
                 }
 
                 ui.spacing_mut().item_spacing.x = 0.0;
+                let ajustes = ui
+                    .add(
+                        egui::Button::new(
+                            egui::RichText::new(super::kit::glifo(Icono::Ajustes))
+                                .font(egui::FontId::proportional(tema::TAMANO_ICONO)),
+                        )
+                        .fill(egui::Color32::TRANSPARENT)
+                        .stroke(egui::Stroke::NONE)
+                        .min_size(egui::vec2(tema::ALTO_CONTROL, tema::ALTO_BOTON_CHICO)),
+                    )
+                    .on_hover_text(textos.preferencias_tooltip);
+                if ajustes.clicked() {
+                    elegido = Some(Comando::Ajustes);
+                }
+
                 boton_ventana(ui, Icono::Minimizar, tema::TEXTO_MENU, "minimizar", || {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                 });
@@ -100,7 +116,7 @@ pub fn mostrar(
                         !ctx.input(|entrada| entrada.viewport().maximized.unwrap_or(false)),
                     ));
                 });
-                boton_ventana(ui, Icono::Cerrar, tema::PELIGRO, "cerrar", || {
+                boton_ventana(ui, Icono::Cerrar, tema::TEXTO_MENU, "cerrar", || {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 });
             });
@@ -115,21 +131,34 @@ fn boton_ventana(
     tooltip: &str,
     accion: impl FnOnce(),
 ) {
-    let respuesta = ui.add(
-        egui::Button::new(
-            egui::RichText::new(super::kit::glifo(icono))
-                .font(egui::FontId::proportional(tema::TAMANO_ICONO))
-                .color(color),
-        )
-        .fill(egui::Color32::TRANSPARENT)
-        .stroke(egui::Stroke::NONE)
-        .min_size(egui::vec2(tema::ANCHO_BOTON_VENTANA, tema::ALTO_CABECERA)),
-    );
-    if respuesta.hovered() {
-        ui.painter().rect_filled(respuesta.rect, 0.0, tema::CONTROL);
-    }
-    if respuesta.clicked() {
-        accion();
-    }
-    let _ = tooltip;
+    // Cerrar es gris en reposo y solo se pinta de rojo al pasar el ratón.
+    let cerrar = icono == Icono::Cerrar;
+    ui.scope(|ui| {
+        ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
+        ui.visuals_mut().widgets.inactive.bg_stroke = egui::Stroke::NONE;
+        ui.visuals_mut().widgets.hovered.bg_fill =
+            if cerrar { tema::PELIGRO } else { tema::CONTROL };
+        ui.visuals_mut().widgets.hovered.bg_stroke = egui::Stroke::NONE;
+        let respuesta = ui.add(
+            egui::Button::new("")
+                .corner_radius(egui::CornerRadius::same(tema::RADIO_CONTROL as u8))
+                .min_size(egui::vec2(tema::ANCHO_BOTON_VENTANA, tema::ALTO_CABECERA)),
+        );
+        let color_icono = if cerrar && respuesta.hovered() {
+            egui::Color32::WHITE
+        } else {
+            color
+        };
+        ui.painter().text(
+            respuesta.rect.center(),
+            egui::Align2::CENTER_CENTER,
+            super::kit::glifo(icono),
+            egui::FontId::proportional(tema::TAMANO_ICONO),
+            color_icono,
+        );
+        if respuesta.clicked() {
+            accion();
+        }
+        let _ = respuesta.on_hover_text(tooltip);
+    });
 }

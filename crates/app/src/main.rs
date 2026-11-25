@@ -77,6 +77,9 @@ impl RustyDialogue {
     fn ejecutar_tarea(&self, tarea: Tarea) {
         let tx = &self.tx_dialogos;
         match tarea {
+            Tarea::MostrarEnCarpeta(ruta) => {
+                let _ = std::process::Command::new("explorer").arg(&ruta).spawn();
+            }
             Tarea::DialogoVideo => dialogos::pedir_video(tx.clone()),
             Tarea::DialogoProyecto => dialogos::pedir_proyecto(tx.clone()),
             Tarea::DialogoCarpeta => dialogos::pedir_carpeta(tx.clone()),

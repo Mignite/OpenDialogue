@@ -1,8 +1,8 @@
-//! Pantalla de arranque: arrastrar video, abrir proyecto, recientes y recovery.
+﻿//! Pantalla de arranque: arrastrar video, abrir proyecto, recientes y recovery.
 //!
 //! No conoce mpv ni el editor: solo decide qué quiere hacer el usuario.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use crate::recientes::Reciente;
@@ -22,6 +22,7 @@ pub enum OrdenRecientes {
     Lineas,
 }
 
+#[derive(Clone)]
 pub struct EstadoInicio {
     pub recientes: Vec<Reciente>,
     pub expandido: bool,
@@ -30,12 +31,24 @@ pub struct EstadoInicio {
     pub orden: OrdenRecientes,
     /// Índice de la tarjeta con el foco del teclado.
     pub destacado: Option<usize>,
+    /// Incluir proyectos con cero líneas en la lista.
+    pub mostrar_vacios: bool,
     /// Miniaturas ya subidas a la GPU, una por proyecto.
     pub miniaturas: HashMap<PathBuf, egui::TextureHandle>,
 }
 
 impl EstadoInicio {
     pub fn nuevo(recientes: Vec<Reciente>, aviso: Option<AvisoRecovery>) -> Self {
+        // Misma ruta absoluta, una sola tarjeta.
+        let mut vistos = HashSet::new();
+        let recientes = recientes
+            .into_iter()
+            .filter(|reciente| {
+                vistos.insert(
+                    std::fs::canonicalize(&reciente.ruta).unwrap_or_else(|_| reciente.ruta.clone()),
+                )
+            })
+            .collect();
         Self {
             recientes,
             expandido: false,
@@ -43,6 +56,7 @@ impl EstadoInicio {
             mensaje: None,
             orden: OrdenRecientes::default(),
             destacado: None,
+            mostrar_vacios: false,
             miniaturas: HashMap::new(),
         }
     }
@@ -54,6 +68,8 @@ pub enum MensajeInicio {
     AbrirVideo,
     AbrirProyecto,
     AbrirReciente(PathBuf),
+    MostrarEnCarpeta(PathBuf),
+    QuitarDeRecientes(PathBuf),
     VerTodos,
     Recuperar,
     DescartarRecovery,
@@ -128,6 +144,18 @@ pub fn update(estado: &mut EstadoInicio, mensaje: MensajeInicio) -> (Tarea, Opti
             (Tarea::Ninguna, None)
         }
         MensajeInicio::AbrirReciente(ruta) => (Tarea::Ninguna, Some(Salida::Proyecto(ruta))),
+        MensajeInicio::MostrarEnCarpeta(ruta) => (Tarea::MostrarEnCarpeta(ruta), None),
+        MensajeInicio::QuitarDeRecientes(ruta) => {
+            estado.recientes.retain(|reciente| reciente.ruta != ruta);
+            let indice = crate::recientes::ruta_indice();
+            let rutas: Vec<_> = estado
+                .recientes
+                .iter()
+                .map(|reciente| reciente.ruta.clone())
+                .collect();
+            let _ = crate::recientes::escribir_indice(&indice, &rutas);
+            (Tarea::Ninguna, None)
+        }
         MensajeInicio::VerTodos => {
             estado.expandido = !estado.expandido;
             (Tarea::Ninguna, None)

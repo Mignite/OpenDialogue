@@ -9,6 +9,7 @@ use crate::comandos::Comando;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct FechaRelativa {
     pub dias: u64,
+    pub horas: u64,
 }
 
 /// Idioma de la interfaz. Por defecto, inglés: el producto es global.
@@ -80,6 +81,14 @@ pub struct Textos {
     pub ver_todos: &'static str,
     pub editar: &'static str,
     pub timeline: &'static str,
+    pub mostrar_vacios: &'static str,
+    pub abrir: &'static str,
+    pub mostrar_en_carpeta: &'static str,
+    pub quitar_de_recientes: &'static str,
+    pub drop_titulo: &'static str,
+    pub drop_subtitulo: &'static str,
+    pub drop_activo: &'static str,
+    pub preferencias_tooltip: &'static str,
 }
 
 pub const ES: Textos = Textos {
@@ -132,6 +141,14 @@ pub const ES: Textos = Textos {
     ver_todos: "Ver todos",
     editar: "Editar",
     timeline: "Línea de tiempo",
+    mostrar_vacios: "Mostrar vacíos",
+    abrir: "Abrir",
+    mostrar_en_carpeta: "Mostrar en carpeta",
+    quitar_de_recientes: "Quitar de recientes",
+    drop_titulo: "Suelta un video aquí",
+    drop_subtitulo: "MP4, MKV, MOV o WebM",
+    drop_activo: "Suelta para abrir",
+    preferencias_tooltip: "Preferencias (Ctrl+,)",
 };
 
 pub const EN: Textos = Textos {
@@ -184,6 +201,14 @@ pub const EN: Textos = Textos {
     ver_todos: "See all",
     editar: "Edit",
     timeline: "Timeline",
+    mostrar_vacios: "Show empty",
+    abrir: "Open",
+    mostrar_en_carpeta: "Show in folder",
+    quitar_de_recientes: "Remove from recent",
+    drop_titulo: "Drop a video here",
+    drop_subtitulo: "MP4, MKV, MOV or WebM",
+    drop_activo: "Drop to open",
+    preferencias_tooltip: "Preferences (Ctrl+,)",
 };
 
 impl Textos {
@@ -272,19 +297,25 @@ impl Textos {
     pub fn fecha(&self, fecha: &FechaRelativa) -> String {
         let n = fecha.dias;
         if self.es {
-            match n {
-                0 => "hoy".into(),
-                1 => "ayer".into(),
-                n if n < 7 => format!("hace {n} días"),
-                n => {
-                    let semanas = n / 7;
-                    if semanas == 1 {
-                        "hace 1 semana".into()
-                    } else {
-                        format!("hace {semanas} semanas")
+            if n == 0 && fecha.horas > 0 {
+                format!("hace {} h", fecha.horas)
+            } else {
+                match n {
+                    0 => "hoy".into(),
+                    1 => "ayer".into(),
+                    n if n < 7 => format!("hace {n} días"),
+                    n => {
+                        let semanas = n / 7;
+                        if semanas == 1 {
+                            "hace 1 semana".into()
+                        } else {
+                            format!("hace {semanas} semanas")
+                        }
                     }
                 }
             }
+        } else if n == 0 && fecha.horas > 0 {
+            format!("{} h ago", fecha.horas)
         } else {
             match n {
                 0 => "today".into(),

@@ -1,8 +1,9 @@
 //! Pantalla de arranque: logo, acciones, zona de arrastre y recientes.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 
-use egui::{Align2, Color32, RichText, Sense, Stroke, Vec2};
+use egui::{Color32, RichText, Sense, Stroke, Vec2};
 
 use crate::inicio::{EstadoInicio, MensajeInicio, OrdenRecientes, cantidad_visible};
 use crate::preferencias::Preferencias;
@@ -13,35 +14,24 @@ use super::kit::{self, Icono};
 use super::tema::{self, Estilo};
 
 /// Dibuja la pantalla. El booleano indica que se pidió abrir Ajustes.
+/// (Ajustes vive ahora en la cabecera; se conserva por compatibilidad.)
 pub fn mostrar(
     ui: &mut egui::Ui,
     estado: &mut EstadoInicio,
     textos: &Textos,
-    prefs: &mut Preferencias,
+    _prefs: &mut Preferencias,
 ) -> (Option<MensajeInicio>, bool) {
-    let _ = &prefs;
     let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
     ui.painter().rect_filled(rect, 0.0, tema::FONDO);
 
-    // Sin riel: una sola columna centrada, con margen a los lados.
-    let ancho_columna = (rect.width() - tema::ESP_48 * 2.0).clamp(320.0, 960.0);
+    let ancho_columna = (rect.width() - tema::ESP_48 * 2.0)
+        .clamp(320.0, tema::ANCHO_CONTENEDOR)
+        .min(tema::ANCHO_CONTENEDOR);
     let centro_x = rect.center().x;
     let contenido = egui::Rect::from_min_max(
         egui::pos2(centro_x - ancho_columna / 2.0, rect.min.y),
         egui::pos2(centro_x + ancho_columna / 2.0, rect.max.y),
     );
-
-    // Preferences vive en la vista principal, arriba a la derecha.
-    let mut abrir_ajustes = false;
-    let zona_ajustes = egui::Rect::from_min_max(
-        egui::pos2(contenido.max.x - 140.0, contenido.min.y + tema::ESP_16),
-        egui::pos2(contenido.max.x, contenido.min.y + tema::ESP_48),
-    );
-    ui.scope_builder(egui::UiBuilder::new().max_rect(zona_ajustes), |ui| {
-        if ui.button(textos.ajustes).clicked() {
-            abrir_ajustes = true;
-        }
-    });
 
     let mut intencion = None;
     ui.scope_builder(egui::UiBuilder::new().max_rect(contenido), |ui| {
@@ -53,7 +43,7 @@ pub fn mostrar(
         let titulo = ui.add(
             egui::Label::new(
                 RichText::new(textos.inicio_titulo)
-                    .font(egui::FontId::proportional(32.0))
+                    .font(egui::FontId::proportional(tema::TAMANO_TITULO))
                     .color(Color32::WHITE),
             )
             .selectable(false),
@@ -61,15 +51,18 @@ pub fn mostrar(
         ui.painter().rect_filled(
             egui::Rect::from_min_max(
                 egui::pos2(titulo.rect.min.x, titulo.rect.max.y + 6.0),
-                egui::pos2(titulo.rect.min.x + 72.0, titulo.rect.max.y + 8.0),
+                egui::pos2(
+                    titulo.rect.min.x + tema::ANCHO_SUBRAYADO,
+                    titulo.rect.max.y + 8.0,
+                ),
             ),
             0.0,
             tema::ACENTO,
         );
-        ui.add_space(tema::ESP_16);
+        ui.add_space(tema::ESP_24);
         ui.label(
             RichText::new(textos.inicio_subtitulo)
-                .font(tema::fuente_segura(Estilo::Cuerpo))
+                .font(tema::fuente(Estilo::Cuerpo))
                 .color(tema::TEXTO_2),
         );
         ui.add_space(tema::ESP_24);
@@ -89,15 +82,17 @@ pub fn mostrar(
             );
         });
 
-        ui.add_space(tema::ESP_16);
-        zona_de_arrastre(ui, textos);
+        ui.add_space(tema::ESP_24);
+        if zona_de_arrastre(ui, textos) {
+            intencion = Some(MensajeInicio::AbrirVideo);
+        }
 
         if let Some(aviso) = &estado.aviso {
             ui.add_space(tema::ESP_16);
             let aviso_color = Color32::from_rgba_premultiplied(
-                tema::PELIGRO.r() as u16 as u8,
-                tema::PELIGRO.g() as u16 as u8,
-                tema::PELIGRO.b() as u16 as u8,
+                tema::PELIGRO.r(),
+                tema::PELIGRO.g(),
+                tema::PELIGRO.b(),
                 30,
             );
             let marco = egui::Frame {
@@ -122,144 +117,227 @@ pub fn mostrar(
             );
         }
 
-        ui.add_space(tema::ESP_48);
-        ui.horizontal(|ui| {
-            ui.label(
-                RichText::new(textos.recientes)
-                    .font(tema::fuente(Estilo::Pequeno))
-                    .color(tema::TEXTO_2),
-            );
-            let orden_actual = match estado.orden {
-                OrdenRecientes::Recientes => textos.mas_recientes,
-                OrdenRecientes::Nombre => textos.orden_nombre,
-                OrdenRecientes::Lineas => textos.orden_lineas,
+        ui.add_space(tema::ESP_40);
+        fila_recientes(ui, estado, textos, &mut intencion);
+        ui.add_space(tema::ESP_12);
+
+        let mut recientes: Vec<_> = estado.recientes.iter().collect();
+        if !estado.mostrar_vacios {
+            recientes.retain(|reciente| reciente.lineas > 0);
+        }
+        match estado.orden {
+            OrdenRecientes::Recientes => {}
+            OrdenRecientes::Nombre => {
+                recientes.sort_by_key(|r| r.ruta.to_string_lossy().into_owned())
+            }
+            OrdenRecientes::Lineas => recientes.sort_by_key(|r| std::cmp::Reverse(r.lineas)),
+        }
+        if recientes.is_empty() {
+            kit::recuadro_punteado(ui, 104.0, textos.texto_vacio_recientes);
+        } else {
+            let gap = tema::ESP_20;
+            let columnas = if contenido.width() >= 780.0 {
+                3
+            } else if contenido.width() >= 520.0 {
+                2
+            } else {
+                1
             };
-            egui::ComboBox::from_id_salt("orden-recientes")
-                .selected_text(orden_actual)
-                .show_ui(ui, |ui| {
+            let ancho_tarjeta = (contenido.width() - gap * (columnas - 1) as f32) / columnas as f32;
+            let visibles = cantidad_visible(recientes.len(), estado.expandido);
+            let destacado = estado.destacado;
+            let tarjetas: Vec<_> = recientes.into_iter().take(visibles).enumerate().collect();
+            let y_inicio = ui.cursor().top();
+            for (fila, grupo) in tarjetas.chunks(columnas).enumerate() {
+                for (columna, (indice, reciente)) in grupo.iter().enumerate() {
+                    let celda = egui::Rect::from_min_size(
+                        egui::pos2(
+                            contenido.min.x + columna as f32 * (ancho_tarjeta + gap),
+                            y_inicio + fila as f32 * (tema::ALTO_TARJETA + gap),
+                        ),
+                        Vec2::new(ancho_tarjeta, tema::ALTO_TARJETA),
+                    );
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(celda), |ui| {
+                        ui.set_width(ancho_tarjeta);
+                        tarjeta_reciente(
+                            ui,
+                            reciente,
+                            textos,
+                            ancho_tarjeta,
+                            Some(*indice) == destacado,
+                            &mut intencion,
+                            &mut estado.miniaturas,
+                        );
+                    });
+                }
+            }
+            ui.allocate_rect(
+                egui::Rect::from_min_size(
+                    egui::pos2(
+                        contenido.min.x,
+                        y_inicio
+                            + tarjetas.len().div_ceil(columnas) as f32 * (tema::ALTO_TARJETA + gap),
+                    ),
+                    Vec2::new(contenido.width(), 0.0),
+                ),
+                Sense::hover(),
+            );
+            ui.add_space(tema::ESP_24);
+        }
+    });
+
+    (intencion, false)
+}
+
+/// Etiqueta de sección con letter-spacing de 0.04 em.
+fn etiqueta_espaciada(ui: &mut egui::Ui, texto: &str, color: Color32) {
+    let fuente = tema::fuente(Estilo::Pequeno);
+    let mut trabajo =
+        egui::text::LayoutJob::simple_singleline(texto.to_owned(), fuente.clone(), color);
+    if let Some(seccion) = trabajo.sections.first_mut() {
+        seccion.format.extra_letter_spacing = fuente.size * tema::LETRA_ESPACIADO;
+    }
+    ui.add(egui::Label::new(trabajo).selectable(false));
+}
+
+/// Fila «Recientes / filtro / See all», con todo alineado al centro vertical.
+fn fila_recientes(
+    ui: &mut egui::Ui,
+    estado: &mut EstadoInicio,
+    textos: &Textos,
+    intencion: &mut Option<MensajeInicio>,
+) {
+    // Altura acotada: un `with_layout` sin límite se come todo el alto restante.
+    ui.allocate_ui_with_layout(
+        Vec2::new(ui.available_width(), tema::ALTO_NAV),
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| {
+            etiqueta_espaciada(ui, &textos.recientes.to_uppercase(), tema::TEXTO_2);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if estado.recientes.len() > 3 {
+                    let respuesta = ui.add(
+                        egui::Button::new(
+                            RichText::new(textos.ver_todos)
+                                .font(tema::fuente(Estilo::Base))
+                                .color(tema::TEXTO_2),
+                        )
+                        .frame(false),
+                    );
+                    if respuesta.hovered() {
+                        ui.painter().rect_filled(
+                            egui::Rect::from_min_max(
+                                egui::pos2(respuesta.rect.min.x, respuesta.rect.max.y - 1.0),
+                                respuesta.rect.max,
+                            ),
+                            0.0,
+                            tema::ACENTO,
+                        );
+                    }
+                    if respuesta.clicked() {
+                        *intencion = Some(MensajeInicio::VerTodos);
+                    }
+                }
+
+                let actual = match estado.orden {
+                    OrdenRecientes::Recientes => textos.mas_recientes,
+                    OrdenRecientes::Nombre => textos.orden_nombre,
+                    OrdenRecientes::Lineas => textos.orden_lineas,
+                };
+                let _ = egui::containers::menu::MenuButton::from_button(
+                    egui::Button::new(
+                        RichText::new(format!("{actual} {}", kit::glifo(Icono::ChevronAbajo)))
+                            .font(tema::fuente(Estilo::Base))
+                            .color(tema::TEXTO_2),
+                    )
+                    .frame(false),
+                )
+                .ui(ui, |ui| {
+                    ui.set_min_width(tema::ANCHO_FILTRO);
                     for (orden, etiqueta) in [
                         (OrdenRecientes::Recientes, textos.mas_recientes),
                         (OrdenRecientes::Nombre, textos.orden_nombre),
                         (OrdenRecientes::Lineas, textos.orden_lineas),
                     ] {
-                        ui.selectable_value(&mut estado.orden, orden, etiqueta);
+                        if ui.button(etiqueta).clicked() {
+                            estado.orden = orden;
+                        }
                     }
+                    ui.separator();
+                    ui.checkbox(&mut estado.mostrar_vacios, textos.mostrar_vacios);
                 });
-        });
-        ui.add_space(tema::ESP_12);
-
-        if estado.recientes.is_empty() {
-            kit::recuadro_punteado(ui, 104.0, textos.texto_vacio_recientes);
-        } else {
-            let destacado = estado.destacado;
-            let mut recientes: Vec<_> = estado.recientes.iter().collect();
-            match estado.orden {
-                OrdenRecientes::Recientes => {}
-                OrdenRecientes::Nombre => {
-                    recientes.sort_by_key(|r| r.ruta.to_string_lossy().into_owned())
-                }
-                OrdenRecientes::Lineas => recientes.sort_by_key(|r| std::cmp::Reverse(r.lineas)),
-            }
-            let visibles = cantidad_visible(recientes.len(), estado.expandido);
-            let ancho_tarjeta = 260.0;
-            // horizontal_wrapped decide las columnas con el ancho realmente
-            // disponible; el Grid anterior se apilaba en la app real.
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing = Vec2::splat(tema::ESP_24);
-                for (indice, reciente) in recientes.into_iter().take(visibles).enumerate() {
-                    ui.allocate_ui_with_layout(
-                        Vec2::new(ancho_tarjeta, 210.0),
-                        egui::Layout::top_down(egui::Align::LEFT),
-                        |ui| {
-                            ui.set_width(ancho_tarjeta);
-                            tarjeta_reciente(
-                                ui,
-                                reciente,
-                                textos,
-                                ancho_tarjeta,
-                                Some(indice) == destacado,
-                                &mut intencion,
-                                &mut estado.miniaturas,
-                            );
-                        },
-                    );
-                }
             });
-            if estado.recientes.len() > 3 && ui.button(textos.ver_todos).clicked() {
-                intencion = Some(MensajeInicio::VerTodos);
-            }
-        }
-    });
-
-    (intencion, abrir_ajustes)
+        },
+    );
 }
-fn zona_de_arrastre(ui: &mut egui::Ui, textos: &Textos) {
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 104.0), Sense::hover());
-    let sobre = ui.ctx().input(|entrada| {
-        entrada.raw.hovered_files.iter().any(|archivo| {
-            archivo
-                .path
-                .as_ref()
-                .and_then(|ruta| ruta.extension())
-                .and_then(|extension| extension.to_str())
-                .is_some_and(|extension| {
-                    ["mp4", "mkv", "mov", "webm"]
-                        .iter()
-                        .any(|valida| extension.eq_ignore_ascii_case(valida))
-                })
-        })
-    });
-    let color = if sobre {
-        tema::ACENTO
-    } else {
-        tema::BORDE_HOVER
-    };
-    let pintor = ui.painter();
-    let trazo = Stroke::new(1.5_f32, color);
+
+/// Zona de arrastre de 96 px, clicable para abrir el selector de vídeo.
+fn zona_de_arrastre(ui: &mut egui::Ui, textos: &Textos) -> bool {
+    let (rect, respuesta) = ui.allocate_exact_size(
+        Vec2::new(ui.available_width(), tema::ALTO_ZONA),
+        Sense::click(),
+    );
+    let sobre = ui
+        .ctx()
+        .input(|entrada| !entrada.raw.hovered_files.is_empty());
+    let activo =
+        ui.ctx()
+            .animate_bool_with_time(egui::Id::new("zona-arrastre"), sobre, tema::ANIMACION);
+    let borde = tema::mezclar(tema::BORDE_CONTROL, tema::ACENTO, activo);
+    let fondo = tema::mezclar(tema::FONDO_ZONA, tema::ACENTO, activo * 0.08);
+    let color_texto = tema::mezclar(tema::TEXTO_2, tema::ACENTO, activo);
+
+    ui.painter()
+        .rect_filled(rect, tema::radio_superficie(), fondo);
+    let trazo = Stroke::new(tema::GROSOR_PUNTEADO, borde);
     let dash = tema::ESP_8;
     let mut x = rect.min.x;
     while x < rect.max.x {
-        pintor.line_segment(
-            [
-                egui::pos2(x, rect.min.y),
-                egui::pos2((x + dash).min(rect.max.x), rect.min.y),
-            ],
-            trazo,
-        );
-        pintor.line_segment(
-            [
-                egui::pos2(x, rect.max.y),
-                egui::pos2((x + dash).min(rect.max.x), rect.max.y),
-            ],
-            trazo,
-        );
+        for y in [rect.min.y, rect.max.y] {
+            ui.painter().line_segment(
+                [egui::pos2(x, y), egui::pos2((x + dash).min(rect.max.x), y)],
+                trazo,
+            );
+        }
         x += dash + tema::ESP_4;
     }
     let mut y = rect.min.y;
     while y < rect.max.y {
-        pintor.line_segment(
-            [
-                egui::pos2(rect.min.x, y),
-                egui::pos2(rect.min.x, (y + dash).min(rect.max.y)),
-            ],
-            trazo,
-        );
-        pintor.line_segment(
-            [
-                egui::pos2(rect.max.x, y),
-                egui::pos2(rect.max.x, (y + dash).min(rect.max.y)),
-            ],
-            trazo,
-        );
+        for x in [rect.min.x, rect.max.x] {
+            ui.painter().line_segment(
+                [egui::pos2(x, y), egui::pos2(x, (y + dash).min(rect.max.y))],
+                trazo,
+            );
+        }
         y += dash + tema::ESP_4;
     }
-    pintor.text(
-        rect.center(),
-        Align2::CENTER_CENTER,
-        textos.arrastrar_video,
-        tema::fuente(Estilo::Base),
-        if sobre { tema::ACENTO } else { tema::TEXTO_2 },
-    );
+
+    ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+        // Sin `centered_and_justified`: expande el hijo hasta el fondo de la
+        // ventana y empuja la grilla fuera de pantalla.
+        ui.vertical_centered(|ui| {
+            ui.add_space(tema::ESP_12);
+            ui.label(
+                RichText::new(kit::glifo(Icono::Subir))
+                    .font(egui::FontId::proportional(tema::TAMANO_ICONO_GRANDE))
+                    .color(color_texto),
+            );
+            ui.label(
+                RichText::new(if activo > 0.5 {
+                    textos.drop_activo
+                } else {
+                    textos.drop_titulo
+                })
+                .font(tema::fuente(Estilo::Base))
+                .color(color_texto),
+            );
+            ui.label(
+                RichText::new(textos.drop_subtitulo)
+                    .font(tema::fuente(Estilo::Pequeno))
+                    .color(tema::TEXTO_2),
+            );
+        });
+    });
+    respuesta.clicked()
 }
 
 fn tarjeta_reciente(
@@ -269,88 +347,31 @@ fn tarjeta_reciente(
     ancho: f32,
     destacada: bool,
     intencion: &mut Option<MensajeInicio>,
-    miniaturas: &mut std::collections::HashMap<PathBuf, egui::TextureHandle>,
+    miniaturas: &mut HashMap<PathBuf, egui::TextureHandle>,
 ) {
-    let color = reciente
-        .tira
-        .first()
-        .map(|(color, _)| tema::color(color))
-        .unwrap_or(tema::CONTROL);
-    // `Frame::show` solo percibe hover: hay que dar a toda la tarjeta un rect
-    // con `Sense::click()` para que abra el proyecto.
-    let (rect, respuesta) = ui.allocate_exact_size(Vec2::new(ancho, 210.0), Sense::click());
-    ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+    // `Frame::show` solo percibe hover: la tarjeta necesita su propio rect
+    // con `Sense::click()` para abrir el proyecto.
+    let (rect, respuesta) =
+        ui.allocate_exact_size(Vec2::new(ancho, tema::ALTO_TARJETA), Sense::click());
+    let elevacion = ui.ctx().animate_bool_with_time(
+        egui::Id::new(("tarjeta", &reciente.ruta)),
+        respuesta.hovered(),
+        tema::ANIMACION,
+    );
+    let visible = rect.translate(Vec2::new(0.0, -elevacion));
+
+    ui.scope_builder(egui::UiBuilder::new().max_rect(visible), |ui| {
         let _ = kit::tarjeta(ui, |ui| {
-            // El Grid celda usa layout horizontal: sin este vertical los labels
-            // caen al lado de la miniatura y se solapan con ella.
             ui.vertical(|ui| {
-                // El ancho de la tarjeta ya viene del Grid; forzarlo aquí rompía el
-                // layout y los labels se solapaban con la miniatura.
                 let ancho_util = (ancho - tema::ESP_16 * 2.0).max(120.0);
                 let (miniatura, _) = ui.allocate_exact_size(
                     Vec2::new(ancho_util, ancho_util * 9.0 / 16.0),
                     Sense::hover(),
                 );
-                let ruta_miniatura = crate::thumbnail::ruta_cache(&reciente.ruta);
-                if ruta_miniatura.is_file() {
-                    let textura = miniaturas.entry(reciente.ruta.clone()).or_insert_with(|| {
-                        let mut rgba = image::open(&ruta_miniatura)
-                            .map(|imagen| imagen.to_rgba8())
-                            .unwrap_or_else(|_| {
-                                image::RgbaImage::from_pixel(
-                                    160,
-                                    90,
-                                    image::Rgba([38, 38, 38, 255]),
-                                )
-                            });
-                        // Caches viejos pueden tener alfa basura: se fuerza opaco.
-                        for pixel in rgba.as_mut().as_chunks_mut::<4>().0.iter_mut() {
-                            pixel[3] = 255;
-                        }
-                        let (ancho_img, alto_img) = rgba.dimensions();
-                        ui.ctx().load_texture(
-                            format!("miniatura-{:?}", reciente.ruta),
-                            egui::ColorImage::from_rgba_unmultiplied(
-                                [ancho_img as usize, alto_img as usize],
-                                &rgba,
-                            ),
-                            egui::TextureOptions::default(),
-                        )
-                    });
-                    // Rect 16:9: un vídeo de otro aspecto se encaja sin
-                    // deformar y deja barras negras arriba/abajo o a los lados.
-                    ui.painter().rect_filled(miniatura, 0.0, Color32::BLACK);
-                    let tamaño = textura.size();
-                    let aspecto = tamaño[0] as f32 / tamaño[1].max(1) as f32;
-                    let (ancho_img, alto_img) = if aspecto > miniatura.width() / miniatura.height()
-                    {
-                        (miniatura.width(), miniatura.width() / aspecto)
-                    } else {
-                        (miniatura.height() * aspecto, miniatura.height())
-                    };
-                    let encajado = egui::Rect::from_center_size(
-                        miniatura.center(),
-                        Vec2::new(ancho_img, alto_img),
-                    );
-                    ui.painter().image(
-                        textura.id(),
-                        encajado,
-                        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                        Color32::WHITE,
-                    );
-                } else {
-                    ui.painter().rect_filled(miniatura, 0.0, tema::CONTROL);
-                }
-                ui.painter().rect_filled(
-                    egui::Rect::from_min_max(
-                        egui::pos2(miniatura.min.x, miniatura.max.y - 4.0),
-                        miniatura.max,
-                    ),
-                    0.0,
-                    color,
-                );
+                pintar_miniatura(ui, reciente, miniatura, miniaturas);
+                pintar_barra_hablantes(ui, reciente, miniatura);
+
                 ui.set_width(ancho_util);
-                // Botón real: nodo accesible que abre el proyecto.
                 if ui
                     .add(
                         egui::Button::new(
@@ -371,26 +392,82 @@ fn tarjeta_reciente(
                 {
                     *intencion = Some(MensajeInicio::AbrirReciente(reciente.ruta.clone()));
                 }
-                ui.label(
-                    RichText::new(format!(
-                        "{} · {} · {}",
-                        textos.lineas(reciente.lineas),
-                        textos.hablantes(reciente.hablantes),
-                        textos.fecha(&reciente.fecha)
-                    ))
-                    .font(tema::fuente(Estilo::Pequeno))
-                    .color(tema::TEXTO_3),
-                );
+                ui.add_space(tema::ESP_4);
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(format!(
+                            "{} · {}",
+                            textos.lineas(reciente.lineas),
+                            textos.hablantes(reciente.hablantes)
+                        ))
+                        .font(tema::fuente(Estilo::Base))
+                        .color(tema::TEXTO_2),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(
+                            RichText::new(textos.fecha(&reciente.fecha))
+                                .font(tema::fuente(Estilo::Pequeno))
+                                .color(tema::TEXTO_3),
+                        );
+                    });
+                });
+
+                ui.add_space(tema::ESP_4);
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = tema::ESP_4;
+                    for (color, _) in reciente.tira.iter().take(7) {
+                        kit::punto(ui, tema::color(color), tema::TAMANO_PUNTO);
+                    }
+                    if reciente.tira.len() > 7 {
+                        ui.label(
+                            RichText::new(format!("+{}", reciente.tira.len() - 7))
+                                .font(tema::fuente(Estilo::Pequeno))
+                                .color(tema::TEXTO_3),
+                        );
+                    }
+                });
+                ui.add_space(tema::ESP_12);
             });
         });
     });
+
+    let borde = if elevacion > 0.5 {
+        tema::BORDE_HOVER
+    } else {
+        tema::BORDE
+    };
+    ui.painter().rect_stroke(
+        visible,
+        egui::CornerRadius::same(tema::RADIO_SUPERFICIE as u8),
+        Stroke::new(1.0_f32, borde),
+        egui::StrokeKind::Inside,
+    );
     if destacada {
         ui.painter().rect_stroke(
-            respuesta.rect,
+            visible,
             egui::CornerRadius::same(tema::RADIO_SUPERFICIE as u8),
             Stroke::new(2.0_f32, tema::ACENTO),
             egui::StrokeKind::Outside,
         );
+    }
+    if respuesta.hovered() {
+        let (_, menu) =
+            egui::containers::menu::MenuButton::from_button(egui::Button::new("···").frame(false))
+                .ui(ui, |ui| {
+                    if ui.button(textos.abrir).clicked() {
+                        *intencion = Some(MensajeInicio::AbrirReciente(reciente.ruta.clone()));
+                        ui.close();
+                    }
+                    if ui.button(textos.mostrar_en_carpeta).clicked() {
+                        *intencion = Some(MensajeInicio::MostrarEnCarpeta(reciente.ruta.clone()));
+                        ui.close();
+                    }
+                    if ui.button(textos.quitar_de_recientes).clicked() {
+                        *intencion = Some(MensajeInicio::QuitarDeRecientes(reciente.ruta.clone()));
+                        ui.close();
+                    }
+                });
+        let _ = menu;
     }
     if respuesta.clicked() {
         *intencion = Some(MensajeInicio::AbrirReciente(reciente.ruta.clone()));
@@ -398,4 +475,87 @@ fn tarjeta_reciente(
     respuesta.on_hover_ui(|ui| {
         ui.label(reciente.ruta.display().to_string());
     });
+}
+
+fn pintar_miniatura(
+    ui: &mut egui::Ui,
+    reciente: &Reciente,
+    miniatura: egui::Rect,
+    miniaturas: &mut HashMap<PathBuf, egui::TextureHandle>,
+) {
+    let ruta = crate::thumbnail::ruta_cache(&reciente.ruta);
+    if !ruta.is_file() {
+        let color = reciente
+            .tira
+            .first()
+            .map(|(color, _)| tema::color(color))
+            .unwrap_or(tema::CONTROL);
+        ui.painter().rect_filled(miniatura, 0.0, tema::CONTROL);
+        ui.painter().rect_filled(
+            egui::Rect::from_min_max(
+                egui::pos2(miniatura.min.x, miniatura.max.y - tema::ALTO_BARRA_COLOR),
+                miniatura.max,
+            ),
+            0.0,
+            color,
+        );
+        return;
+    }
+    let textura = miniaturas.entry(reciente.ruta.clone()).or_insert_with(|| {
+        let mut rgba = image::open(&ruta)
+            .map(|imagen| imagen.to_rgba8())
+            .unwrap_or_else(|_| {
+                image::RgbaImage::from_pixel(160, 90, image::Rgba([38, 38, 38, 255]))
+            });
+        for pixel in rgba.as_mut().as_chunks_mut::<4>().0.iter_mut() {
+            pixel[3] = 255;
+        }
+        let (ancho, alto) = rgba.dimensions();
+        ui.ctx().load_texture(
+            format!("miniatura-{:?}", reciente.ruta),
+            egui::ColorImage::from_rgba_unmultiplied([ancho as usize, alto as usize], &rgba),
+            egui::TextureOptions::default(),
+        )
+    });
+    ui.painter().rect_filled(miniatura, 0.0, Color32::BLACK);
+    let tamaño = textura.size();
+    let aspecto = tamaño[0] as f32 / tamaño[1].max(1) as f32;
+    let (ancho_img, alto_img) = if aspecto > miniatura.width() / miniatura.height() {
+        (miniatura.width(), miniatura.width() / aspecto)
+    } else {
+        (miniatura.height() * aspecto, miniatura.height())
+    };
+    ui.painter().image(
+        textura.id(),
+        egui::Rect::from_center_size(miniatura.center(), Vec2::new(ancho_img, alto_img)),
+        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+        Color32::WHITE,
+    );
+}
+
+/// Barra de 4 px segmentada por el tiempo que habla cada hablante.
+fn pintar_barra_hablantes(ui: &mut egui::Ui, reciente: &Reciente, miniatura: egui::Rect) {
+    let alto = tema::ALTO_BARRA_COLOR;
+    let rect = egui::Rect::from_min_max(
+        egui::pos2(miniatura.min.x, miniatura.max.y - alto),
+        miniatura.max,
+    );
+    let total: f32 = reciente.tira.iter().map(|(_, segundos)| *segundos).sum();
+    if total <= 0.0 {
+        ui.painter().rect_filled(rect, 0.0, tema::BORDE_CONTROL);
+        return;
+    }
+    let mut x = rect.min.x;
+    for (color, segundos) in &reciente.tira {
+        let ancho = rect.width() * (*segundos / total);
+        ui.painter().rect_filled(
+            egui::Rect::from_min_max(
+                egui::pos2(x, rect.min.y),
+                egui::pos2((x + ancho).min(rect.max.x), rect.max.y),
+            ),
+            0.0,
+            tema::color(color),
+        );
+        x += ancho;
+    }
 }

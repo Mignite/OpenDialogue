@@ -10,7 +10,7 @@ pub use crate::textos::FechaRelativa;
 
 /// Cuántas rutas caben en el menú. Las más viejas se descartan al registrar.
 const TOPE: usize = 10;
-const MS_POR_DIA: f64 = 86_400_000.0;
+const MS_POR_HORA: f64 = 3_600_000.0;
 
 /// Una entrada ya resuelta, lista para dibujar. Nada de esto se persiste:
 /// las líneas, los hablantes y la fecha se derivan del `.cdp` en cada arranque.
@@ -72,8 +72,11 @@ pub fn registrar(ruta_indice: &Path, proyecto: &Path) -> std::io::Result<()> {
 /// Días completos entre dos instantes epoch-ms. Un reloj adelantado se toma
 /// como «hoy» en vez de dar una fecha negativa.
 pub fn fecha_relativa(mtime_ms: f64, ahora_ms: f64) -> FechaRelativa {
-    let dias = ((ahora_ms - mtime_ms) / MS_POR_DIA).floor().max(0.0) as u64;
-    FechaRelativa { dias }
+    let horas = ((ahora_ms - mtime_ms) / MS_POR_HORA).floor().max(0.0) as u64;
+    FechaRelativa {
+        dias: horas / 24,
+        horas,
+    }
 }
 
 /// Lee un `.cdp` y deriva lo que el menú muestra. Cualquier fallo (archivo
@@ -267,14 +270,14 @@ mod tests {
 
         assert_eq!(
             super::fecha_relativa(1_000.0, 1_000.0),
-            FechaRelativa { dias: 0 }
+            FechaRelativa { dias: 0, horas: 0 }
         );
         assert_eq!(
             super::fecha_relativa(1_000.0, 1_000.0 + 3.0 * 86_400_000.0),
-            FechaRelativa { dias: 3 }
+            FechaRelativa { dias: 3, horas: 72 }
         );
-        assert_eq!(EN.fecha(&FechaRelativa { dias: 1 }), "yesterday");
-        assert_eq!(ES.fecha(&FechaRelativa { dias: 3 }), "hace 3 días");
+        assert_eq!(EN.fecha(&FechaRelativa { dias: 1, horas: 24 }), "yesterday");
+        assert_eq!(ES.fecha(&FechaRelativa { dias: 0, horas: 2 }), "hace 2 h");
     }
 
     #[test]

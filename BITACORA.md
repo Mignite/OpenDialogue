@@ -13,6 +13,13 @@
 - kittest no ejecuta el `PaintCallback` de mpv: las capturas finales del editor
   son headless con el monitor vacío. El «antes» real con video quedó en
   `docs/checklists/rediseno/antes-editor-1440.png`.
+- Inicio (pulido): fila de Recientes con etiqueta espaciada, filtro y See all;
+  grilla de 3/2/1 columnas con celdas posicionadas a mano (el `Grid` y el
+  `horizontal_wrapped` escalonaban las tarjetas); tarjetas con meta a la
+  derecha, puntos por hablante, menú ⋯ en hover y barra segmentada; proyectos
+  vacíos ocultos con interruptor en el filtro; dedupe por ruta absoluta.
+  Drop zone de 96 px con icono y estados de arrastre. Preferences pasó a la
+  cabecera como engranaje con Ctrl+,; cerrar solo se pinta rojo en hover.
 - Inicio: el título pasa a ser el nombre de la app con subrayado de acento. El
   logo se usa también en la cabecera. Las miniaturas ocupan un rect 16:9 y se
   encajan conservando el aspecto, con barras negras para vídeos no 16:9.

@@ -1,4 +1,4 @@
-﻿use std::path::PathBuf;
+use std::path::PathBuf;
 
 use egui_kittest::kittest::Queryable;
 use rod_app::inicio::EstadoInicio;
@@ -61,26 +61,40 @@ fn sin_recientes_muestra_el_vacio() {
 }
 
 #[test]
-fn el_riel_abre_ajustes() {
-    let estado = (
-        EstadoInicio::nuevo(vec![], None),
-        Preferencias::default(),
-        false,
-    );
+fn proyectos_vacios_se_ocultan_hasta_activar_el_filtro() {
+    let mut estado = EstadoInicio::nuevo(vec![reciente("test.cdp", 0, 0)], None);
+    assert!(!estado.mostrar_vacios);
     let mut h = egui_kittest::Harness::builder()
         .with_size(egui::vec2(1440.0, 900.0))
         .build_ui_state(
-            |ui, (estado, prefs, aplicados)| {
-                let (_, abrir) = rod_app::ui::inicio::mostrar(ui, estado, &EN, prefs);
-                if abrir {
-                    *aplicados = true;
-                }
+            |ui, (estado, prefs)| {
+                rod_app::ui::inicio::mostrar(ui, estado, &EN, prefs);
             },
-            estado,
+            (estado.clone(), Preferencias::default()),
         );
-    h.get_by_label("Preferences").click();
     h.run();
-    assert!(h.state().2);
+    assert_eq!(h.query_all_by_label("test.cdp").count(), 0);
+
+    estado.mostrar_vacios = true;
+    let mut h2 = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(1440.0, 900.0))
+        .build_ui_state(
+            |ui, (estado, prefs)| {
+                rod_app::ui::inicio::mostrar(ui, estado, &EN, prefs);
+            },
+            (estado, Preferencias::default()),
+        );
+    h2.run();
+    assert_eq!(h2.query_all_by_label("test.cdp").count(), 1);
+}
+
+#[test]
+fn recientes_se_deduplican_por_ruta() {
+    let estado = EstadoInicio::nuevo(
+        vec![reciente("presa.cdp", 19, 3), reciente("presa.cdp", 19, 3)],
+        None,
+    );
+    assert_eq!(estado.recientes.len(), 1);
 }
 
 #[test]

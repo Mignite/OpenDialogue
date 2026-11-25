@@ -5,6 +5,8 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Tarea {
     Ninguna,
+    /// Abrir la carpeta de un proyecto reciente en el explorador del sistema.
+    MostrarEnCarpeta(std::path::PathBuf),
     DialogoVideo,
     DialogoProyecto,
     DialogoCarpeta,
