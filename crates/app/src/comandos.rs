@@ -36,6 +36,10 @@ pub enum Comando {
     Copiar,
     Pegar,
     Dividir,
+    Unir,
+    Entrada,
+    Salida,
+    AlternarSnap,
     Buscar,
     Ayuda,
     VelocidadMas,
@@ -82,6 +86,10 @@ impl Comando {
             Comando::Copiar,
             Comando::Pegar,
             Comando::Dividir,
+            Comando::Unir,
+            Comando::Entrada,
+            Comando::Salida,
+            Comando::AlternarSnap,
             Comando::Buscar,
             Comando::Ayuda,
             Comando::VelocidadMas,
@@ -147,6 +155,10 @@ pub fn seccion(comando: Comando) -> Seccion {
         | Comando::Copiar
         | Comando::Pegar
         | Comando::Dividir
+        | Comando::Unir
+        | Comando::Entrada
+        | Comando::Salida
+        | Comando::AlternarSnap
         | Comando::Buscar
         | Comando::VelocidadMas
         | Comando::VelocidadMenos
@@ -155,11 +167,16 @@ pub fn seccion(comando: Comando) -> Seccion {
 }
 
 /// En el arranque no hay proyecto ni timeline: esas entradas se muestran
-/// deshabilitadas en lugar de desaparecer.
+/// deshabilitadas en lugar de desaparecer. Ajustes y Ayuda no dependen del
+/// proyecto y sí funcionan desde Inicio.
 pub fn disponible_en_inicio(comando: Comando) -> bool {
     matches!(
         comando,
-        Comando::NuevoProyecto | Comando::AbrirProyecto | Comando::AbrirVideo | Comando::Ayuda
+        Comando::NuevoProyecto
+            | Comando::AbrirProyecto
+            | Comando::AbrirVideo
+            | Comando::Ajustes
+            | Comando::Ayuda
     )
 }
 
@@ -187,7 +204,10 @@ pub fn atajo(comando: Comando) -> String {
         Comando::Rehacer => "Ctrl+Y",
         Comando::Copiar => "Ctrl+C",
         Comando::Pegar => "Ctrl+V",
-        Comando::Dividir => "C",
+        Comando::Dividir => "S",
+        Comando::Unir => "M",
+        Comando::Entrada => "[",
+        Comando::Salida => "]",
         Comando::Ayuda => "?",
         Comando::VelocidadMas => "+",
         Comando::VelocidadMenos => "-",
@@ -302,7 +322,10 @@ impl MapaAtajos {
             Self::fila(Comando::Eliminar, Key::Delete, false, false, false),
             Self::fila(Comando::EditarTexto, Key::E, false, false, false),
             Self::fila(Comando::AgregarFragmento, Key::A, false, false, false),
-            Self::fila(Comando::Dividir, Key::C, false, false, false),
+            Self::fila(Comando::Dividir, Key::S, false, false, false),
+            Self::fila(Comando::Unir, Key::M, false, false, false),
+            Self::fila(Comando::Entrada, Key::OpenBracket, false, false, false),
+            Self::fila(Comando::Salida, Key::CloseBracket, false, false, false),
             Self::fila(Comando::Ayuda, Key::Questionmark, false, false, false),
             Self::fila(Comando::Ayuda, Key::F1, false, false, false),
             Self::fila(Comando::VelocidadMas, Key::Plus, false, false, false),
@@ -319,6 +342,11 @@ impl MapaAtajos {
 
     /// Primer comando que coincide. Con foco en texto, las teclas desnudas
     /// no disparan: solo pasan las combinaciones con Ctrl o Alt.
+    /// Filas (comando, atajo), para comprobar duplicados y poblar el panel.
+    pub fn filas(&self) -> &[(Comando, Atajo)] {
+        &self.filas
+    }
+
     pub fn comando_de(&self, tecla: Key, modif: Modifiers, foco_en_texto: bool) -> Option<Comando> {
         let atajo = Atajo::desde(tecla, modif);
         if foco_en_texto && !atajo.ctrl && !atajo.alt {
@@ -507,7 +535,7 @@ mod tests {
             Some(Comando::Hablante(7))
         );
         assert_eq!(
-            desde_input(key("c"), mods(false, false, false)),
+            desde_input(key("s"), mods(false, false, false)),
             Some(Comando::Dividir)
         );
         assert_eq!(

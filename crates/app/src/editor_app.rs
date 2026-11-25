@@ -166,8 +166,21 @@ pub enum MensajeEditor {
     DialogoAutosubsTxt(Option<PathBuf>),
 }
 
+/// Estado de la única barra de edición de texto (bajo el video).
+#[derive(Debug, Default)]
+pub struct EstadoTexto {
+    /// Línea que se edita: selección, o la del playhead si no hay selección.
+    pub objetivo: Option<String>,
+    pub borrador: String,
+    pub original: String,
+    pub foco: bool,
+    pub ultimo_tipeo: Option<std::time::Instant>,
+    pub nueva_linea: bool,
+}
+
 pub struct EditorApp {
     pub(crate) editor: EstadoEditor,
+    pub texto: EstadoTexto,
     pub(crate) player: rod_player::Player,
     pub(crate) subtitles: rod_subs::Subtitulos,
     pub(crate) pixels: Vec<u8>,
@@ -348,6 +361,7 @@ impl EditorApp {
         let ruta_audio = std::path::PathBuf::from(&video_path);
         let mut estado = Self {
             editor,
+            texto: EstadoTexto::default(),
             player,
             subtitles,
             pixels: vec![0; WIDTH * HEIGHT * 4],
@@ -837,6 +851,8 @@ fn ejecutar_comando(state: &mut EditorApp, comando: Comando) -> Tarea {
         C::NudgeDerecha => nudge_seleccion(state, 0.1),
         C::AgregarFragmento => agregar_fragmento(state),
         C::Dividir => dividir_en_playhead(state),
+        // Estos comandos se conectan a sus mensajes en la fase de timeline.
+        C::Unir | C::Entrada | C::Salida | C::AlternarSnap => Tarea::Ninguna,
         C::CaptionAnterior => ciclar_caption(state, -1),
         C::CaptionSiguiente => ciclar_caption(state, 1),
         C::SimultaneoArriba => ciclar_simultaneo(state, -1),

@@ -23,7 +23,7 @@ fn el_mapa_por_defecto_reproduce_los_atajos_de_hoy() {
         (Key::Space, false, false, false, Comando::ReproducirPausa),
         (Key::ArrowLeft, false, false, true, Comando::CaptionAnterior),
         (Key::ArrowLeft, false, true, false, Comando::RetrocederFino),
-        (Key::C, false, false, false, Comando::Dividir),
+        (Key::S, false, false, false, Comando::Dividir),
         (Key::Num7, false, false, false, Comando::Hablante(7)),
     ] {
         assert_eq!(
@@ -31,6 +31,33 @@ fn el_mapa_por_defecto_reproduce_los_atajos_de_hoy() {
             Some(esperado),
             "{tecla:?}"
         );
+    }
+}
+
+#[test]
+fn atajos_de_edicion_registrados() {
+    let mapa = MapaAtajos::por_defecto();
+    for (tecla, esperado) in [
+        (Key::OpenBracket, Comando::Entrada),
+        (Key::CloseBracket, Comando::Salida),
+        (Key::S, Comando::Dividir),
+        (Key::M, Comando::Unir),
+    ] {
+        assert_eq!(
+            mapa.comando_de(tecla, Modifiers::default(), false),
+            Some(esperado),
+            "{tecla:?}"
+        );
+    }
+    assert_eq!(
+        mapa.comando_de(Key::Delete, Modifiers::default(), false),
+        Some(Comando::Eliminar)
+    );
+
+    let mut vistos = std::collections::HashSet::new();
+    for (_, atajo) in mapa.filas() {
+        let clave = (atajo.tecla, atajo.ctrl, atajo.shift, atajo.alt);
+        assert!(vistos.insert(clave), "atajo duplicado: {clave:?}");
     }
 }
 

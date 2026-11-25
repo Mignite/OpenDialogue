@@ -120,9 +120,18 @@ impl RustyDialogue {
                 let editor = abrir_proyecto(&ruta)
                     .map_err(|error| error.to_string())
                     .and_then(|proyecto| {
-                        EditorApp::desde_proyecto(proyecto.clone(), Some(ruta), proyecto.playhead)
+                        EditorApp::desde_proyecto(
+                            proyecto.clone(),
+                            Some(ruta.clone()),
+                            proyecto.playhead,
+                        )
                     });
-                self.abrir(editor);
+                // Abrir un proyecto también lo promueve al tope de recientes:
+                // antes solo «Guardar» escribía el índice y la lista quedaba
+                // clavada en lo último guardado.
+                if self.abrir(editor) {
+                    let _ = recientes::registrar(&recientes::ruta_indice(), &ruta);
+                }
             }
             Salida::Recuperar => {
                 let aviso = match &self.pantalla {
@@ -190,11 +199,17 @@ impl RustyDialogue {
 
     fn aplicar_comando(&mut self, comando: Comando) {
         if comando == Comando::Ajustes {
-            self.ajustes.abierto = true;
+            self.ajustes.abrir();
             return;
         }
         if comando == Comando::Ayuda {
             self.panel_atajos.abierto = true;
+            return;
+        }
+        if comando == Comando::EditarTexto {
+            if let Pantalla::Editor(editor) = &mut self.pantalla {
+                editor.texto.foco = true;
+            }
             return;
         }
         match &mut self.pantalla {
@@ -235,7 +250,7 @@ impl RustyDialogue {
 }
 
 impl eframe::App for RustyDialogue {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         // Al minimizar, wgpu recibe una superficie de 0x0 y el renderizador
         // puede fallar. No pintamos ni pedimos frames mientras no haya área.
         let minimizado = ctx.input(|entrada| {
@@ -252,6 +267,9 @@ impl eframe::App for RustyDialogue {
             }
             return;
         }
+
+        // Ventana sin marco: devolver los bordes al SO con WM_NCHITTEST.
+        ui::borde::mostrar(ctx, frame);
 
         // Respuestas de los diálogos que se abrieron en otro hilo.
         let pendientes: Vec<_> = self.rx_dialogos.try_iter().collect();
@@ -377,7 +395,7 @@ impl eframe::App for RustyDialogue {
                             ui::inicio::mostrar(ui, estado, textos, &mut self.preferencias);
                         mensaje_inicio = mensaje;
                         if abrir_ajustes {
-                            self.ajustes.abierto = true;
+                            self.ajustes.abrir();
                         }
                     });
             }
