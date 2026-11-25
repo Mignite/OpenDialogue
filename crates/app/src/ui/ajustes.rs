@@ -23,11 +23,28 @@ pub struct EstadoAjustes {
     pub busqueda: String,
     /// Comando que ya tiene la tecla recién pulsada.
     pub conflicto: Option<(Comando, Atajo)>,
+    /// La capa se abrió en este frame.
+    recien_abierto: bool,
+    /// El clic que la abrió sigue en curso: esperar a que el ratón se suelte
+    /// antes de aceptar «clic fuera». Con el menú, el comando llega al pulsar y
+    /// el botón se suelta en un frame posterior.
+    ignorar_clic: bool,
+}
+
+impl EstadoAjustes {
+    /// Abre la capa. El clic que la abre no debe cerrarla.
+    pub fn abrir(&mut self) {
+        self.abierto = true;
+        self.recien_abierto = true;
+        self.ignorar_clic = false;
+    }
 }
 
 /// Dibuja la capa. Devuelve `true` si cambió algo y hay que guardar.
 fn cerrar(estado: &mut EstadoAjustes) {
     estado.abierto = false;
+    estado.recien_abierto = false;
+    estado.ignorar_clic = false;
     estado.capturando = None;
     estado.conflicto = None;
 }
@@ -35,6 +52,9 @@ fn cerrar(estado: &mut EstadoAjustes) {
 pub fn mostrar(ctx: &egui::Context, prefs: &mut Preferencias, estado: &mut EstadoAjustes) -> bool {
     if !estado.abierto {
         return false;
+    }
+    if std::mem::take(&mut estado.recien_abierto) {
+        estado.ignorar_clic = true;
     }
     let idioma_inicial = prefs.idioma;
     let textos = idioma_inicial.textos();
@@ -253,14 +273,22 @@ pub fn mostrar(ctx: &egui::Context, prefs: &mut Preferencias, estado: &mut Estad
             }
         });
 
+    // Clic fuera para cerrar. Se descarta mientras siga en curso el clic que
+    // abrió la capa: si no, abrir desde el menú con el ratón la cerraba al
+    // soltar el botón.
+    if estado.ignorar_clic {
+        estado.ignorar_clic =
+            ctx.input(|entrada| entrada.pointer.any_down() || entrada.pointer.any_click());
+    }
     if let Some(respuesta) = respuesta {
-        let clic_fuera = ctx.input(|entrada| {
-            entrada.pointer.button_clicked(egui::PointerButton::Primary)
-                && entrada
-                    .pointer
-                    .latest_pos()
-                    .is_some_and(|pos| !respuesta.response.rect.contains(pos))
-        });
+        let clic_fuera = !estado.ignorar_clic
+            && ctx.input(|entrada| {
+                entrada.pointer.button_clicked(egui::PointerButton::Primary)
+                    && entrada
+                        .pointer
+                        .latest_pos()
+                        .is_some_and(|pos| !respuesta.response.rect.contains(pos))
+            });
         if clic_fuera {
             cerrar(estado);
         }

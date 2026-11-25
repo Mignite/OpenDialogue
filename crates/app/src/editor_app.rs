@@ -167,7 +167,7 @@ pub enum MensajeEditor {
 }
 
 /// Estado de la única barra de edición de texto (bajo el video).
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct EstadoTexto {
     /// Línea que se edita: selección, o la del playhead si no hay selección.
     pub objetivo: Option<String>,
@@ -176,6 +176,90 @@ pub struct EstadoTexto {
     pub foco: bool,
     pub ultimo_tipeo: Option<std::time::Instant>,
     pub nueva_linea: bool,
+    /// Líneas visibles del campo (1–3).
+    pub lineas: u8,
+}
+
+impl Default for EstadoTexto {
+    fn default() -> Self {
+        Self {
+            lineas: 1,
+            ..Self::vacio()
+        }
+    }
+}
+
+impl EstadoTexto {
+    fn vacio() -> Self {
+        Self {
+            objetivo: None,
+            borrador: String::new(),
+            original: String::new(),
+            foco: false,
+            ultimo_tipeo: None,
+            nueva_linea: false,
+            lineas: 1,
+        }
+    }
+
+    /// Línea seleccionada o, si no hay, la que contiene el playhead.
+    pub fn objetivo(state: &EditorApp) -> Option<String> {
+        let captions = &state.editor.proyecto().captions;
+        if let Some(id) = state.editor.seleccion.first()
+            && captions.iter().any(|caption| &caption.id == id)
+        {
+            return Some(id.clone());
+        }
+        captions
+            .iter()
+            .find(|caption| state.position >= caption.inicio && state.position <= caption.fin)
+            .map(|caption| caption.id.clone())
+    }
+
+    /// Cierra la sesión: aplica el texto, crea la línea si no había objetivo y
+    /// devuelve el foco a la timeline.
+    pub fn cerrar_sesion(state: &mut EditorApp) {
+        let borrador = state.texto.borrador.clone();
+        let original = state.texto.original.clone();
+        let objetivo = Self::objetivo(state);
+        state.texto.foco = false;
+        state.texto.ultimo_tipeo = None;
+        if let Some(id) = objetivo {
+            if borrador != original {
+                update(state, MensajeEditor::EditarEnVivo(id, borrador));
+            }
+            update(state, MensajeEditor::TerminarEdicionTexto);
+        } else if !borrador.is_empty() {
+            let caption = rod_core::Caption {
+                id: id_nuevo(),
+                inicio: state.position,
+                fin: (state.position + 2.0).min(state.duration),
+                texto: borrador,
+                hablante_id: None,
+            };
+            state.editor.agregar(caption);
+            state.editor.registrar_historial();
+            refrescar_preview(state);
+        }
+        state.texto.borrador.clear();
+        state.texto.original.clear();
+        state.texto.nueva_linea = false;
+        state.texto.lineas = 1;
+    }
+
+    /// Esc: vuelve al texto que había al enfocar y suelta el foco.
+    pub fn revertir(state: &mut EditorApp) {
+        let original = state.texto.original.clone();
+        if let Some(id) = Self::objetivo(state) {
+            update(state, MensajeEditor::EditarEnVivo(id, original.clone()));
+            update(state, MensajeEditor::TerminarEdicionTexto);
+        }
+        state.texto.borrador = original;
+        state.texto.foco = false;
+        state.texto.ultimo_tipeo = None;
+        state.texto.nueva_linea = false;
+        state.texto.lineas = 1;
+    }
 }
 
 pub struct EditorApp {
@@ -286,6 +370,11 @@ pub struct EditorApp {
 }
 
 impl EditorApp {
+    /// Acceso a la selección compartida por lista y timeline.
+    pub fn editor_mut(&mut self) -> &mut EstadoEditor {
+        &mut self.editor
+    }
+
     /// Hay una fila en edición inline.
     pub fn texto_inline_activo(&self) -> bool {
         self.inline.is_some()

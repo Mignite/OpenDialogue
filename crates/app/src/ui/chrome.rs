@@ -1,4 +1,4 @@
-﻿//! Cabecera de ventana propia: marca, menús, nombre del proyecto y controles.
+//! Cabecera de ventana propia: marca, menús, nombre del proyecto y controles.
 
 use crate::comandos::{Comando, MapaAtajos};
 use crate::menu;
@@ -59,13 +59,15 @@ pub fn mostrar(
 
                 // Reservar primero el sitio de los controles: si la franja de
                 // arrastre toma todo el ancho, los botones se salen del rect.
-                let ancho_botones =
-                    3.0 * tema::ANCHO_BOTON_VENTANA + tema::ALTO_CONTROL + tema::ESP_8;
+                let ancho_botones = 3.0 * tema::ANCHO_BOTON_VENTANA + tema::ESP_12;
                 let ancho_arrastre = (ui.available_width() - ancho_botones).max(4.0);
                 let (_franja, respuesta) = ui.allocate_exact_size(
                     egui::vec2(ancho_arrastre, tema::ALTO_CABECERA - 8.0),
                     egui::Sense::click_and_drag(),
                 );
+                respuesta.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "arrastrar-ventana")
+                });
                 if respuesta.drag_started() {
                     ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
                 }
@@ -93,30 +95,15 @@ pub fn mostrar(
                 }
 
                 ui.spacing_mut().item_spacing.x = 0.0;
-                let ajustes = ui
-                    .add(
-                        egui::Button::new(
-                            egui::RichText::new(super::kit::glifo(Icono::Ajustes))
-                                .font(egui::FontId::proportional(tema::TAMANO_ICONO)),
-                        )
-                        .fill(egui::Color32::TRANSPARENT)
-                        .stroke(egui::Stroke::NONE)
-                        .min_size(egui::vec2(tema::ALTO_CONTROL, tema::ALTO_BOTON_CHICO)),
-                    )
-                    .on_hover_text(textos.preferencias_tooltip);
-                if ajustes.clicked() {
-                    elegido = Some(Comando::Ajustes);
-                }
-
-                boton_ventana(ui, Icono::Minimizar, tema::TEXTO_MENU, "minimizar", || {
+                boton_ventana(ui, Icono::Minimizar, "minimizar", || {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                 });
-                boton_ventana(ui, Icono::Maximizar, tema::TEXTO_MENU, "maximizar", || {
+                boton_ventana(ui, Icono::Maximizar, "maximizar", || {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(
                         !ctx.input(|entrada| entrada.viewport().maximized.unwrap_or(false)),
                     ));
                 });
-                boton_ventana(ui, Icono::Cerrar, tema::TEXTO_MENU, "cerrar", || {
+                boton_ventana(ui, Icono::Cerrar, "cerrar", || {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 });
             });
@@ -124,41 +111,45 @@ pub fn mostrar(
     elegido
 }
 
-fn boton_ventana(
-    ui: &mut egui::Ui,
-    icono: Icono,
-    color: egui::Color32,
-    tooltip: &str,
-    accion: impl FnOnce(),
-) {
-    // Cerrar es gris en reposo y solo se pinta de rojo al pasar el ratón.
+/// Botón de ventana sin caja en reposo: solo el glifo. El realce es un chip
+/// interior para que minimizar, maximizar y cerrar no se lean como un bloque
+/// de cuadrados pegados.
+fn boton_ventana(ui: &mut egui::Ui, icono: Icono, tooltip: &str, accion: impl FnOnce()) {
+    let (rect, respuesta) = ui.allocate_exact_size(
+        egui::vec2(tema::ANCHO_BOTON_VENTANA, tema::ALTO_CABECERA),
+        egui::Sense::click(),
+    );
     let cerrar = icono == Icono::Cerrar;
-    ui.scope(|ui| {
-        ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::TRANSPARENT;
-        ui.visuals_mut().widgets.inactive.bg_stroke = egui::Stroke::NONE;
-        ui.visuals_mut().widgets.hovered.bg_fill =
-            if cerrar { tema::PELIGRO } else { tema::CONTROL };
-        ui.visuals_mut().widgets.hovered.bg_stroke = egui::Stroke::NONE;
-        let respuesta = ui.add(
-            egui::Button::new("")
-                .corner_radius(egui::CornerRadius::same(tema::RADIO_CONTROL as u8))
-                .min_size(egui::vec2(tema::ANCHO_BOTON_VENTANA, tema::ALTO_CABECERA)),
+    let realzado = respuesta.hovered() || respuesta.is_pointer_button_down_on();
+    if realzado {
+        let chip = egui::Rect::from_center_size(
+            rect.center(),
+            egui::vec2(
+                tema::ANCHO_BOTON_VENTANA - tema::ESP_8,
+                tema::ALTO_BOTON_CHICO,
+            ),
         );
-        let color_icono = if cerrar && respuesta.hovered() {
-            egui::Color32::WHITE
-        } else {
-            color
-        };
-        ui.painter().text(
-            respuesta.rect.center(),
-            egui::Align2::CENTER_CENTER,
-            super::kit::glifo(icono),
-            egui::FontId::proportional(tema::TAMANO_ICONO),
-            color_icono,
+        ui.painter().rect_filled(
+            chip,
+            tema::radio_control(),
+            if cerrar { tema::PELIGRO } else { tema::CONTROL },
         );
-        if respuesta.clicked() {
-            accion();
-        }
-        let _ = respuesta.on_hover_text(tooltip);
-    });
+    }
+    let color = if realzado {
+        egui::Color32::WHITE
+    } else {
+        tema::TEXTO_MENU
+    };
+    ui.painter().text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        super::kit::glifo(icono),
+        egui::FontId::proportional(tema::TAMANO_ICONO),
+        color,
+    );
+    if respuesta.clicked() {
+        accion();
+    }
+    respuesta.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tooltip));
+    let _ = respuesta.on_hover_text(tooltip);
 }

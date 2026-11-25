@@ -1,18 +1,15 @@
-//! Pestaña Subtítulos: barra fija, lista acotada e inspector fijo abajo.
-//!
-//! Cada zona tiene un rect explícito: los `ScrollArea` anidados se comían el
-//! alto disponible y hacían que el inspector se pintara sobre la lista.
+﻿//! Pestaña Subtítulos: búsqueda y lista a todo el alto.
+//! El texto se edita en la barra bajo el video (`ui/texto.rs`).
 
-use egui::{Event, Key, RichText, Sense, Stroke, Vec2};
+use egui::{RichText, Sense, Stroke, Vec2};
 
 use crate::comandos::Comando;
-use crate::editor_app::{CampoTiempo, EditorApp, MensajeEditor};
+use crate::editor_app::{EditorApp, MensajeEditor};
 use crate::textos::Textos;
 use crate::ui::kit::{self, Icono};
 use crate::ui::tema::{self, Estilo};
 
 const ALTO_BARRA: f32 = 36.0;
-const ALTO_INSPECTOR: f32 = 196.0;
 
 pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec<MensajeEditor> {
     let mut mensajes = Vec::new();
@@ -63,31 +60,14 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
         Stroke::new(1.0_f32, tema::BORDE),
     );
 
-    // ── Lista: alto calculado, nunca todo el panel ─────────────────────────
+    // ── Lista a todo el alto restante ──────────────────────────────────────
     let fondo = ui.max_rect().max.y;
     let y_lista = ui.cursor().top();
-    let alto_lista = (fondo - y_lista - ALTO_INSPECTOR - tema::ESP_8).max(80.0);
     let lista = egui::Rect::from_min_max(
         egui::pos2(ui.max_rect().min.x, y_lista),
-        egui::pos2(ui.max_rect().max.x, y_lista + alto_lista),
+        egui::pos2(ui.max_rect().max.x, fondo.max(y_lista + 80.0)),
     );
     dibujar_lista(ui, lista, state, textos, &mut mensajes);
-
-    // ── Inspector fijo ─────────────────────────────────────────────────────
-    ui.allocate_rect(
-        egui::Rect::from_min_max(
-            egui::pos2(lista.min.x, lista.max.y),
-            egui::pos2(lista.max.x, lista.max.y + tema::ESP_8),
-        ),
-        Sense::hover(),
-    );
-    let rect_inspector = egui::Rect::from_min_max(
-        egui::pos2(lista.min.x, lista.max.y + tema::ESP_8),
-        egui::pos2(lista.max.x, fondo),
-    );
-    ui.scope_builder(egui::UiBuilder::new().max_rect(rect_inspector), |ui| {
-        inspector(ui, state, textos, &mut mensajes);
-    });
 
     mensajes
 }
@@ -193,73 +173,48 @@ fn dibujar_lista(
                         ui.set_width(interior.width());
                         ui.vertical(|ui| {
                             ui.spacing_mut().item_spacing.y = tema::ESP_2;
-                            if let Some((id, borrador)) = state.inline.as_mut()
-                                && *id == caption.id
-                            {
-                                let id_campo = egui::Id::new(("inline", &caption.id));
-                                let respuesta = ui.add(
-                                    egui::TextEdit::singleline(borrador)
-                                        .id(id_campo)
+                            let texto = tema::acortar(&caption.texto, 48);
+                            let respuesta = ui.add(
+                                egui::Label::new(
+                                    RichText::new(&texto)
                                         .font(tema::fuente(Estilo::Base))
-                                        .desired_width(fila.width() - 8.0),
+                                        .color(tema::TEXTO),
+                                )
+                                .selectable(false),
+                            );
+                            respuesta.on_hover_text(&caption.texto);
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = tema::ESP_4;
+                                ui.label(
+                                    RichText::new(format!(
+                                        "{} → {}",
+                                        tiempo_corto(caption.inicio),
+                                        tiempo_corto(caption.fin)
+                                    ))
+                                    .font(tema::fuente(Estilo::Timecode))
+                                    .color(tema::TEXTO_3),
                                 );
-                                respuesta.request_focus();
-                                if ui.input(|entrada| entrada.key_pressed(Key::Enter)) {
-                                    mensajes.push(MensajeEditor::EditarInline(
-                                        caption.id.clone(),
-                                        borrador.clone(),
-                                    ));
-                                }
-                                if ui.input(|entrada| entrada.key_pressed(Key::Escape)) {
-                                    mensajes.push(MensajeEditor::CancelarInline);
-                                }
-                            } else {
-                                let texto = tema::acortar(&caption.texto, 48);
-                                let respuesta = ui.add(
-                                    egui::Label::new(
-                                        RichText::new(&texto)
-                                            .font(tema::fuente(Estilo::Base))
-                                            .color(tema::TEXTO),
-                                    )
-                                    .selectable(false),
+                                ui.label(
+                                    RichText::new(crate::editor_app::duracion_texto(
+                                        caption.inicio,
+                                        caption.fin,
+                                    ))
+                                    .font(tema::fuente(Estilo::Pequeno))
+                                    .color(tema::TEXTO_3),
                                 );
-                                respuesta.on_hover_text(&caption.texto);
-                                ui.horizontal(|ui| {
-                                    ui.spacing_mut().item_spacing.x = tema::ESP_4;
-                                    ui.label(
-                                        RichText::new(format!(
-                                            "{} → {}",
-                                            tiempo_corto(caption.inicio),
-                                            tiempo_corto(caption.fin)
-                                        ))
-                                        .font(tema::fuente(Estilo::Timecode))
-                                        .color(tema::TEXTO_3),
-                                    );
-                                    ui.label(
-                                        RichText::new(crate::editor_app::duracion_texto(
-                                            caption.inicio,
-                                            caption.fin,
-                                        ))
-                                        .font(tema::fuente(Estilo::Pequeno))
-                                        .color(tema::TEXTO_3),
-                                    );
-                                });
-                                // El lápiz se coloca en un rect explícito: un
-                                // `add_space(available - ancho)` desbordaba el
-                                // min_rect del SidePanel 1 px por frame.
-                                let boton = egui::Rect::from_min_max(
-                                    egui::pos2(
-                                        fila.max.x - tema::ALTO_CHIP - tema::ESP_4,
-                                        fila.max.y - tema::ALTO_CHIP - tema::ESP_2,
-                                    ),
-                                    egui::pos2(fila.max.x - tema::ESP_4, fila.max.y - tema::ESP_2),
-                                );
-                                if kit::icon_button_en(ui, boton, Icono::Editar, textos.editar)
-                                    .clicked()
-                                {
-                                    state.inline =
-                                        Some((caption.id.clone(), caption.texto.clone()));
-                                }
+                            });
+                            let boton = egui::Rect::from_min_max(
+                                egui::pos2(
+                                    fila.max.x - tema::ALTO_CHIP - tema::ESP_4,
+                                    fila.max.y - tema::ALTO_CHIP - tema::ESP_2,
+                                ),
+                                egui::pos2(fila.max.x - tema::ESP_4, fila.max.y - tema::ESP_2),
+                            );
+                            if kit::icon_button_en(ui, boton, Icono::Editar, textos.editar)
+                                .clicked()
+                            {
+                                mensajes.push(MensajeEditor::Seleccionar(caption.id.clone()));
+                                mensajes.push(MensajeEditor::Comando(Comando::EditarTexto));
                             }
                         });
                     });
@@ -268,7 +223,8 @@ fn dibujar_lista(
                         mensajes.push(MensajeEditor::Seleccionar(caption.id.clone()));
                     }
                     if respuesta.double_clicked() {
-                        state.inline = Some((caption.id.clone(), caption.texto.clone()));
+                        mensajes.push(MensajeEditor::Seleccionar(caption.id.clone()));
+                        mensajes.push(MensajeEditor::Comando(Comando::EditarTexto));
                     }
                 }
             });
@@ -284,183 +240,4 @@ fn tiempo_corto(segundos: f64) -> String {
         (centesimas / 100) % 60,
         centesimas % 100
     )
-}
-
-/// Inspector fijo: controles arriba y texto en el espacio libre de abajo.
-fn inspector(
-    ui: &mut egui::Ui,
-    state: &mut EditorApp,
-    textos: &Textos,
-    mensajes: &mut Vec<MensajeEditor>,
-) {
-    let Some(id) = state.editor.seleccion.first().cloned() else {
-        ui.add_space(tema::ESP_16);
-        ui.label(
-            RichText::new(textos.sin_seleccion)
-                .font(tema::fuente(Estilo::Base))
-                .color(tema::TEXTO_3),
-        );
-        return;
-    };
-
-    // Fila de controles, 28 px.
-    ui.allocate_ui_with_layout(
-        Vec2::new(ui.available_width(), tema::ALTO_CONTROL),
-        egui::Layout::left_to_right(egui::Align::Center),
-        |ui| {
-            ui.spacing_mut().item_spacing.x = tema::ESP_4;
-            let nombre = state
-                .editor
-                .proyecto()
-                .captions
-                .iter()
-                .find(|caption| caption.id == id)
-                .and_then(|caption| caption.hablante_id.clone())
-                .and_then(|hablante_id| {
-                    state
-                        .editor
-                        .proyecto()
-                        .hablantes
-                        .iter()
-                        .enumerate()
-                        .find(|(_, hablante)| hablante.id == hablante_id)
-                        .map(|(indice, hablante)| {
-                            (
-                                hablante.nombre.clone(),
-                                tema::color(rod_core::color_identidad(hablante, indice)),
-                            )
-                        })
-                })
-                .unwrap_or_else(|| (textos.sin_hablante.to_owned(), tema::TEXTO_3));
-            egui::ComboBox::from_id_salt("hablante-inspector")
-                .selected_text(RichText::new(nombre.0).color(nombre.1))
-                .show_ui(ui, |ui| {
-                    if ui.button(textos.sin_hablante).clicked() {
-                        mensajes.push(MensajeEditor::AsignarHablante(None));
-                    }
-                    for hablante in &state.editor.proyecto().hablantes {
-                        if ui.button(&hablante.nombre).clicked() {
-                            mensajes
-                                .push(MensajeEditor::AsignarHablante(Some(hablante.id.clone())));
-                        }
-                    }
-                });
-            if kit::icon_button(
-                ui,
-                Icono::Papelera,
-                false,
-                textos.comando(Comando::Eliminar),
-                None,
-            )
-            .clicked()
-            {
-                mensajes.push(MensajeEditor::BorrarSeleccion);
-            }
-            if kit::icon_button(ui, Icono::Dividir, false, textos.divisor, None).clicked() {
-                mensajes.push(MensajeEditor::Comando(Comando::Dividir));
-            }
-            if kit::icon_button(ui, Icono::Unir, false, textos.unir_siguiente, None).clicked() {
-                mensajes.push(MensajeEditor::UnirConSiguiente(id.clone()));
-            }
-        },
-    );
-
-    // Entrada / salida con botones de un cuadro.
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = tema::ESP_4;
-        tema::etiqueta(ui, textos.entrada);
-        if kit::campo_tiempo(ui, &mut state.borrador_inicio, false).changed() {
-            mensajes.push(MensajeEditor::EditarTiempo(
-                id.clone(),
-                CampoTiempo::Entrada,
-                state.borrador_inicio.clone(),
-            ));
-        }
-        tema::etiqueta(ui, textos.salida);
-        if kit::campo_tiempo(ui, &mut state.borrador_fin, false).changed() {
-            mensajes.push(MensajeEditor::EditarTiempo(
-                id.clone(),
-                CampoTiempo::Salida,
-                state.borrador_fin.clone(),
-            ));
-        }
-    });
-
-    ui.add_space(tema::ESP_8);
-    // Texto: Enter termina la edición, Shift+Enter añade línea.
-    let id_texto = egui::Id::new(("inspector-texto", &id));
-    let enter_fin = ui.input(|entrada| {
-        !entrada.modifiers.shift
-            && entrada.events.iter().any(|evento| {
-                matches!(
-                    evento,
-                    Event::Key {
-                        key: Key::Enter,
-                        pressed: true,
-                        ..
-                    }
-                )
-            })
-    });
-    if enter_fin {
-        ui.input_mut(|entrada| {
-            entrada.events.retain(|evento| {
-                !matches!(
-                    evento,
-                    Event::Key {
-                        key: Key::Enter,
-                        ..
-                    }
-                )
-            })
-        });
-        ui.memory_mut(|memoria| memoria.surrender_focus(id_texto));
-    }
-    let ancho = ui.available_width();
-    let alto = (ui.available_height() - 28.0).max(40.0);
-    ui.allocate_ui_with_layout(
-        Vec2::new(ancho, alto),
-        egui::Layout::top_down(egui::Align::LEFT),
-        |ui| {
-            let respuesta = ui.add(
-                egui::TextEdit::multiline(&mut state.borrador)
-                    .id(id_texto)
-                    .hint_text("Texto del subtítulo")
-                    .font(tema::fuente(Estilo::Cuerpo))
-                    .desired_width(ancho - 8.0),
-            );
-            if respuesta.changed() {
-                mensajes.push(MensajeEditor::EditarEnVivo(
-                    id.clone(),
-                    state.borrador.clone(),
-                ));
-            }
-            if respuesta.lost_focus() {
-                mensajes.push(MensajeEditor::TerminarEdicionTexto);
-            }
-        },
-    );
-
-    let inicio = rod_core::parse_time_input(&state.borrador_inicio).unwrap_or(0.0);
-    let fin = rod_core::parse_time_input(&state.borrador_fin).unwrap_or(inicio);
-    let duracion = fin - inicio;
-    let caracteres = state.borrador.chars().count();
-    let cps = if duracion > 0.0 {
-        caracteres as f64 / duracion
-    } else {
-        0.0
-    } as f32;
-    ui.horizontal(|ui| {
-        ui.label(
-            RichText::new(format!("{caracteres} · {cps:.1} CPS"))
-                .font(tema::fuente(Estilo::Pequeno))
-                .color(
-                    if cps > tema::CPS_MAXIMO || caracteres > tema::CARACTERES_MAXIMOS {
-                        tema::AMBAR
-                    } else {
-                        tema::TEXTO_3
-                    },
-                ),
-        );
-    });
 }

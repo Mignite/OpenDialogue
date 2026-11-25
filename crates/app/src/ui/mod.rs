@@ -3,6 +3,7 @@
 
 pub mod ajustes;
 pub mod atajos;
+pub mod borde;
 pub mod chrome;
 pub mod editor;
 pub mod iconos;
@@ -11,6 +12,7 @@ pub mod kit;
 pub mod paneles;
 pub mod repintado;
 pub mod tema;
+pub mod texto;
 pub mod timeline;
 pub mod tipografia;
 pub mod toast;

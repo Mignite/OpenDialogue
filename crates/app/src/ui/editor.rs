@@ -51,6 +51,11 @@ impl From<&Preferencias> for MedidasEditor {
     }
 }
 
+/// Alto de la timeline: el campo de texto puede quitarle altura al crecer.
+pub fn alto_timeline(state: &EditorApp, medidas: &MedidasEditor, _animacion: f32) -> f32 {
+    (medidas.alto_timeline - crate::ui::texto::alto_extra(state)).max(160.0)
+}
+
 /// Distribución: inspector a la derecha, timeline abajo, monitor al centro.
 pub fn show(
     ctx: &egui::Context,
@@ -99,10 +104,12 @@ pub fn show(
             .clamp(tema::ANCHO_PANEL_MIN, tema::ANCHO_PANEL_MAX);
     }
 
+    let alto_abajo = alto_timeline(state, medidas, tema::ANIMACION);
     let abajo = egui::TopBottomPanel::bottom("timeline")
         .resizable(true)
-        .default_height(medidas.alto_timeline)
+        .default_height(alto_abajo)
         .min_height(160.0)
+        .max_height(alto_abajo)
         .frame(tema::panel(tema::FONDO))
         .show(ctx, |ui| {
             kit::panel_header(ui, textos.timeline);

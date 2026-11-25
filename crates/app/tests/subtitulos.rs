@@ -1,6 +1,7 @@
 use egui::Key;
 use egui_kittest::kittest::Queryable;
-use rod_app::editor_app::EditorApp;
+use rod_app::comandos::Comando;
+use rod_app::editor_app::{EditorApp, MensajeEditor};
 use rod_app::textos::ES;
 
 fn editor() -> EditorApp {
@@ -21,14 +22,20 @@ fn editor() -> EditorApp {
 }
 
 #[test]
-fn doble_clic_abre_editor_y_escape_no_cambia_el_texto() {
+fn lapiz_en_fila_enfoca_la_barra_y_escape_no_cambia_el_texto() {
     let mut h = egui_kittest::Harness::builder()
         .with_size(egui::vec2(1440.0, 900.0))
         .build_ui_state(
             |ui, editor: &mut EditorApp| {
                 for mensaje in rod_app::ui::paneles::subtitulos::mostrar(ui, editor, &ES) {
-                    rod_app::editor_app::update(editor, mensaje);
+                    match mensaje {
+                        MensajeEditor::Comando(Comando::EditarTexto) => editor.texto.foco = true,
+                        otro => {
+                            rod_app::editor_app::update(editor, otro);
+                        }
+                    }
                 }
+                let _ = rod_app::ui::texto::mostrar(ui, editor, &ES);
             },
             editor(),
         );
@@ -36,11 +43,10 @@ fn doble_clic_abre_editor_y_escape_no_cambia_el_texto() {
     h.get_by_label(rod_app::ui::kit::glifo(rod_app::ui::kit::Icono::Editar))
         .click();
     h.run();
-    assert!(h.state().texto_inline_activo());
-    // El campo inline debe tomar el foco: si no, escribir dispara atajos.
+    assert!(h.state().texto.foco);
     assert!(h.ctx.memory(|memoria| memoria.focused().is_some()));
     h.key_press(Key::Escape);
     h.run();
     assert_eq!(h.state().proyecto().captions[0].texto, "texto original");
-    assert!(!h.state().texto_inline_activo());
+    assert!(!h.state().texto.foco);
 }

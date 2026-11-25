@@ -150,12 +150,14 @@ mod tests {
     }
 
     #[test]
-    fn en_inicio_solo_hay_tres_acciones_habilitadas() {
-        let habilitadas = TODOS
+    fn en_inicio_hay_acciones_de_archivo_ayuda_y_ajustes() {
+        let habilitadas: Vec<_> = TODOS
             .iter()
             .copied()
             .filter(|comando| comandos::disponible_en_inicio(*comando))
-            .count();
-        assert_eq!(habilitadas, 3);
+            .collect();
+        assert_eq!(habilitadas.len(), 4);
+        assert!(habilitadas.contains(&Comando::Ajustes));
+        assert!(habilitadas.contains(&Comando::AbrirProyecto));
     }
 }

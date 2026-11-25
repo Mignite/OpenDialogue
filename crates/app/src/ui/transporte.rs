@@ -14,7 +14,6 @@ pub fn mostrar(
     textos: &Textos,
     atajos: &MapaAtajos,
 ) -> Vec<MensajeEditor> {
-    let _ = textos;
     let _ = atajos;
     let mut mensajes = Vec::new();
     ui.horizontal_centered(|ui| {
@@ -63,6 +62,9 @@ pub fn mostrar(
                 .font(tema::fuente(Estilo::Pequeno))
                 .color(tema::TEXTO_3),
         );
+
+        ui.add_space(tema::ESP_8);
+        mensajes.extend(crate::ui::texto::mostrar(ui, state, textos));
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             egui::ComboBox::from_id_salt("velocidad")
