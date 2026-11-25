@@ -97,6 +97,10 @@ pub fn mezclar(a: Color32, b: Color32, t: f32) -> Color32 {
 pub fn radio_superficie() -> egui::CornerRadius {
     egui::CornerRadius::same(RADIO_SUPERFICIE as u8)
 }
+
+pub fn radio_control() -> egui::CornerRadius {
+    egui::CornerRadius::same(RADIO_CONTROL as u8)
+}
 pub const ESP_72: f32 = 72.0;
 
 pub const ALTO_CHIP: f32 = 24.0;

@@ -1,4 +1,4 @@
-//! Componentes compartidos. Ningún widget suelto en las vistas: tamaños,
+﻿//! Componentes compartidos. Ningún widget suelto en las vistas: tamaños,
 //! colores y tipografía vienen siempre de `tema`.
 
 use egui::{Color32, CornerRadius, FontId, Response, RichText, Sense, Stroke, Ui, Vec2};
@@ -45,6 +45,7 @@ pub enum Icono {
     Rayo,
     Dividir,
     Unir,
+    Editar,
 }
 
 impl Icono {
@@ -85,6 +86,7 @@ impl Icono {
         Icono::Rayo,
         Icono::Dividir,
         Icono::Unir,
+        Icono::Editar,
     ];
 }
 
@@ -128,6 +130,7 @@ pub fn glifo(icono: Icono) -> &'static str {
         Icono::Rayo => r::LIGHTNING,
         Icono::Dividir => r::SCISSORS,
         Icono::Unir => r::ARROWS_MERGE,
+        Icono::Editar => r::PENCIL,
     }
 }
 

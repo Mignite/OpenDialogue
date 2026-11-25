@@ -133,6 +133,13 @@ fn capturar_editor(
     let mut app = app;
     if let Some(panel) = panel {
         rod_app::editor_app::update(&mut app, rod_app::editor_app::MensajeEditor::Panel(panel));
+        if panel == rod_app::editor_app::Panel::Subtitulos {
+            let id = app.proyecto().captions[0].id.clone();
+            rod_app::editor_app::update(
+                &mut app,
+                rod_app::editor_app::MensajeEditor::Seleccionar(id),
+            );
+        }
     }
     let mut harness = Harness::builder()
         .wgpu()

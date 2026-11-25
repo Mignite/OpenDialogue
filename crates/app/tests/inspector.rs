@@ -1,4 +1,4 @@
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use rod_app::comandos::Comando;
 use rod_app::editor_app::{EditorApp, MensajeEditor};
 use rod_app::textos::ES;
@@ -76,4 +76,49 @@ fn borrar_muestra_toast_y_deshacer_restaura() {
     th.get_by_label(ES.comando(Comando::Deshacer)).click();
     th.run();
     assert!(th.state().1);
+}
+
+#[test]
+fn shift_enter_deja_linea_y_enter_termina_la_edicion() {
+    let app = editor();
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(1440.0, 900.0))
+        .build_ui_state(
+            |ui, editor: &mut EditorApp| {
+                for mensaje in rod_app::ui::paneles::subtitulos::mostrar(ui, editor, &ES) {
+                    rod_app::editor_app::update(editor, mensaje);
+                }
+            },
+            app,
+        );
+    h.run();
+    // La etiqueta de la fila y el campo comparten valor; el campo tiene hijos.
+    h.query_all_by_value("texto original")
+        .find(|nodo| nodo.children().count() > 0)
+        .expect("campo de texto del inspector")
+        .click();
+    h.run();
+    assert!(h.ctx.memory(|memoria| memoria.focused().is_some()));
+
+    h.query_all_by_value("texto original")
+        .find(|nodo| nodo.children().count() > 0)
+        .expect("campo de texto del inspector")
+        .type_text(" Hola");
+    h.run();
+    h.key_press_modifiers(egui::Modifiers::SHIFT, egui::Key::Enter);
+    h.run();
+    h.query_all_by_value("texto original Hola\n")
+        .find(|nodo| nodo.children().count() > 0)
+        .expect("campo de texto del inspector")
+        .type_text("mundo");
+    h.run();
+    assert_eq!(
+        h.state().proyecto().captions[0].texto,
+        "texto original Hola\nmundo"
+    );
+    assert!(h.ctx.memory(|memoria| memoria.focused().is_some()));
+
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert!(h.ctx.memory(|memoria| memoria.focused().is_none()));
 }

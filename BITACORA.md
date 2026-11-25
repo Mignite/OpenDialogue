@@ -17,6 +17,13 @@
   pestañas de 36 px con badges; lista con búsqueda y panel fijo de inspector;
   Speakers con tarjetas y paleta saturada en popover; Styles con vista previa
   y campos rotulados; `Apply` desaparece (edición en vivo).
+- Corrección de la lista de subtítulos: el `ScrollArea` anidado comía el alto
+  y el inspector se pintaba encima. Ahora cada zona tiene un rect explícito
+  (barra 36 px / lista acotada / inspector fijo); las filas son de 44 px con
+  la barra de hablante desplazada del texto, y el CPS se calcula con
+  `parse_time_input` (antes `parse::<f64>` daba 20000 CPS). El editor de texto
+  vive en el espacio libre del inspector: Enter termina, Shift+Enter añade
+  línea; cubierto por un test de kittest.
 - Scrubbing: tiempo de UI optimista al arrastrar, redondeado al cuadro, seek
   último-gana y el decoder no sobreescribe mientras se arrastra.
 - Pendiente del rediseño del panel: diálogo completo de importación con

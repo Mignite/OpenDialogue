@@ -1,4 +1,4 @@
-﻿use egui::Key;
+use egui::Key;
 use egui_kittest::kittest::Queryable;
 use rod_app::editor_app::EditorApp;
 use rod_app::textos::ES;
@@ -33,7 +33,8 @@ fn doble_clic_abre_editor_y_escape_no_cambia_el_texto() {
             editor(),
         );
     h.run();
-    h.get_by_label("Editar").click();
+    h.get_by_label(rod_app::ui::kit::glifo(rod_app::ui::kit::Icono::Editar))
+        .click();
     h.run();
     assert!(h.state().texto_inline_activo());
     // El campo inline debe tomar el foco: si no, escribir dispara atajos.
