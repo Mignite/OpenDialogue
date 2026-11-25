@@ -319,6 +319,7 @@ impl eframe::App for RustyDialogue {
                 !editor_app::pausado(editor),
                 editor_app::sucio(editor),
                 editor_app::buscando(editor),
+                editor.scrubbing(),
             ),
             Pantalla::Inicio(_) => None,
         };

@@ -54,7 +54,7 @@ pub fn mostrar(
 
         ui.add_space(tema::ESP_8);
         ui.label(
-            RichText::new(rod_core::format_time(state.position))
+            RichText::new(rod_core::format_time(state.tiempo_ui()))
                 .font(tema::fuente(Estilo::TimecodeGrande))
                 .color(tema::TEXTO),
         );

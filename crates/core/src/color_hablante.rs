@@ -1,4 +1,4 @@
-//! Color efectivo de un hablante en la UI.
+﻿//! Color efectivo de un hablante en la UI.
 
 use crate::{Hablante, PresetAss};
 
@@ -11,8 +11,8 @@ use crate::{Hablante, PresetAss};
 /// accesibles sobre fondo oscuro; el azul de acento queda reservado.
 pub fn paleta_identidad() -> &'static [&'static str] {
     &[
-        "#FF8A6B", "#F2B84B", "#C9D45C", "#A8E06B", "#7BD17F", "#3FC4B8", "#7FE0E8", "#6BB6F0",
-        "#8FA9FF", "#B39BFF", "#E0A8F0", "#F27BB5",
+        "#FF6B4A", "#FFB020", "#C8E02B", "#34D36B", "#00C9A7", "#22D3EE", "#4FA8FF", "#6C7BFF",
+        "#8F6BFF", "#D86BFF", "#FF4FA3", "#FF5C7A",
     ]
 }
 
@@ -148,9 +148,9 @@ mod tests {
     fn un_color_de_paleta_guardado_manda_sobre_el_indice() {
         use super::color_identidad;
 
-        let h = hablante_color(Some("#F27BB5"));
-        assert_eq!(color_identidad(&h, 0), "#F27BB5");
-        assert_eq!(color_identidad(&h, 5), "#F27BB5");
+        let h = hablante_color(Some("#FF4FA3"));
+        assert_eq!(color_identidad(&h, 0), "#FF4FA3");
+        assert_eq!(color_identidad(&h, 5), "#FF4FA3");
     }
 
     #[test]

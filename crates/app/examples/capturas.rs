@@ -92,7 +92,13 @@ fn guardar<S>(harness: &mut Harness<'_, S>, nombre: &str) {
     println!("{}", ruta.display());
 }
 
-fn capturar_editor(nombre: &str, ancho: f32, alto: f32, idioma: rod_app::textos::Idioma) {
+fn capturar_editor(
+    nombre: &str,
+    ancho: f32,
+    alto: f32,
+    idioma: rod_app::textos::Idioma,
+    panel: Option<rod_app::editor_app::Panel>,
+) {
     let video = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../testdata/clip-15s-2audio.mp4"
@@ -124,6 +130,10 @@ fn capturar_editor(nombre: &str, ancho: f32, alto: f32, idioma: rod_app::textos:
         &std::env::temp_dir(),
     )
     .expect("abre el clip de prueba");
+    let mut app = app;
+    if let Some(panel) = panel {
+        rod_app::editor_app::update(&mut app, rod_app::editor_app::MensajeEditor::Panel(panel));
+    }
     let mut harness = Harness::builder()
         .wgpu()
         .with_size(egui::vec2(ancho, alto))
@@ -270,6 +280,28 @@ fn main() {
         );
     }
 
+    if fase == "paneles" {
+        for (nombre, panel) in [
+            (
+                "despues-panel-subtitulos",
+                rod_app::editor_app::Panel::Subtitulos,
+            ),
+            (
+                "despues-panel-hablantes",
+                rod_app::editor_app::Panel::Hablantes,
+            ),
+            ("despues-panel-estilos", rod_app::editor_app::Panel::Estilos),
+        ] {
+            capturar_editor(
+                nombre,
+                1440.0,
+                900.0,
+                rod_app::textos::Idioma::En,
+                Some(panel),
+            );
+        }
+    }
+
     if fase == "finales" {
         for ancho in [1100.0, 1440.0, 2560.0] {
             let alto = if ancho == 1100.0 { 700.0 } else { 900.0 };
@@ -291,6 +323,7 @@ fn main() {
                 ancho,
                 alto,
                 rod_app::textos::Idioma::En,
+                None,
             );
         }
         capturar(

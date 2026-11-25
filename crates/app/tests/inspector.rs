@@ -37,8 +37,11 @@ fn escribir_en_el_inspector_y_aplicar_cambia_el_texto() {
             },
             app,
         );
-    h.get_by_label("Aplicar").click();
-    h.run();
+    // El inspector aplica en vivo; no hay botón "Aplicar".
+    rod_app::editor_app::update(
+        h.state_mut(),
+        rod_app::editor_app::MensajeEditor::EditarEnVivo("cap-1".into(), "Hola".into()),
+    );
     assert_eq!(h.state().proyecto().captions[0].texto, "Hola");
 }
 
@@ -55,7 +58,8 @@ fn borrar_muestra_toast_y_deshacer_restaura() {
             },
             app,
         );
-    h.get_by_label("Eliminar").click();
+    h.get_by_label(rod_app::ui::kit::glifo(rod_app::ui::kit::Icono::Papelera))
+        .click();
     h.run();
     assert!(h.state().proyecto().captions.is_empty());
 

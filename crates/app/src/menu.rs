@@ -17,6 +17,7 @@ const TODOS: &[Comando] = &[
     Comando::AbrirProyecto,
     Comando::Guardar,
     Comando::GuardarComo,
+    Comando::CargarSrt,
     Comando::Deshacer,
     Comando::Rehacer,
     Comando::Dividir,

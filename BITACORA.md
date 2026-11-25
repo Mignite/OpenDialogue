@@ -13,6 +13,16 @@
 - kittest no ejecuta el `PaintCallback` de mpv: las capturas finales del editor
   son headless con el monitor vacío. El «antes» real con video quedó en
   `docs/checklists/rediseno/antes-editor-1440.png`.
+- Panel derecho: ancho común 360/300/520 persistido; sin título duplicado;
+  pestañas de 36 px con badges; lista con búsqueda y panel fijo de inspector;
+  Speakers con tarjetas y paleta saturada en popover; Styles con vista previa
+  y campos rotulados; `Apply` desaparece (edición en vivo).
+- Scrubbing: tiempo de UI optimista al arrastrar, redondeado al cuadro, seek
+  último-gana y el decoder no sobreescribe mientras se arrastra.
+- Pendiente del rediseño del panel: diálogo completo de importación con
+  detección de codificación/desfase/mapeo, toast del `.srt` vecino, campos de
+  mayúsculas/fondo en estilos, mute/solo reales y scroll automático de la
+  selección. Los puntos de entrada (menú, Ctrl+Shift+I y estado vacío) sí están.
 - Inicio (pulido): fila de Recientes con etiqueta espaciada, filtro y See all;
   grilla de 3/2/1 columnas con celdas posicionadas a mano (el `Grid` y el
   `horizontal_wrapped` escalonaban las tarjetas); tarjetas con meta a la

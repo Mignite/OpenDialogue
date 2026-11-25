@@ -14,5 +14,5 @@ fn el_menu_es_compacto_y_solo_muestra_etiquetas() {
     // Menú corto: sin columna de atajos (ésos están en Ajustes).
     harness.get_by_label("Guardar");
     assert_eq!(harness.query_all_by_label("Ctrl+S").count(), 0);
-    assert_eq!(harness.query_all_by_label("Cargar SRT").count(), 0);
+    harness.get_by_label("Cargar SRT");
 }

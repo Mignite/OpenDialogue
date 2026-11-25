@@ -1,4 +1,4 @@
-﻿//! Vista del editor en egui. Compone el preview, la barra de transporte, los
+//! Vista del editor en egui. Compone el preview, la barra de transporte, los
 //! paneles laterales y la barra de estado. Devuelve **todos** los mensajes del
 //! frame: sobrescribirlos habría dejado los botones inertes.
 
@@ -26,7 +26,7 @@ pub struct MedidasEditor {
 impl Default for MedidasEditor {
     fn default() -> Self {
         Self {
-            ancho_panel: 320.0,
+            ancho_panel: tema::ANCHO_PANEL_DEFECTO,
             alto_timeline: 260.0,
             panel_visible: true,
         }
@@ -60,32 +60,28 @@ pub fn show(
         let lado = egui::SidePanel::right("inspector")
             .resizable(true)
             .default_width(medidas.ancho_panel)
-            .min_width(280.0)
-            .max_width(420.0)
+            .min_width(tema::ANCHO_PANEL_MIN)
+            .max_width(tema::ANCHO_PANEL_MAX)
             .frame(tema::panel(tema::PANEL))
             .show(ctx, |ui| {
-                let titulo = match state.panel {
-                    Panel::Subtitulos => textos.tab_subtitulos,
-                    Panel::Hablantes => textos.tab_hablantes,
-                    Panel::Estilos => textos.tab_estilos,
-                };
-                kit::panel_header(ui, titulo);
+                let lineas = state.editor.proyecto().captions.len();
+                let hablantes = state.editor.proyecto().hablantes.len();
                 if let Some(panel) = kit::tab_bar(
                     ui,
                     &[
-                        (Panel::Subtitulos, textos.tab_subtitulos, None),
-                        (Panel::Hablantes, textos.tab_hablantes, None),
+                        (Panel::Subtitulos, textos.tab_subtitulos, Some(lineas)),
+                        (Panel::Hablantes, textos.tab_hablantes, Some(hablantes)),
                         (Panel::Estilos, textos.tab_estilos, None),
                     ],
                     state.panel,
                 ) {
                     mensajes.push(MensajeEditor::Panel(panel));
                 }
-                egui::ScrollArea::vertical().show(ui, |ui| match state.panel {
+                match state.panel {
                     Panel::Subtitulos => mensajes.extend(subtitulos::mostrar(ui, state, textos)),
-                    Panel::Hablantes => mensajes.extend(hablantes::mostrar(ui, state)),
-                    Panel::Estilos => mensajes.extend(estilos::mostrar(ui, state)),
-                });
+                    Panel::Hablantes => mensajes.extend(hablantes::mostrar(ui, state, textos)),
+                    Panel::Estilos => mensajes.extend(estilos::mostrar(ui, state, textos)),
+                }
             });
         medidas.ancho_panel = lado.response.rect.width();
     }

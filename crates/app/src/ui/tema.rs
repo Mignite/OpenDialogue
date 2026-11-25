@@ -65,6 +65,18 @@ pub const ANCHO_FILTRO: f32 = 160.0;
 pub const ALTO_TARJETA: f32 = 210.0;
 pub const ALTO_BOTON_CHICO: f32 = 28.0;
 pub const GROSOR_PUNTEADO: f32 = 1.5;
+pub const ANCHO_PANEL_DEFECTO: f32 = 360.0;
+pub const ANCHO_PANEL_MIN: f32 = 300.0;
+pub const ANCHO_PANEL_MAX: f32 = 520.0;
+pub const ALTO_TABS: f32 = 36.0;
+pub const SEPARACION_TABS: f32 = 16.0;
+pub const ALTO_TARJETA_HABLANTE: f32 = 56.0;
+pub const TAMANO_PUNTO_GRANDE: f32 = 12.0;
+pub const GROSOR_BARRA_HABLANTE: f32 = 3.0;
+/// Fondo de la fila seleccionada en la lista de subtítulos.
+pub const SELECCION_FILA: Color32 = Color32::from_rgb(0x2C, 0x3A, 0x52);
+pub const CPS_MAXIMO: f32 = 17.0;
+pub const CARACTERES_MAXIMOS: usize = 42;
 /// Fondo de la zona de arrastre.
 pub const FONDO_ZONA: Color32 = Color32::from_rgb(0x1E, 0x1E, 0x1E);
 /// Duración de las transiciones de hover.
@@ -298,17 +310,13 @@ pub fn chip(ui: &mut egui::Ui, texto: &str, color: Color32) {
 
 /// Etiqueta de sección: 11 px, medium, gris terciario.
 pub fn etiqueta(ui: &mut egui::Ui, texto: impl Into<String>) {
-    // Helper heredado: usa una familia siempre disponible porque las vistas
-    // antiguas se pintan en tests sin `aplicar`. El kit usará el estilo con
-    // nombre en cuanto sustituya a este helper.
-    ui.add(
-        egui::Label::new(
-            egui::RichText::new(texto.into())
-                .font(egui::FontId::proportional(11.0))
-                .color(TEXTO_3),
-        )
-        .selectable(false),
-    );
+    let fuente_etiqueta = fuente(Estilo::Pequeno);
+    let mut trabajo =
+        egui::text::LayoutJob::simple_singleline(texto.into(), fuente_etiqueta.clone(), TEXTO_2);
+    if let Some(seccion) = trabajo.sections.first_mut() {
+        seccion.format.extra_letter_spacing = fuente_etiqueta.size * LETRA_ESPACIADO;
+    }
+    ui.add(egui::Label::new(trabajo).selectable(false));
 }
 
 #[cfg(test)]

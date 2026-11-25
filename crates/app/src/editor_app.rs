@@ -95,12 +95,20 @@ pub enum MensajeEditor {
     /// Confirmación de la edición inline de una fila (id, texto nuevo).
     EditarInline(String, String),
     CancelarInline,
+    /// Aplicación en vivo del inspector (un paso de deshacer por sesión).
+    EditarEnVivo(String, String),
+    TerminarEdicionTexto,
+    UnirConSiguiente(String),
+    SeleccionarTodosHablante(String),
     /// Entrada/salida del caption seleccionado. Se aplica al confirmar; un
     /// valor inválido o invertido se descarta sin tocar el proyecto.
     EditarTiempo(String, CampoTiempo, String),
     BorradorInicio(String),
     BorradorFin(String),
     AgregarHablante,
+    DuplicarHablante(String),
+    AlternarMute(String),
+    AlternarSolo(String),
     /// Edición en vivo de un hablante: el campo decide qué se toca.
     EditarHablante(String, CampoHablante, String),
     BorrarHablante(String),
@@ -108,6 +116,8 @@ pub enum MensajeEditor {
     AsignarHablante(Option<String>),
     /// Cambia el preset `.ass` de un hablante (`None` = sin preset).
     AsignarPreset(String, Option<String>),
+    /// Aplica un preset a los hablantes de los captions seleccionados.
+    AplicarPresetSeleccion(String),
     /// Pestaña de la columna derecha.
     Panel(Panel),
     /// Preset abierto en el panel de estilos.
@@ -122,6 +132,10 @@ pub enum MensajeEditor {
     Zoom(f64),
     /// El usuario enciende o apaga el seguimiento del playhead.
     Seguir,
+    /// Scrubbing optimista: la UI manda y el decoder sigue al último objetivo.
+    ScrubInicio(f64),
+    ScrubMover(f64),
+    ScrubFin(f64),
     /// Modificadores del teclado, para que la rueda sepa si hay Shift.
     Modificadores(egui::Modifiers),
     /// Abre un `.cdp`: proyecto, video y playhead.
@@ -171,6 +185,15 @@ pub struct EditorApp {
     pub(crate) borrador: String,
     /// Fila en edición inline: (id del caption, borrador).
     pub inline: Option<(String, String)>,
+    /// Tiempo optimista mientras se arrastra el playhead.
+    pub scrub_ui_time: Option<f64>,
+    /// Texto buscado en la pestaña de subtítulos.
+    pub busqueda_subtitulos: String,
+    /// Sesión de edición en vivo del inspector (para un solo paso de deshacer).
+    pub editando_texto: Option<String>,
+    /// Hablantes silenciados / en solo, estado de UI.
+    pub mute_hablantes: std::collections::HashSet<String>,
+    pub solo_hablantes: std::collections::HashSet<String>,
     /// Picos de la waveform, cuando el análisis en hilo terminó.
     pub picos: Option<rod_player::waveform::Picos>,
     pub rx_picos: Option<
@@ -253,6 +276,16 @@ impl EditorApp {
     /// Hay una fila en edición inline.
     pub fn texto_inline_activo(&self) -> bool {
         self.inline.is_some()
+    }
+
+    /// Tiempo que debe mostrar la UI (optimista mientras se arrastra).
+    pub fn tiempo_ui(&self) -> f64 {
+        self.scrub_ui_time.unwrap_or(self.position)
+    }
+
+    /// Está arrastrando el playhead: hay que repintar cada frame.
+    pub fn scrubbing(&self) -> bool {
+        self.scrub_ui_time.is_some()
     }
 
     /// Posición del playhead, para el transporte y las pruebas.
@@ -359,6 +392,11 @@ impl EditorApp {
             portapapeles: String::new(),
             pendiente_srt: None,
             borradores_hablante: HashMap::new(),
+            scrub_ui_time: None,
+            busqueda_subtitulos: String::new(),
+            editando_texto: None,
+            mute_hablantes: std::collections::HashSet::new(),
+            solo_hablantes: std::collections::HashSet::new(),
             picos: None,
             rx_picos: Some(rod_player::waveform::analizar_en_hilo(ruta_audio)),
         };
@@ -584,6 +622,12 @@ fn cargar_proyecto(
 
 /// Mueve el reproductor al segundo pedido. Un clic en la regla o en un hueco
 /// del carril no es una edición: no toca el proyecto ni el historial.
+/// Redondea al cuadro (25 fps por defecto) y acota a la duración.
+fn snap_a_frame(tiempo: f64, duracion: f64) -> f64 {
+    let cuadro = 1.0 / 25.0;
+    ((tiempo / cuadro).round() * cuadro).clamp(0.0, duracion.max(0.0))
+}
+
 fn buscar(state: &mut EditorApp, tiempo: f64) {
     state.position = tiempo.clamp(0.0, state.duration);
     if let Err(error) = state.player.seek(state.position) {
@@ -1190,7 +1234,9 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             // `time-pos` sigue en el instante viejo uno o dos frames después de
             // pedir un seek, y no se mueve mientras el usuario arrastra. Si se
             // adopta igual, el thumb salta hacia atrás y pelea con el dedo.
-            if !state.arrastrando && !state.player.seeking() {
+            // Mientras se arrastra, el reloj del decoder NO sobreescribe el
+            // tiempo que ve el usuario (llega con retraso tras el seek).
+            if state.scrub_ui_time.is_none() && !state.arrastrando && !state.player.seeking() {
                 state.position = state.player.position();
             }
             state.paused = state.player.paused();
@@ -1385,6 +1431,44 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
                 refrescar_preview(state);
             }
         }
+        MensajeEditor::UnirConSiguiente(id) => {
+            state.editor.registrar_historial();
+            let proyecto = state.editor.proyecto_mut();
+            if let Some(pos) = proyecto
+                .captions
+                .iter()
+                .position(|caption| caption.id == id)
+                && pos + 1 < proyecto.captions.len()
+            {
+                let fin = proyecto.captions[pos + 1].fin;
+                let texto_siguiente = proyecto.captions[pos + 1].texto.clone();
+                proyecto.captions[pos].fin = fin;
+                proyecto.captions[pos].texto =
+                    format!("{} {}", proyecto.captions[pos].texto, texto_siguiente);
+                proyecto.captions.remove(pos + 1);
+            }
+            refrescar_preview(state);
+        }
+        MensajeEditor::SeleccionarTodosHablante(hablante) => {
+            let ids: Vec<_> = state
+                .editor
+                .proyecto()
+                .captions
+                .iter()
+                .filter(|caption| caption.hablante_id.as_deref() == Some(&hablante))
+                .map(|caption| caption.id.clone())
+                .collect();
+            state.editor.seleccion = ids.into_iter().collect();
+        }
+        MensajeEditor::EditarEnVivo(id, texto) => {
+            if state.editando_texto.as_deref() != Some(&id) {
+                state.editor.registrar_historial();
+                state.editando_texto = Some(id.clone());
+            }
+            state.editor.editar_texto(&id, texto);
+            refrescar_preview(state);
+        }
+        MensajeEditor::TerminarEdicionTexto => state.editando_texto = None,
         MensajeEditor::EditarInline(id, texto) => {
             state.inline = None;
             if state.editor.aplicar_texto(&id, texto) {
@@ -1447,6 +1531,32 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             state.editando_hablante = None;
             state.editor.agregar_hablante();
         }
+        MensajeEditor::DuplicarHablante(id) => {
+            let fuente = state
+                .editor
+                .proyecto()
+                .hablantes
+                .iter()
+                .find(|h| h.id == id)
+                .cloned();
+            if let Some(mut hablante) = fuente {
+                let nuevo_id = format!("sp-{}", state.editor.proyecto().hablantes.len() + 1);
+                hablante.id = nuevo_id;
+                hablante.nombre = format!("{} (copia)", hablante.nombre);
+                state.editor.proyecto_mut().hablantes.push(hablante);
+                refrescar_preview(state);
+            }
+        }
+        MensajeEditor::AlternarMute(id) => {
+            if !state.mute_hablantes.remove(&id) {
+                state.mute_hablantes.insert(id);
+            }
+        }
+        MensajeEditor::AlternarSolo(id) => {
+            if !state.solo_hablantes.remove(&id) {
+                state.solo_hablantes.insert(id);
+            }
+        }
         MensajeEditor::EditarHablante(id, campo, valor) => {
             // Si el texto no cambia no hay nada que registrar: borrar y volver a
             // escribir la misma letra no debe dejar un Ctrl+Z que no hace nada.
@@ -1498,6 +1608,26 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             if state.editor.asignar_a_seleccion(hablante_id) > 0 {
                 refrescar_preview(state);
             }
+        }
+        MensajeEditor::AplicarPresetSeleccion(preset) => {
+            let ids: Vec<String> = state
+                .editor
+                .seleccion
+                .iter()
+                .filter_map(|caption_id| {
+                    state
+                        .editor
+                        .proyecto()
+                        .captions
+                        .iter()
+                        .find(|caption| caption.id == *caption_id)
+                        .and_then(|caption| caption.hablante_id.clone())
+                })
+                .collect();
+            for id in ids {
+                state.editor.asignar_preset(&id, Some(preset.clone()));
+            }
+            refrescar_preview(state);
         }
         MensajeEditor::AsignarPreset(hablante_id, preset_id) => {
             state.editando_hablante = None;
@@ -1679,6 +1809,25 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             // está mirando cuando cambia el zoom.
             let ancla = state.vista.x_de(state.position).max(0.0);
             aplicar_escala(state, state.vista.escala / factor, ancla);
+        }
+        MensajeEditor::ScrubInicio(tiempo) => {
+            let objetivo = snap_a_frame(tiempo, state.duration);
+            state.scrub_ui_time = Some(objetivo);
+            state.position = objetivo;
+            let _ = state.player.seek(objetivo);
+        }
+        MensajeEditor::ScrubMover(tiempo) => {
+            // Último gana: no hay cola de seeks, solo el objetivo más reciente.
+            let objetivo = snap_a_frame(tiempo, state.duration);
+            state.scrub_ui_time = Some(objetivo);
+            state.position = objetivo;
+            let _ = state.player.seek(objetivo);
+        }
+        MensajeEditor::ScrubFin(tiempo) => {
+            let objetivo = snap_a_frame(tiempo, state.duration);
+            state.position = objetivo;
+            state.scrub_ui_time = None;
+            let _ = state.player.seek(objetivo);
         }
         MensajeEditor::Seguir => {
             state.seguir = !state.seguir;

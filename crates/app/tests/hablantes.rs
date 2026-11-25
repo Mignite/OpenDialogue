@@ -29,10 +29,19 @@ fn el_selector_solo_ofrece_los_doce_colores_y_guarda_el_elegido() {
         move |ui, editor: &mut EditorApp| {
             recolector
                 .borrow_mut()
-                .extend(rod_app::ui::paneles::hablantes::mostrar(ui, editor));
+                .extend(rod_app::ui::paneles::hablantes::mostrar(
+                    ui,
+                    editor,
+                    &rod_app::textos::ES,
+                ));
         },
         editor(),
     );
+    // El punto abre el popover; la muestra elegida está dentro.
+    harness
+        .get_by_label(rod_core::paleta_identidad()[0])
+        .click();
+    harness.run();
     harness
         .get_by_label(rod_core::paleta_identidad()[3])
         .click();

@@ -8,8 +8,13 @@ use std::time::Duration;
 /// - Buscando: se sondea `seeking` hasta que termina.
 /// - Con cambios sin guardar: el autosave vive en `Tick` y necesita un
 ///   repintado periódico; en reposo limpio, la entrada despierta la app.
-pub fn politica(reproduciendo: bool, sucio: bool, buscando: bool) -> Option<Duration> {
-    if reproduciendo {
+pub fn politica(
+    reproduciendo: bool,
+    sucio: bool,
+    buscando: bool,
+    scrubbing: bool,
+) -> Option<Duration> {
+    if reproduciendo || scrubbing {
         Some(Duration::ZERO)
     } else if buscando {
         Some(Duration::from_millis(100))

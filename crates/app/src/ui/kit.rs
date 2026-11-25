@@ -43,6 +43,8 @@ pub enum Icono {
     Descargar,
     Guardar,
     Rayo,
+    Dividir,
+    Unir,
 }
 
 impl Icono {
@@ -81,6 +83,8 @@ impl Icono {
         Icono::Descargar,
         Icono::Guardar,
         Icono::Rayo,
+        Icono::Dividir,
+        Icono::Unir,
     ];
 }
 
@@ -122,6 +126,8 @@ pub fn glifo(icono: Icono) -> &'static str {
         Icono::Descargar => r::DOWNLOAD,
         Icono::Guardar => r::FLOPPY_DISK,
         Icono::Rayo => r::LIGHTNING,
+        Icono::Dividir => r::SCISSORS,
+        Icono::Unir => r::ARROWS_MERGE,
     }
 }
 
@@ -243,8 +249,8 @@ pub fn tab_bar(
 ) -> Option<Panel> {
     let mut elegida = None;
     ui.horizontal(|ui| {
-        ui.set_height(tema::ALTO_NAV);
-        ui.spacing_mut().item_spacing.x = tema::ESP_4;
+        ui.set_height(tema::ALTO_TABS);
+        ui.spacing_mut().item_spacing.x = tema::SEPARACION_TABS;
         for (panel, texto, contador) in pestanas {
             let es_activa = *panel == activa;
             let respuesta = ui.add(

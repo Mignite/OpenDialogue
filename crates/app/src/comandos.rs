@@ -269,6 +269,7 @@ impl MapaAtajos {
             Self::fila(Comando::GuardarComo, Key::S, true, true, false),
             Self::fila(Comando::Buscar, Key::F, true, false, false),
             Self::fila(Comando::Ajustes, Key::Comma, true, false, false),
+            Self::fila(Comando::CargarSrt, Key::I, true, true, false),
             Self::fila(Comando::AbrirProyecto, Key::O, true, false, false),
             Self::fila(Comando::Deshacer, Key::Z, true, false, false),
             Self::fila(Comando::Rehacer, Key::Z, true, true, false),

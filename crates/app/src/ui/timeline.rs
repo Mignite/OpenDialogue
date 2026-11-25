@@ -6,10 +6,21 @@ use egui::{Ui, Vec2};
 
 use crate::editor_app::{EditorApp, MensajeEditor};
 use crate::timeline::{self, ALTO_CARRIL, ALTO_REGLA, Mensaje};
-use crate::ui::tema;
+use crate::ui::tema::{self, Estilo};
 
 /// Margen izquierdo para los nombres de carril. El eje empieza después.
 const GUTTER: f32 = 104.0;
+
+/// Etiqueta adaptativa: `m:ss` para ticks de 1 s o más, `m:ss.d` si no.
+fn etiqueta_regla(segundos: f64, paso: f64) -> String {
+    let minutos = (segundos / 60.0).floor() as u64;
+    let resto = segundos - minutos as f64 * 60.0;
+    if paso >= 1.0 {
+        format!("{minutos}:{:02}", resto.floor() as u64)
+    } else {
+        format!("{minutos}:{:04.1}", resto)
+    }
+}
 
 fn punto(rel: egui::Vec2) -> timeline::Punto {
     timeline::Punto::new(rel.x - GUTTER, rel.y)
@@ -17,7 +28,7 @@ fn punto(rel: egui::Vec2) -> timeline::Punto {
 
 pub fn playhead(state: &EditorApp) -> f64 {
     if state.position.is_finite() && state.duration.is_finite() {
-        state.position
+        state.tiempo_ui()
     } else {
         0.0
     }
@@ -85,9 +96,9 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
             painter.text(
                 egui::pos2(x + 4.0, rect.min.y + 8.0),
                 egui::Align2::LEFT_CENTER,
-                format!("{}:{:02}", (t / 60.0) as i32, (t % 60.0) as i32),
-                egui::FontId::monospace(10.0),
-                tema::DIM,
+                etiqueta_regla(t, paso),
+                tema::fuente(Estilo::Timecode),
+                tema::TEXTO_3,
             );
         }
         t += paso;
@@ -96,8 +107,8 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
         gutter.min + egui::vec2(10.0, 8.0),
         egui::Align2::LEFT_CENTER,
         "TIEMPO",
-        egui::FontId::monospace(9.0),
-        tema::DIM,
+        tema::fuente(Estilo::Pequeno),
+        tema::TEXTO_3,
     );
 
     // Carriles: fondo alterno y nombre con el punto semántico del hablante.
@@ -145,8 +156,8 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
             gutter.min + egui::vec2(22.0, centro),
             egui::Align2::LEFT_CENTER,
             tema::acortar(&nombre, 12),
-            egui::FontId::proportional(11.0),
-            tema::SECUNDARIO,
+            tema::fuente(Estilo::Pequeno),
+            tema::TEXTO_2,
         );
     }
 
@@ -235,7 +246,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
                 clip.min + egui::vec2(5.0, 4.0),
                 egui::Align2::LEFT_TOP,
                 tema::acortar(&caption.texto, (clip.width() / 7.0).max(4.0) as usize),
-                egui::FontId::proportional(10.0),
+                tema::fuente(Estilo::Pequeno),
                 tema::TEXTO,
             );
         }
@@ -263,6 +274,8 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
     if respuesta.drag_started()
         && let Some(pos) = respuesta.interact_pointer_pos()
     {
+        let tiempo = vista.tiempo_de(punto(pos - rect.min).x).max(0.0);
+        mensajes.push(MensajeEditor::ScrubInicio(tiempo));
         mensajes.push(MensajeEditor::Timeline(Mensaje::Pulsar(punto(
             pos - rect.min,
         ))));
@@ -270,6 +283,8 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
     if respuesta.dragged()
         && let Some(pos) = respuesta.interact_pointer_pos()
     {
+        let tiempo = vista.tiempo_de(punto(pos - rect.min).x).max(0.0);
+        mensajes.push(MensajeEditor::ScrubMover(tiempo));
         mensajes.push(MensajeEditor::Timeline(Mensaje::Arrastrar(punto(
             pos - rect.min,
         ))));
@@ -277,6 +292,8 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp) -> Vec<MensajeEditor> {
     if respuesta.drag_stopped()
         && let Some(pos) = respuesta.interact_pointer_pos()
     {
+        let tiempo = vista.tiempo_de(punto(pos - rect.min).x).max(0.0);
+        mensajes.push(MensajeEditor::ScrubFin(tiempo));
         mensajes.push(MensajeEditor::Timeline(Mensaje::Soltar(punto(
             pos - rect.min,
         ))));
