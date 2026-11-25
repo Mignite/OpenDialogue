@@ -36,8 +36,14 @@ superposiciones y ningún texto baje de 11 px.
 5. Un solo diseño, plan de implementación por fases.
 
 **Fuera de alcance.** Loop de reproducción, volumen real (rod-player no expone
-API), cambios en ASS/exportación, selección múltiple con Ctrl/Shift, guía
-vertical de snap y chip de timecode al arrastrar (mejoras futuras).
+API), cambios en ASS/exportación, guía vertical de snap y chip de timecode al
+arrastrar (mejoras futuras).
+
+**Precisiones del autor (2026-11-25).** Con el foco en el campo no se consume
+ninguna tecla: los atajos, incluidos `1–9`, solo actúan cuando el foco está en
+la timeline o en la lista. `E` se conserva como atajo «Editar texto». La
+multiselección entra en alcance: se selecciona en la lista y también en la
+timeline con Shift+arrastrar (marquesina), compartiendo la misma selección.
 
 ## 2. Arquitectura y componentes
 
@@ -73,11 +79,14 @@ que muta el proyecto y empuja un paso de historial por gesto.
   se cierra con Enter, pérdida de foco o vencimiento del temporizador, usando
   el mecanismo actual de «una sesión = un paso». Mientras la sesión esté abierta
   se pide repaint diferido para que el cierre ocurra aunque no haya video.
-- **Foco:** Enter/doble clic en fila → campo. Enter en campo → confirmar y foco
-  a la timeline (Espacio vuelve a reproducir). Esc → revertir y foco a timeline.
+- **Foco:** Enter, doble clic en fila o atajo `E` → campo. Enter en campo →
+  confirmar y foco a la timeline (Espacio vuelve a reproducir). Esc → revertir
+  y foco a timeline. Mientras el campo tiene foco, ninguna tecla se intercepta:
+  `1–9` escriben dígitos en el texto; los comandos solo se disparan desde la
+  timeline o la lista.
 - **Hablante:** chip a la izquierda del campo con punto de color; clic abre el
   selector existente con «Sin hablante». Atajos 1–9 asignan a la selección
-  cuando el foco no está en el campo (para no robar dígitos al texto).
+  cuando el foco no está en el campo.
 - **CPS:** a la derecha, dentro del campo, 11 px secundario; ámbar si >17,
   reutilizando `CPS_MAXIMO` de `tema.rs`.
 - **Altura:** una línea de 32 px; Shift+Enter permite hasta 3 líneas y el
@@ -92,6 +101,13 @@ que muta el proyecto y empuja un paso de historial por gesto.
   mayúsculas a la izquierda; a la derecha, iconos de Eliminar, Dividir, Unir,
   Snap (toggle), Seguir (toggle) y slider de zoom (~72 px). El slider usa el
   `MensajeEditor::Zoom` existente.
+- **Multiselección:** la lista admite Ctrl+clic y Shift+clic; la timeline
+  añade marquesina con Shift+arrastrar sobre clips vacíos. Ambas vistas leen y
+  escriben la misma selección de `rod_core::selection`, así que seleccionar en
+  un lado resalta en el otro. Las acciones de borrar, dividir y asignar
+  hablante operan sobre toda la selección como un único paso de historial;
+  borrar con más de una línea pide confirmación y el toast «Deshacer» revierte
+  el grupo entero.
 - **In/Out:** se mantienen los arrastres de bordes ya probados; se añade
   edición por doble clic sobre el timecode de la fila de la lista y atajos `[`
   y `]` para fijar entrada/salida en el playhead.
@@ -152,17 +168,21 @@ también verificar el render real con video para el overlay.
 - El ancho del panel tiene dos defaults distintos; la fase 1 debe dejar uno.
 - La pista «Sin hablante» y el clip sin hablante son conceptos distintos: el
   primero es un carril, el segundo es un caption sin `hablante_id`.
-- Los atajos `1–9` deben seguir funcionando con el foco en la timeline/lista;
-  dentro del campo escriben dígitos.
+- Los atajos `1–9` solo actúan con el foco en timeline/lista; dentro del campo
+  escriben dígitos. Cualquier filtro de atajos que se añada debe comprobar el
+  foco antes de despachar el comando.
+- La marquesina de la timeline y los clics con modificador de la lista deben
+  actualizar la misma selección; si se implementan por separado, las dos vistas
+  se desincronizan.
 
-## 8. Preguntas pendientes (para revisión del autor)
+## 8. Pendiente de revisión
 
-1. ¿Los atajos `1–9` deben estar **desactivados** mientras el campo tiene foco
-   (supuesto de esta spec) o deben asignar hablante también ahí, impidiendo
-   escribir dígitos en el texto?
-2. ¿El chip de hablante sobre el video se muestra solo para la línea
-   seleccionada (supuesto) o para toda línea bajo el playhead?
-3. ¿La toolbar debe incluir también borrar con confirmación cuando hay
-   multiselección, o la multiselección queda fuera de alcance?
-4. ¿Se conserva el botón «Editar texto» (`E`) como atajo para enfocar el campo,
-   además de Enter/doble clic?
+Única pregunta abierta: el chip con el nombre del hablante que se dibuja sobre
+el video, ¿debe aparecer **solo cuando hay una línea seleccionada**, o también
+cuando no hay selección pero hay una línea bajo el playhead? (Hoy la spec
+supone lo primero; la barra vertical de color sí aparece para la línea activa
+en ambos casos, si el toggle «Mostrar tinte de hablante» está activo.)
+
+Resueltas: `1–9` no consumen teclas con el foco en el campo; `E` enfoca el
+campo; borrar con confirmación y multiselección en lista y timeline entran en
+alcance.
