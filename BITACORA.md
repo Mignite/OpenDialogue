@@ -1,5 +1,21 @@
 # Bitácora
 
+## 2026-11-26 — `mpv.lib` no encontrado al compilar
+
+- `cargo run` fallaba en el linker con `LNK1181: cannot open input file
+  'mpv.lib'`. El `LIBPATH` emitido apuntaba a
+  `...\Temp\opencode\rod-base-review\crates\player\..\..\third_party\mpv`,
+  un worktree que usó el revisor de código, en vez del checkout real.
+- Causa: `crates/player/build.rs` usaba `env!("CARGO_MANIFEST_DIR")`, que se
+  resuelve al **compilar el build script** y queda horneado en el binario.
+  Cargo no incluye esa ruta en la huella del script, así que reutilizó el
+  artifact del worktree en el `target/` principal.
+- Corregido leyendo `std::env::var("CARGO_MANIFEST_DIR")` en runtime: cada
+  invocación apunta a su propio checkout y la caché deja de ser venenosa.
+  Verificado con `cargo build` y `cargo test --workspace` en el target por
+  defecto. Coste si falla: el proyecto deja de compilar en la máquina.
+
+
 ## 2026-11-26 — Revisiones del rediseño de Styles
 
 - Selector de fuente: `aplicar_campo` publicaba solo con `drag_stopped` o

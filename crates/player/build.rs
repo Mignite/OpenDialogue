@@ -1,6 +1,11 @@
 fn main() {
     if cfg!(windows) {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../third_party/mpv");
+        // `env!` se resuelve al compilar el build script, así que un build
+        // desde otro directorio (un worktree, por ejemplo) deja la ruta vieja
+        // en la caché y el linker no encuentra `mpv.lib`. Leer la variable en
+        // runtime siempre apunta al checkout que se está compilando.
+        let raiz = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
+        let dir = std::path::Path::new(&raiz).join("../../third_party/mpv");
         println!("cargo:rustc-link-search=native={}", dir.display());
         copiar_dll(&dir.join("libmpv-2.dll"));
     }
