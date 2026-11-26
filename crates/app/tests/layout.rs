@@ -252,10 +252,11 @@ fn speakers_no_desborda_a_300px() {
     for recorte in &h.output().shapes {
         let clip = recorte.clip_rect;
         // El área sensible transparente del arnés es más ancha; no pinta nada.
-        if let egui::Shape::Rect(r) = &recorte.shape {
-            if r.fill.a() == 0 && r.stroke.width == 0.0 {
-                continue;
-            }
+        if let egui::Shape::Rect(r) = &recorte.shape
+            && r.fill.a() == 0
+            && r.stroke.width == 0.0
+        {
+            continue;
         }
         let rect = match &recorte.shape {
             egui::Shape::Rect(r) => r.rect,

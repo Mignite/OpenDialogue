@@ -146,10 +146,12 @@ fn preferencias_hacen_round_trip() {
     let dir = std::env::temp_dir().join(format!("rod-prefs-rt-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let ruta = dir.join("preferencias.json");
-    let mut prefs = Preferencias::default();
-    prefs.idioma = Idioma::Es;
-    prefs.ancho_panel = 348.0;
-    prefs.atajos = MapaAtajos::por_defecto();
+    let prefs = Preferencias {
+        idioma: Idioma::Es,
+        ancho_panel: 348.0,
+        atajos: MapaAtajos::por_defecto(),
+        ..Default::default()
+    };
     prefs.guardar_en(&ruta).unwrap();
     let cargadas = Preferencias::cargar_en(&ruta);
     assert_eq!(cargadas.idioma, Idioma::Es);

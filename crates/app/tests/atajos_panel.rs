@@ -19,10 +19,7 @@ fn el_panel_lista_el_atajo_vigente_y_escape_lo_cierra() {
             },
         )
         .unwrap();
-    let estado = EstadoAtajos {
-        abierto: true,
-        ..Default::default()
-    };
+    let estado = EstadoAtajos { abierto: true };
     let mut h = egui_kittest::Harness::builder()
         .with_size(egui::vec2(1440.0, 900.0))
         .build_state(

@@ -46,8 +46,10 @@ fn fuente_ausente_muestra_chip_y_renderiza() {
 #[test]
 fn acordeon_guarda_y_reabre_el_preset() {
     let ruta = std::env::temp_dir().join(format!("rod-estilos-prefs-{}.json", std::process::id()));
-    let mut prefs = Preferencias::default();
-    prefs.preset_abierto = Some("p1".into());
+    let prefs = Preferencias {
+        preset_abierto: Some("p1".into()),
+        ..Default::default()
+    };
     prefs.guardar_en(&ruta).expect("guarda preferencias");
     assert_eq!(
         Preferencias::cargar_en(&ruta).preset_abierto.as_deref(),
