@@ -51,6 +51,12 @@ impl From<&Preferencias> for MedidasEditor {
     }
 }
 
+/// Tope del panel inferior: el video se puede encoger hasta dejarle el 70 %
+/// de la ventana al timeline, con un suelo de 160 px.
+pub fn alto_maximo_timeline(alto_ventana: f32) -> f32 {
+    (alto_ventana * 0.7).max(160.0)
+}
+
 /// Alto de la timeline: el campo de texto puede quitarle altura al crecer.
 pub fn alto_timeline(
     state: &EditorApp,
@@ -109,12 +115,14 @@ pub fn show(
             .clamp(tema::ANCHO_PANEL_MIN, tema::ANCHO_PANEL_MAX);
     }
 
+    let tope = alto_maximo_timeline(ctx.content_rect().height());
+    medidas.alto_timeline = medidas.alto_timeline.clamp(160.0, tope);
     let alto_abajo = alto_timeline(state, medidas, tema::ANIMACION, ctx.content_rect().width());
     let abajo = egui::TopBottomPanel::bottom("timeline")
         .resizable(true)
         .default_height(alto_abajo)
         .min_height(160.0)
-        .max_height(alto_abajo)
+        .max_height(tope)
         .frame(tema::panel(tema::FONDO))
         .show(ctx, |ui| {
             mensajes.extend(crate::ui::timeline::toolbar(ui, state, textos));
