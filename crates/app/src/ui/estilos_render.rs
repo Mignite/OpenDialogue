@@ -12,7 +12,12 @@ pub fn escala_de_preview(fontsize: f32, alto_preview: f32) -> f32 {
     (fontsize * alto_preview / CANVAS.1 as f32).max(20.0)
 }
 
-/// Compone los bitmaps de libass sobre un frame transparente.
+/// Compone los bitmaps de libass sobre un frame transparente en RGBA recto,
+/// que es lo que `ColorImage::from_rgba_unmultiplied` espera.
+///
+/// El shader del video mezcla color recto con `SrcAlpha`. Guardar `RGB` ya
+/// multiplicado por el alfa haría que egui lo multiplique otra vez y el
+/// contorno se viera más oscuro en la tarjeta que sobre el video.
 pub fn componer(ancho: u32, alto: u32, bitmaps: &[Bitmap]) -> RgbaImage {
     let mut imagen = RgbaImage::new(ancho, alto);
     for bitmap in bitmaps {
@@ -23,9 +28,11 @@ pub fn componer(ancho: u32, alto: u32, bitmaps: &[Bitmap]) -> RgbaImage {
         let mascara = bitmap.alpha();
         // ASS guarda el alfa invertido y el color en 0xRRGGBBAA.
         let opacidad = 255_u32 - (bitmap.color & 0xFF);
-        let rojo = (bitmap.color >> 24) as u8;
-        let verde = ((bitmap.color >> 16) & 0xFF) as u8;
-        let azul = ((bitmap.color >> 8) & 0xFF) as u8;
+        let frente = [
+            (bitmap.color >> 24) as u8,
+            ((bitmap.color >> 16) & 0xFF) as u8,
+            ((bitmap.color >> 8) & 0xFF) as u8,
+        ];
         for y in y0..y1 {
             for x in x0..x1 {
                 let indice = (y - y0) as usize * bitmap.stride + (x - x0) as usize;
@@ -38,21 +45,22 @@ pub fn componer(ancho: u32, alto: u32, bitmaps: &[Bitmap]) -> RgbaImage {
                 }
                 let destino = imagen.get_pixel_mut(x, y);
                 let fondo = destino.0;
-                destino.0 = [
-                    mezclar(fondo[0], rojo, alfa),
-                    mezclar(fondo[1], verde, alfa),
-                    mezclar(fondo[2], azul, alfa),
-                    fondo[3].max(alfa),
-                ];
+                // Source-over con alfa entero: el color de salida es recto,
+                // no premultiplicado, aunque haya varias capas solapadas.
+                let a_s = u32::from(alfa);
+                let a_d = u32::from(fondo[3]);
+                let a_out = a_s + a_d * (255 - a_s) / 255;
+                for canal in 0..3 {
+                    let mezcla = (u32::from(frente[canal]) * a_s
+                        + u32::from(fondo[canal]) * a_d * (255 - a_s) / 255)
+                        / a_out.max(1);
+                    destino.0[canal] = mezcla.min(255) as u8;
+                }
+                destino.0[3] = a_out.min(255) as u8;
             }
         }
     }
     imagen
-}
-
-fn mezclar(fondo: u8, frente: u8, alfa: u8) -> u8 {
-    let t = f32::from(alfa) / 255.0;
-    (f32::from(fondo) * (1.0 - t) + f32::from(frente) * t).round() as u8
 }
 
 /// Rasteriza una muestra del preset con el mismo pipeline del `.ass` exportado.

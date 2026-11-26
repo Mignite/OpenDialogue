@@ -383,7 +383,13 @@ impl Textos {
     /// Etiqueta del botón que aplica el preset a las líneas seleccionadas.
     pub fn aplicar_a_lineas(&self, n: usize) -> String {
         if self.es {
-            format!("Aplicar a {n} líneas seleccionadas")
+            if n == 1 {
+                "Aplicar a 1 línea seleccionada".into()
+            } else {
+                format!("Aplicar a {n} líneas seleccionadas")
+            }
+        } else if n == 1 {
+            "Apply to 1 selected line".into()
         } else {
             format!("Apply to {n} selected lines")
         }

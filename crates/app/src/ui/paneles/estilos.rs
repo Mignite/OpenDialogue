@@ -11,6 +11,10 @@ use crate::ui::tema::{self, Estilo};
 pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec<MensajeEditor> {
     let mut mensajes = Vec::new();
 
+    state
+        .texturas_preset
+        .retain(|id, _| state.presets.iter().any(|preset| &preset.id == id));
+
     if ui
         .add_sized(
             Vec2::new(ui.available_width(), tema::ALTO_NAV),
@@ -31,7 +35,7 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
     let nombres: Vec<String> = state.presets.iter().map(|p| p.fontname.clone()).collect();
     crate::ui::tipografia::registrar_fuentes(ui.ctx(), &nombres);
 
-    let mut abrir: Option<String> = None;
+    let mut abrir: Option<egui::Rect> = None;
     egui::ScrollArea::vertical().show(ui, |ui| {
         let presets = state.presets.clone();
         for preset in &presets {
@@ -141,7 +145,7 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
 
             if respuesta.clicked() {
                 state.preset_seleccionado = Some(preset.id.clone());
-                abrir = Some(preset.id.clone());
+                abrir = Some(rect);
                 mensajes.push(MensajeEditor::SeleccionarPreset(preset.id.clone()));
             }
             if abierto {
@@ -149,9 +153,9 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
             }
         }
     });
-    if let Some(id) = abrir {
+    if let Some(rect) = abrir {
+        ui.scroll_to_rect(rect, Some(egui::Align::TOP));
         ui.ctx().request_repaint();
-        let _ = id;
     }
     mensajes
 }
@@ -196,20 +200,40 @@ fn vista_previa(
             ),
         )
     );
-    let textura = state.texturas_preset.entry(clave).or_insert_with(|| {
+    let textura = state
+        .texturas_preset
+        .entry(preset.id.clone())
+        .or_insert_with(|| {
+            let escala = tema::ALTO_PREVIEW_STYLES / crate::preview::CANVAS.1 as f32;
+            let imagen =
+                crate::ui::estilos_render::render_subtitle(preset, "Aa Hola mundo", escala);
+            let color = egui::ColorImage::from_rgba_unmultiplied(
+                [imagen.width() as usize, imagen.height() as usize],
+                imagen.as_raw(),
+            );
+            (
+                clave.clone(),
+                ui.ctx()
+                    .load_texture("preset-preview", color, egui::TextureOptions::LINEAR),
+            )
+        });
+    if textura.0 != clave {
         let escala = tema::ALTO_PREVIEW_STYLES / crate::preview::CANVAS.1 as f32;
         let imagen = crate::ui::estilos_render::render_subtitle(preset, "Aa Hola mundo", escala);
         let color = egui::ColorImage::from_rgba_unmultiplied(
             [imagen.width() as usize, imagen.height() as usize],
             imagen.as_raw(),
         );
-        ui.ctx()
-            .load_texture("preset-preview", color, egui::TextureOptions::LINEAR)
-    });
-    let tamano = textura.size_vec2();
+        textura.0 = clave;
+        textura.1 = ui
+            .ctx()
+            .load_texture("preset-preview", color, egui::TextureOptions::LINEAR);
+    }
+    let id = textura.1.id();
+    let tamano = textura.1.size_vec2();
     ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
         ui.centered_and_justified(|ui| {
-            ui.image((textura.id(), tamano));
+            ui.image((id, tamano));
         });
     });
 }
@@ -290,11 +314,17 @@ fn editor_preset(
         {
             mensajes.push(MensajeEditor::NuevoPreset);
         }
+        // `update` rechaza borrar el último preset: no ofrecer la acción evita
+        // un toast que diga «eliminado» cuando no pasó nada.
         if ui
-            .add_sized(
-                Vec2::new(ancho * 0.5, tema::ALTO_CONTROL),
-                egui::Button::new(textos.comando(crate::comandos::Comando::Eliminar)).frame(false),
-            )
+            .add_enabled_ui(state.presets.len() > 1, |ui| {
+                ui.add_sized(
+                    Vec2::new(ancho * 0.5, tema::ALTO_CONTROL),
+                    egui::Button::new(textos.comando(crate::comandos::Comando::Eliminar))
+                        .frame(false),
+                )
+            })
+            .inner
             .clicked()
         {
             mensajes.push(MensajeEditor::BorrarPreset(preset.id.clone()));
@@ -304,7 +334,12 @@ fn editor_preset(
     separador(ui);
     etiqueta(ui, "FONT");
     let mut fuente = valor_campo(preset, CampoPreset::Fontname, &state.borradores_preset);
-    let respuesta = egui::ComboBox::from_id_salt(("fuente-preset", &preset.id))
+    let valor_inicial = fuente.clone();
+    // El botón del ComboBox no pide foco en egui 0.33: `lost_focus` no dispara
+    // al elegir. La selección se publica desde el propio closure, que es el
+    // único sitio donde se sabe qué opción se pulsó.
+    let mut elegida: Option<String> = None;
+    egui::ComboBox::from_id_salt(("fuente-preset", &preset.id))
         .width(ancho)
         .selected_text(&fuente)
         .show_ui(ui, |ui| {
@@ -313,20 +348,23 @@ fn editor_preset(
                 egui::TextEdit::singleline(&mut state.busqueda_fuente_preset)
                     .hint_text(textos.buscar_fuente),
             );
+            let busqueda = state.busqueda_fuente_preset.to_lowercase();
             for nombre in crate::ui::tipografia::fuentes_del_sistema() {
-                if nombre.contains(&state.busqueda_fuente_preset) {
-                    ui.selectable_value(&mut fuente, nombre.clone(), nombre);
+                if nombre.to_lowercase().contains(&busqueda) {
+                    ui.selectable_value(&mut fuente, nombre.clone(), &nombre);
+                    if fuente != valor_inicial {
+                        elegida = Some(fuente.clone());
+                    }
                 }
             }
-        })
-        .response;
-    aplicar_campo(
-        preset,
-        CampoPreset::Fontname,
-        fuente.clone(),
-        respuesta,
-        mensajes,
-    );
+        });
+    if let Some(nombre) = elegida {
+        mensajes.push(MensajeEditor::EditarPreset(
+            preset.id.clone(),
+            CampoPreset::Fontname,
+            nombre,
+        ));
+    }
 
     ui.horizontal(|ui| {
         let mut tamano = valor_campo(preset, CampoPreset::Fontsize, &state.borradores_preset)

@@ -457,7 +457,8 @@ impl eframe::App for RustyDialogue {
             self.toasts.push(textos.linea_eliminada.to_owned(), true);
         }
         if borro_preset {
-            self.toasts.push(textos.preset_eliminado.to_owned(), true);
+            self.toasts
+                .push_restaurar_preset(textos.preset_eliminado.to_owned());
         }
         ui::atajos::mostrar(
             ctx,
@@ -465,10 +466,10 @@ impl eframe::App for RustyDialogue {
             &self.preferencias.atajos,
             &mut self.panel_atajos,
         );
-        if self.toasts.mostrar(ctx, textos)
+        if let Some(mensaje) = self.toasts.mostrar(ctx, textos)
             && let Pantalla::Editor(editor) = &mut self.pantalla
         {
-            let tarea = editor_app::update(editor, MensajeEditor::Deshacer);
+            let tarea = editor_app::update(editor, mensaje);
             self.ejecutar_tarea(tarea);
         }
     }

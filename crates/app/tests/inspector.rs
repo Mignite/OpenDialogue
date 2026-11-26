@@ -75,7 +75,7 @@ fn borrar_por_comando_muestra_toast_y_deshacer_restaura() {
     toasts.push(ES.linea_eliminada.to_owned(), true);
     let mut th = egui_kittest::Harness::builder().build_state(
         |ctx, (toasts, deshecho): &mut (Toasts, bool)| {
-            if toasts.mostrar(ctx, &ES) {
+            if toasts.mostrar(ctx, &ES).is_some() {
                 *deshecho = true;
             }
         },

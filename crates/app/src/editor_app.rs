@@ -389,8 +389,9 @@ pub struct EditorApp {
     /// primero; `None` solo si el panel no tiene nada que mostrar (no pasa:
     /// siempre hay al menos la semilla).
     pub preset_seleccionado: Option<String>,
-    /// Previews rasterizados de los presets, claveados por contenido.
-    pub texturas_preset: std::collections::HashMap<String, egui::TextureHandle>,
+    /// Previews rasterizados: una textura por preset, con la clave de su
+    /// contenido para reemplazarla cuando cambia en vez de acumular handles.
+    pub texturas_preset: std::collections::HashMap<String, (String, egui::TextureHandle)>,
     pub busqueda_fuente_preset: String,
     pub preset_renombrando: Option<String>,
     /// Preset borrado y su posición, para restaurarlo desde el toast.
@@ -1856,11 +1857,6 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
         }
         MensajeEditor::Deshacer => {
             state.editando_hablante = None;
-            // El toast de «estilo eliminado» usa este mismo mensaje: restaurar
-            // el preset tiene prioridad sobre deshacer una edición del texto.
-            if state.ultimo_preset_borrado.is_some() {
-                return restaurar_ultimo_preset(state);
-            }
             if state.editor.deshacer() {
                 sincronizar_borrador(state);
                 refrescar_preview(state);

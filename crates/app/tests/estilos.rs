@@ -208,7 +208,30 @@ fn sin_overflow_a_300px() {
 }
 
 #[test]
-fn deshacer_restaura_el_preset_borrado() {
+fn combo_box_cambia_la_fuente_del_preset() {
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(320.0, 700.0))
+        .build_ui_state(
+            |ui, estado: &mut EditorApp| {
+                let mensajes = rod_app::ui::paneles::estilos::mostrar(ui, estado, &EN);
+                for mensaje in mensajes {
+                    let _ = rod_app::editor_app::update(estado, mensaje);
+                }
+            },
+            app("Arial"),
+        );
+    rod_app::ui::tema::aplicar(&h.ctx);
+    h.run();
+    h.get_by_role(egui::accesskit::Role::ComboBox).click();
+    h.run();
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Agency FB")
+        .click();
+    h.run();
+    assert_eq!(h.state_mut().presets_mut()[0].fontname, "Agency FB");
+}
+
+#[test]
+fn restaurar_preset_recupera_el_borrado() {
     let mut editor = app("Arial");
     editor.presets_mut().push(rod_core::PresetAss {
         id: "p2".into(),
@@ -220,9 +243,28 @@ fn deshacer_restaura_el_preset_borrado() {
         rod_app::editor_app::MensajeEditor::BorrarPreset("p1".into()),
     );
     assert_eq!(editor.presets_mut().len(), 1);
-    let _ = rod_app::editor_app::update(&mut editor, rod_app::editor_app::MensajeEditor::Deshacer);
+    let _ = rod_app::editor_app::update(
+        &mut editor,
+        rod_app::editor_app::MensajeEditor::RestaurarPreset,
+    );
     assert_eq!(editor.presets_mut().len(), 2);
     assert!(editor.presets_mut().iter().any(|preset| preset.id == "p1"));
+}
+
+#[test]
+fn deshacer_no_restaura_el_preset_borrado() {
+    let mut editor = app("Arial");
+    editor.presets_mut().push(rod_core::PresetAss {
+        id: "p2".into(),
+        nombre: "P2".into(),
+        ..rod_core::preset_por_defecto()
+    });
+    let _ = rod_app::editor_app::update(
+        &mut editor,
+        rod_app::editor_app::MensajeEditor::BorrarPreset("p1".into()),
+    );
+    let _ = rod_app::editor_app::update(&mut editor, rod_app::editor_app::MensajeEditor::Deshacer);
+    assert_eq!(editor.presets_mut().len(), 1);
 }
 
 #[test]

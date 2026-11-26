@@ -53,6 +53,28 @@ fn escala_minima_legible() {
 }
 
 #[test]
+fn color_de_borde_es_recto_no_premultiplicado() {
+    let mut preset = preset("Arial");
+    preset.color = "#FFFFFF".into();
+    preset.outline = 0.0;
+    preset.shadow = 0.0;
+    let imagen = render_subtitle(&preset, "Aa", 1.0);
+    // En los bordes antialiasados del relleno hay cobertura parcial: el RGB
+    // debe ser el color del preset, no color*alfa (egui ya multiplica). El
+    // contorno es negro, así que se filtra por color de relleno.
+    let parciales: Vec<&image::Rgba<u8>> = imagen
+        .pixels()
+        .filter(|pixel| pixel.0[3] > 0 && pixel.0[3] < 255 && pixel.0[0] > 0)
+        .collect();
+    assert!(!parciales.is_empty(), "libass generó antialias");
+    assert!(
+        parciales.iter().all(|pixel| pixel.0[0] >= 240),
+        "borde premultiplicado: {:?}",
+        &parciales[..parciales.len().min(4)]
+    );
+}
+
+#[test]
 fn fuente_ausente_no_panica() {
     let bitmap = render_subtitle(&preset("FuenteQueNoExiste"), "Hola", 1.0);
     assert!(bitmap.as_raw().iter().any(|canal| *canal != 0));

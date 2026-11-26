@@ -1,5 +1,37 @@
 # Bitácora
 
+## 2026-11-26 — Revisiones del rediseño de Styles
+
+- Selector de fuente: `aplicar_campo` publicaba solo con `drag_stopped` o
+  `lost_focus`, pero el botón del `ComboBox` de egui 0.33 no pide foco: elegir
+  una familia no emitía `EditarPreset` y el dropdown saltaba hacia atrás al
+  frame siguiente. La selección se publica ahora desde el closure de
+  `show_ui`, que es el único sitio que sabe qué opción se pulsó. Test de UI
+  `combo_box_cambia_la_fuente_del_preset` (kittest). Coste si falla: el control
+  central del editor no guarda lo que el usuario elige.
+- `componer` guardaba `RGB = color*alfa` y se lo entregaba a
+  `from_rgba_unmultiplied`: egui volvía a multiplicar por alfa y el borde se
+  veía más oscuro que en el video. Ahora acumula source-over en RGBA recto y
+  despremultiplica al final, como el shader `subs.wgsl`. Test
+  `color_de_borde_es_recto_no_premultiplicado`. Coste si falla: divergencia
+  preview/overlay en los bordes, justo el invariante del proyecto.
+- Ctrl+Z estaba secuestrado por el preset borrado: `Deshacer` restauraba el
+  preset antes de tocar `Historial` y el slot nunca se limpiaba, así que
+  cualquier deshacer posterior restauraba el estilo indefinidamente. El toast
+  del preset envía ahora `RestaurarPreset` y `Deshacer` queda para el
+  `Historial`. Tests: `restaurar_preset_recupera_el_borrado` y
+  `deshacer_no_restaura_el_preset_borrado`. Coste si falla: se pierde una
+  edición real al pulsar Ctrl+Z.
+- Desviación del plan §5.4: no hay debounce de ~1 s. `EditarPreset` se publica
+  al soltar el control (`lost_focus`/`drag_stopped`), así que no se escribe en
+  cada tecla ni en cada frame, que es el objetivo real del debounce.
+- Auto-scroll al abrir una tarjeta: `abrir` guardaba el id y solo pedía un
+  repaint. Ahora guarda el `Rect` y llama `ui.scroll_to_rect`.
+- Texturas de preview: se acumulaban por cada contenido distinto. Ahora hay
+  una por preset, se reemplaza al cambiar el contenido y se podan las de
+  presets borrados.
+
+
 ## 2026-11-26 — Muestra de Styles recortada
 
 - La tarjeta de Estilos pedía `render_subtitle` con un canvas de 64 px pero
