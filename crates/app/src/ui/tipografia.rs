@@ -81,6 +81,91 @@ pub fn instalar(ctx: &egui::Context) {
     ctx.set_fonts(defs);
 }
 
+/// Base de fuentes del sistema, cargada una sola vez.
+fn base_del_sistema() -> &'static fontdb::Database {
+    static BASE: std::sync::OnceLock<fontdb::Database> = std::sync::OnceLock::new();
+    BASE.get_or_init(|| {
+        let mut base = fontdb::Database::new();
+        base.load_system_fonts();
+        base
+    })
+}
+
+/// ¿La familia está instalada en el sistema?
+pub fn fuente_disponible(nombre: &str) -> bool {
+    if nombre.is_empty() || nombre.eq_ignore_ascii_case("arial") {
+        return true; // libass la resuelve siempre como fuente por defecto.
+    }
+    base_del_sistema()
+        .query(&fontdb::Query {
+            families: &[fontdb::Family::Name(nombre)],
+            ..Default::default()
+        })
+        .is_some()
+}
+
+/// ¿La familia instalada tiene cara bold/italic?
+pub fn variante_disponible(nombre: &str, negrita: bool) -> bool {
+    if !fuente_disponible(nombre) {
+        return false;
+    }
+    let mut consulta = fontdb::Query {
+        families: &[fontdb::Family::Name(nombre)],
+        ..Default::default()
+    };
+    if negrita {
+        consulta.weight = fontdb::Weight::BOLD;
+    } else {
+        consulta.style = fontdb::Style::Italic;
+    }
+    base_del_sistema().query(&consulta).is_some()
+}
+
+/// Registra en egui las familias visibles del panel, una sola vez por lote.
+pub fn registrar_fuentes(ctx: &egui::Context, nombres: &[String]) {
+    static REGISTRADAS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    let registradas =
+        REGISTRADAS.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+    let nuevas: Vec<String> = {
+        let mut vistas = registradas.lock().unwrap();
+        nombres
+            .iter()
+            .filter(|nombre| !nombre.is_empty() && vistas.insert((*nombre).clone()))
+            .cloned()
+            .collect()
+    };
+    if nuevas.is_empty() {
+        return;
+    }
+    let mut defs = ctx.fonts(|fuentes| fuentes.definitions().clone());
+    for nombre in &nuevas {
+        let Some(id) = base_del_sistema().query(&fontdb::Query {
+            families: &[fontdb::Family::Name(nombre)],
+            ..Default::default()
+        }) else {
+            continue;
+        };
+        let Some(fuente) = base_del_sistema().face(id) else {
+            continue;
+        };
+        let fontdb::Source::File(ruta) = &fuente.source else {
+            continue;
+        };
+        let Ok(bytes) = std::fs::read(ruta) else {
+            continue;
+        };
+        let clave = format!("preset-{}", nombre);
+        defs.font_data
+            .insert(clave.clone(), egui::FontData::from_owned(bytes).into());
+        defs.families.insert(
+            egui::FontFamily::Name(nombre.clone().into()),
+            vec![clave, "inter-regular".into(), "phosphor".into()],
+        );
+    }
+    ctx.set_fonts(defs);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -387,7 +387,9 @@ pub struct EditorApp {
     /// Preset abierto en el panel de estilos. Si el archivo traía presets, el
     /// primero; `None` solo si el panel no tiene nada que mostrar (no pasa:
     /// siempre hay al menos la semilla).
-    pub(crate) preset_seleccionado: Option<String>,
+    pub preset_seleccionado: Option<String>,
+    /// Previews rasterizados de los presets, claveados por contenido.
+    pub texturas_preset: std::collections::HashMap<String, egui::TextureHandle>,
     /// Texto a medias de los campos numéricos, por id de preset y campo. Sin
     /// esto, escribir `72.5` se quedaría en `72` al llegar al punto.
     pub(crate) borradores_preset: HashMap<(String, CampoPreset), String>,
@@ -416,6 +418,11 @@ impl EditorApp {
     /// Ids seleccionados, compartidos por lista, timeline y barra de texto.
     pub fn seleccion(&self) -> &[String] {
         &self.editor.seleccion
+    }
+
+    /// Presets cargados, para el panel de Estilos y sus pruebas.
+    pub fn presets_mut(&mut self) -> &mut Vec<rod_core::PresetAss> {
+        &mut self.presets
     }
 
     /// Espejo de los modificadores del teclado, para la marquesina con Shift.
@@ -539,6 +546,7 @@ impl EditorApp {
             presets,
             ruta_presets,
             preset_seleccionado,
+            texturas_preset: std::collections::HashMap::new(),
             borradores_preset: HashMap::new(),
             mensaje: None,
             miniatura_pendiente,

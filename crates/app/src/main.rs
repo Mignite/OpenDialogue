@@ -100,6 +100,7 @@ impl RustyDialogue {
             Ok(mut editor) => {
                 editor.snap = self.preferencias.snap;
                 editor.seguir = self.preferencias.seguir;
+                editor.preset_seleccionado = self.preferencias.preset_abierto.clone();
                 self.pantalla = Pantalla::Editor(Box::new(editor));
                 true
             }
@@ -420,9 +421,11 @@ impl eframe::App for RustyDialogue {
             let _ = self.preferencias.guardar();
         }
         if let Pantalla::Editor(editor) = &self.pantalla
-            && editor.seguir != self.preferencias.seguir
+            && (editor.seguir != self.preferencias.seguir
+                || editor.preset_seleccionado != self.preferencias.preset_abierto)
         {
             self.preferencias.seguir = editor.seguir;
+            self.preferencias.preset_abierto = editor.preset_seleccionado.clone();
             let _ = self.preferencias.guardar();
         }
         if let Some(mensaje) = mensaje_inicio {

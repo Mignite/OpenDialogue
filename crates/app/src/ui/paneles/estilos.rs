@@ -1,6 +1,6 @@
 //! Panel de estilos: tarjetas con vista previa viva y editor inline.
 
-use egui::{Color32, RichText, Stroke, Vec2};
+use egui::{RichText, Stroke, Vec2};
 
 use crate::editor_app::{EditorApp, MensajeEditor};
 use crate::presets_edicion::{CampoPreset, valor_campo};
@@ -12,7 +12,8 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
     let mut mensajes = Vec::new();
 
     if ui
-        .add(
+        .add_sized(
+            Vec2::new(ui.available_width(), tema::ALTO_NAV),
             egui::Button::new(
                 RichText::new(format!(
                     "{}  {}",
@@ -20,20 +21,26 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
                     textos.nuevo_preset
                 ))
                 .font(tema::fuente(Estilo::Base)),
-            )
-            .frame(false),
+            ),
         )
         .clicked()
     {
         mensajes.push(MensajeEditor::NuevoPreset);
     }
 
+    let nombres: Vec<String> = state.presets.iter().map(|p| p.fontname.clone()).collect();
+    crate::ui::tipografia::registrar_fuentes(ui.ctx(), &nombres);
+
+    let mut abrir: Option<String> = None;
     egui::ScrollArea::vertical().show(ui, |ui| {
         let presets = state.presets.clone();
         for preset in &presets {
             let abierto = state.preset_seleccionado.as_deref() == Some(&preset.id);
-            let (rect, respuesta) = ui
-                .allocate_exact_size(Vec2::new(ui.available_width(), 104.0), egui::Sense::click());
+            let altura = tema::ALTO_PREVIEW_STYLES + tema::ALTO_CABECERA_PRESET;
+            let (rect, respuesta) = ui.allocate_exact_size(
+                Vec2::new(ui.available_width(), altura),
+                egui::Sense::click(),
+            );
             let pintor = ui.painter();
             pintor.rect_filled(
                 rect,
@@ -50,23 +57,32 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
             ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
                 ui.set_width(rect.width());
                 ui.vertical(|ui| {
-                    ui.add_space(tema::ESP_4);
-                    vista_previa(ui, preset);
+                    vista_previa(ui, state, preset, textos);
                     ui.horizontal(|ui| {
+                        ui.set_height(tema::ALTO_CABECERA_PRESET);
+                        ui.add_space(tema::ESP_8);
                         ui.label(
                             RichText::new(&preset.nombre)
-                                .font(tema::fuente(Estilo::Base))
+                                .font(tema::fuente_segura(Estilo::CuerpoFuerte))
                                 .color(tema::TEXTO),
                         );
+                        if !crate::ui::tipografia::fuente_disponible(&preset.fontname) {
+                            tema::chip(ui, textos.fuente_no_encontrada, tema::AMBAR);
+                        }
                         for (indice, hablante) in
                             state.editor.proyecto().hablantes.iter().enumerate()
                         {
                             if hablante.preset_id.as_deref() == Some(&preset.id) {
-                                kit::punto(
-                                    ui,
-                                    tema::color(rod_core::color_identidad(hablante, indice)),
-                                    tema::TAMANO_PUNTO,
+                                let (punto, respuesta) = ui.allocate_exact_size(
+                                    Vec2::splat(tema::TAMANO_PUNTO_ESTILO),
+                                    egui::Sense::hover(),
                                 );
+                                ui.painter().circle_filled(
+                                    punto.center(),
+                                    tema::TAMANO_PUNTO_ESTILO * 0.5,
+                                    tema::color(rod_core::color_identidad(hablante, indice)),
+                                );
+                                respuesta.on_hover_text(&hablante.nombre);
                             }
                         }
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -75,13 +91,20 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
                                 abierto,
                                 tema::ANIMACION,
                             );
-                            ui.label(
-                                RichText::new(kit::glifo(Icono::ChevronAbajo))
-                                    .font(egui::FontId::proportional(
-                                        tema::TAMANO_ICONO * (1.0 + giro * 0.15),
-                                    ))
-                                    .color(tema::TEXTO_2),
+                            let galley = ui.ctx().fonts_mut(|f| {
+                                f.layout_job(egui::text::LayoutJob::simple_singleline(
+                                    kit::glifo(Icono::ChevronAbajo).to_owned(),
+                                    egui::FontId::proportional(tema::TAMANO_ICONO),
+                                    tema::TEXTO_2,
+                                ))
+                            });
+                            let mut forma = egui::epaint::TextShape::new(
+                                ui.cursor().min,
+                                galley,
+                                tema::TEXTO_2,
                             );
+                            forma.angle = giro * std::f32::consts::FRAC_PI_2;
+                            ui.painter().add(forma);
                         });
                     });
                 });
@@ -89,6 +112,7 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
 
             if respuesta.clicked() {
                 state.preset_seleccionado = Some(preset.id.clone());
+                abrir = Some(preset.id.clone());
                 mensajes.push(MensajeEditor::SeleccionarPreset(preset.id.clone()));
             }
             if abierto {
@@ -96,47 +120,63 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
             }
         }
     });
+    if let Some(id) = abrir {
+        ui.ctx().request_repaint();
+        let _ = id;
+    }
     mensajes
 }
 
-/// Texto de muestra con los atributos visuales del preset.
-fn vista_previa(ui: &mut egui::Ui, preset: &rod_core::PresetAss) {
-    let (rect, _) =
-        ui.allocate_exact_size(Vec2::new(ui.available_width(), 44.0), egui::Sense::hover());
-    let pintor = ui.painter();
-    pintor.rect_filled(rect, 0.0, Color32::from_rgb(0x16, 0x16, 0x16));
-    let fuente = egui::FontId::new(
-        (preset.fontsize as f32).clamp(11.0, 36.0),
-        egui::FontFamily::Proportional,
+/// Muestra el mismo raster libass que usa el overlay, en miniatura centrada.
+fn vista_previa(
+    ui: &mut egui::Ui,
+    state: &mut EditorApp,
+    preset: &rod_core::PresetAss,
+    _textos: &Textos,
+) {
+    let (rect, _) = ui.allocate_exact_size(
+        Vec2::new(ui.available_width(), tema::ALTO_PREVIEW_STYLES),
+        egui::Sense::hover(),
     );
-    let centro = rect.center();
-    if preset.shadow > 0.0 {
-        pintor.text(
-            centro + Vec2::new(preset.shadow as f32, preset.shadow as f32),
-            egui::Align2::CENTER_CENTER,
-            "Aa Hola mundo",
-            fuente.clone(),
-            Color32::from_black_alpha(160),
+    let radio = egui::CornerRadius {
+        nw: tema::RADIO_SUPERFICIE as u8,
+        ne: tema::RADIO_SUPERFICIE as u8,
+        sw: 0,
+        se: 0,
+    };
+    ui.painter()
+        .rect_filled(rect, radio, tema::COLOR_PREVIEW_STYLES);
+
+    let clave = format!(
+        "{:?}",
+        (
+            &preset.id,
+            &preset.fontname,
+            preset.fontsize,
+            &preset.color,
+            &preset.outline_color,
+            preset.outline,
+            preset.shadow,
+            preset.bold,
+            preset.italic,
+        )
+    );
+    let textura = state.texturas_preset.entry(clave).or_insert_with(|| {
+        let escala = tema::ALTO_PREVIEW_STYLES / crate::preview::CANVAS.1 as f32;
+        let imagen = crate::ui::estilos_render::render_subtitle(preset, "Aa Hola mundo", escala);
+        let color = egui::ColorImage::from_rgba_unmultiplied(
+            [imagen.width() as usize, imagen.height() as usize],
+            imagen.as_raw(),
         );
-    }
-    if preset.outline > 0.0 {
-        for (dx, dy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)] {
-            pintor.text(
-                centro + Vec2::new(dx, dy) * preset.outline as f32,
-                egui::Align2::CENTER_CENTER,
-                "Aa Hola mundo",
-                fuente.clone(),
-                tema::color(&preset.outline_color),
-            );
-        }
-    }
-    pintor.text(
-        centro,
-        egui::Align2::CENTER_CENTER,
-        "Aa Hola mundo",
-        fuente,
-        tema::color(&preset.color),
-    );
+        ui.ctx()
+            .load_texture("preset-preview", color, egui::TextureOptions::LINEAR)
+    });
+    let tamano = textura.size_vec2();
+    ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+        ui.centered_and_justified(|ui| {
+            ui.image((textura.id(), tamano));
+        });
+    });
 }
 
 fn editor_preset(

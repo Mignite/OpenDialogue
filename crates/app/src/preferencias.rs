@@ -29,6 +29,7 @@ struct Datos {
     panel_visible: bool,
     snap: bool,
     seguir: bool,
+    preset_abierto: Option<String>,
     idioma: String,
     atajos: Vec<(String, AtajoGuardado)>,
 }
@@ -41,6 +42,7 @@ impl Default for Datos {
             panel_visible: true,
             snap: true,
             seguir: false,
+            preset_abierto: None,
             idioma: "en".into(),
             atajos: MapaAtajos::por_defecto().guardadas(),
         }
@@ -54,6 +56,7 @@ pub struct Preferencias {
     pub panel_visible: bool,
     pub snap: bool,
     pub seguir: bool,
+    pub preset_abierto: Option<String>,
     pub idioma: Idioma,
     pub atajos: MapaAtajos,
 }
@@ -66,6 +69,7 @@ impl Default for Preferencias {
             panel_visible: true,
             snap: true,
             seguir: false,
+            preset_abierto: None,
             idioma: Idioma::default(),
             atajos: MapaAtajos::por_defecto(),
         }
@@ -98,6 +102,7 @@ impl Preferencias {
             panel_visible: datos.panel_visible,
             snap: datos.snap,
             seguir: datos.seguir,
+            preset_abierto: datos.preset_abierto,
             idioma: if datos.idioma == "es" {
                 Idioma::Es
             } else {
@@ -121,6 +126,7 @@ impl Preferencias {
             panel_visible: self.panel_visible,
             snap: self.snap,
             seguir: self.seguir,
+            preset_abierto: self.preset_abierto.clone(),
             idioma: match self.idioma {
                 Idioma::Es => "es".into(),
                 Idioma::En => "en".into(),
