@@ -18,6 +18,12 @@
 - Rueda: antes simple = pan horizontal, Ctrl/Shift = zoom. Ahora simple =
   pistas, Ctrl = zoom, Shift = pan. Es la única regresión de gesto aceptada y
   fue decisión del autor. El slider de zoom sigue disponible.
+- Revisión final: Shift+rueda no hacía pan porque egui 0.33 mueve la muesca a
+  `raw_scroll_delta.x` y deja `.y = 0`; el handler además trataba Shift como
+  zoom. Y la rueda simple iba al revés de la scrollbar: `.y` negativo es girar
+  hacia abajo. `gesto_rueda` reparte ahora los tres gestos con el convenio
+  nativo, y `scroll_visible` acota el desplazamiento cada frame por si se
+  borran hablantes mientras el timeline está abierto.
 - Coste si falla: el usuario vuelve a quedarse sin ver las pistas de los
   hablantes restantes, que era el problema reportado.
 
