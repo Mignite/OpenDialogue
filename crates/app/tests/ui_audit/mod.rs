@@ -423,6 +423,11 @@ pub fn construir_inicio(
                 if !tema_aplicado {
                     tema::aplicar(ctx);
                     tema_aplicado = true;
+                    // `set_fonts` solo se activa en el NextFrame: este primer
+                    // frame no pinta nada para que ningún helper use una
+                    // fuente todavía no registrada.
+                    ctx.request_repaint();
+                    return;
                 }
                 fondo(ctx);
                 let _ = chrome::mostrar(
@@ -470,6 +475,11 @@ pub fn construir_editor(
                 if !tema_aplicado {
                     tema::aplicar(ctx);
                     tema_aplicado = true;
+                    // `set_fonts` solo se activa en el NextFrame: este primer
+                    // frame no pinta nada para que ningún helper use una
+                    // fuente todavía no registrada.
+                    ctx.request_repaint();
+                    return;
                 }
                 fondo(ctx);
                 let _ = chrome::mostrar(
@@ -558,6 +568,11 @@ pub fn capturar_ajustes(
                 if !tema_aplicado {
                     tema::aplicar(ctx);
                     tema_aplicado = true;
+                    // `set_fonts` solo se activa en el NextFrame: este primer
+                    // frame no pinta nada para que ningún helper use una
+                    // fuente todavía no registrada.
+                    ctx.request_repaint();
+                    return;
                 }
                 fondo(ctx);
                 let _ = chrome::mostrar(
@@ -612,6 +627,11 @@ pub fn capturar_atajos(
                 if !tema_aplicado {
                     tema::aplicar(ctx);
                     tema_aplicado = true;
+                    // `set_fonts` solo se activa en el NextFrame: este primer
+                    // frame no pinta nada para que ningún helper use una
+                    // fuente todavía no registrada.
+                    ctx.request_repaint();
+                    return;
                 }
                 fondo(ctx);
                 let _ = chrome::mostrar(
@@ -669,6 +689,11 @@ pub fn capturar_toast(
                 if !tema_aplicado {
                     tema::aplicar(ctx);
                     tema_aplicado = true;
+                    // `set_fonts` solo se activa en el NextFrame: este primer
+                    // frame no pinta nada para que ningún helper use una
+                    // fuente todavía no registrada.
+                    ctx.request_repaint();
+                    return;
                 }
                 fondo(ctx);
                 let _ = chrome::mostrar(
@@ -852,6 +877,8 @@ pub fn hoja_contacto(fase: &str) {
                 if !tema_aplicado {
                     tema::aplicar(ui.ctx());
                     tema_aplicado = true;
+                    ui.ctx().request_repaint();
+                    return;
                 }
                 fondo(ui.ctx());
                 egui::ScrollArea::vertical()
