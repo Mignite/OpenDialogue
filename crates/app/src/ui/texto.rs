@@ -2,16 +2,45 @@
 
 use std::time::Duration;
 
-use egui::{Key, RichText, TextEdit, Vec2};
+use egui::{Key, RichText, Stroke, TextEdit, Vec2};
 
 use crate::editor_app::{EditorApp, EstadoTexto, MensajeEditor};
 use crate::textos::Textos;
-use crate::ui::kit;
+use crate::ui::kit::{self, Icono};
 use crate::ui::tema::{self, Estilo};
 
 /// Alto extra que la barra añade al transporte cuando crece a varias líneas.
 pub fn alto_extra(state: &EditorApp, _ancho: f32) -> f32 {
     (state.texto.lineas.saturating_sub(1)) as f32 * tema::ALTO_BARRA_TEXTO
+}
+
+/// Único formateador de timecode: `hh:mm:ss.cc`. La lista, el transporte y la
+/// regla de la timeline muestran el mismo formato; las centésimas se redondean
+/// para que la duración reste exactamente los tiempos visibles (C2/C3).
+pub fn tiempo(segundos: f64) -> String {
+    let centesimas = (segundos.max(0.0) * 100.0).round() as u64;
+    format!(
+        "{:02}:{:02}:{:02}.{:02}",
+        centesimas / 360_000,
+        (centesimas / 6_000) % 60,
+        (centesimas / 100) % 60,
+        centesimas % 100
+    )
+}
+
+/// Duración calculada sobre las mismas centésimas que `tiempo`.
+pub fn duracion(inicio: f64, fin: f64) -> String {
+    let inicio = (inicio.max(0.0) * 100.0).round() as u64;
+    let fin = (fin.max(0.0) * 100.0).round() as u64;
+    let centesimas = fin.saturating_sub(inicio);
+    format!("{}.{:02} s", centesimas / 100, centesimas % 100)
+}
+
+/// Ancho que el transporte pinta a la derecha del campo: bucle, volumen y
+/// velocidad. Se resta **antes** de fijar el ancho del `TextEdit` para que los
+/// controles no se pinten encima del texto (C1).
+pub fn ancho_reservado_derecha() -> f32 {
+    tema::ANCHO_DROPDOWN_VELOCIDAD + tema::ANCHO_BOTON_28 * 2.0 + tema::ESP_4 * 2.0 + tema::ESP_8
 }
 
 /// Una sesión de tipeo se cierra sola tras ~1 s sin teclear.
@@ -60,22 +89,25 @@ pub fn mensaje_al_enfocar(state: &EditorApp) -> Option<MensajeEditor> {
 }
 
 fn pintar_borde_rayado(painter: &egui::Painter, rect: egui::Rect, color: egui::Color32) {
-    const PASO: f32 = 10.0;
+    /// Paso y longitud de trazo del borde del campo sin línea activa.
+    const PASO: f32 = tema::ANCHO_SCROLLBAR;
+    const TRAZO: f32 = PASO / 2.0;
+    let trazo = Stroke::new(tema::GROSOR_BORDE, color);
     let mut x = rect.min.x;
     while x < rect.max.x {
         painter.line_segment(
             [
                 egui::pos2(x, rect.min.y),
-                egui::pos2((x + 5.0).min(rect.max.x), rect.min.y),
+                egui::pos2((x + TRAZO).min(rect.max.x), rect.min.y),
             ],
-            egui::Stroke::new(1.0_f32, color),
+            trazo,
         );
         painter.line_segment(
             [
                 egui::pos2(x, rect.max.y),
-                egui::pos2((x + 5.0).min(rect.max.x), rect.max.y),
+                egui::pos2((x + TRAZO).min(rect.max.x), rect.max.y),
             ],
-            egui::Stroke::new(1.0_f32, color),
+            trazo,
         );
         x += PASO;
     }
@@ -122,7 +154,7 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
     let nombre = hablante
         .as_ref()
         .map(|hablante| hablante.nombre.clone())
-        .unwrap_or_else(|| "Sin hablante".into());
+        .unwrap_or_else(|| textos.sin_hablante.to_owned());
     let color = hablante
         .as_ref()
         .map(|hablante| tema::color_de_hex(&hablante.color))
@@ -131,13 +163,34 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = tema::ESP_8;
         kit::punto(ui, color, tema::ESP_8);
+        // Nombre + chevron en un solo `LayoutJob`: el glifo de Phosphor entra
+        // como reserva de Proportional, así que comparte botón sin familia propia.
+        let mut etiqueta = egui::text::LayoutJob::default();
+        etiqueta.append(
+            &nombre,
+            0.0,
+            egui::text::TextFormat {
+                font_id: tema::fuente(Estilo::Pequeno),
+                color: tema::TEXTO,
+                ..Default::default()
+            },
+        );
+        etiqueta.append(
+            kit::glifo(Icono::ChevronAbajo),
+            tema::ESP_4,
+            egui::text::TextFormat {
+                font_id: egui::FontId::proportional(tema::TAMANO_ICONO),
+                color: tema::TEXTO_2,
+                ..Default::default()
+            },
+        );
         let chip = egui::containers::menu::MenuButton::from_button(
-            egui::Button::new(RichText::new(&nombre).font(tema::fuente(Estilo::Pequeno)))
+            egui::Button::new(etiqueta)
                 .frame(false)
                 .min_size(egui::vec2(tema::ANCHO_BOTON_28, tema::ALTO_BOTON_CHICO)),
         )
         .ui(ui, |ui| {
-            if ui.button("Sin hablante").clicked() {
+            if ui.button(textos.sin_hablante).clicked() {
                 mensajes.push(MensajeEditor::AsignarHablante(None));
                 ui.close();
             }
@@ -151,9 +204,16 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
         });
         let _ = chip;
 
-        let mostrar_cps = ui.available_width() >= tema::ANCHO_MINIMO_TEXTO;
-        let ancho_cps = if mostrar_cps { 64.0 } else { 0.0 };
-        let ancho = (ui.available_width() - ancho_cps - tema::ESP_8).max(tema::ESP_72);
+        let reserva = ancho_reservado_derecha();
+        let libre = (ui.available_width() - reserva).max(0.0);
+        let mostrar_cps = libre >= tema::ANCHO_MINIMO_TEXTO;
+        // Ancho de "00.0 CPS" con la fuente pequeña: dos keycaps y un espacio.
+        let ancho_cps = if mostrar_cps {
+            tema::ANCHO_BOTON_28 * 2.0 + tema::ESP_8
+        } else {
+            0.0
+        };
+        let ancho = (libre - ancho_cps - tema::ESP_8).max(tema::ESP_72);
         // Con una sola línea usamos el TextEdit simple (más barato); si el
         // usuario pide salto, cambiamos a multicampo en este mismo frame para
         // que egui inserte el '\n' en la posición correcta del cursor.
@@ -184,12 +244,14 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
                     .frame(false),
             )
         };
-        let color_borde = color_borde_campo(objetivo.is_some(), state.texto.foco);
-        if objetivo.is_some() {
+        let color_borde = color_borde_campo(objetivo.is_some(), false);
+        if state.texto.foco || respuesta.has_focus() {
+            kit::anillo_foco(ui, &respuesta);
+        } else if objetivo.is_some() {
             ui.painter().rect_stroke(
                 respuesta.rect.expand(tema::ESP_2),
                 tema::radio_control(),
-                egui::Stroke::new(1.0_f32, color_borde),
+                Stroke::new(tema::GROSOR_BORDE, color_borde),
                 egui::StrokeKind::Inside,
             );
         } else {
@@ -281,4 +343,29 @@ fn update_texto(state: &mut EditorApp) {
         state,
         MensajeEditor::EditarEnVivo(id, state.texto.borrador.clone()),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn timecode_y_duracion_comparten_base() {
+        assert_eq!(tiempo(473.13), "00:07:53.13");
+        assert_eq!(tiempo(0.32), "00:00:00.32");
+        // Antes la lista mostraba 1.54 s para 12.46 − 10.93.
+        assert_eq!(duracion(10.93, 12.46), "1.53 s");
+        assert_eq!(duracion(2.0, 2.0), "0.00 s");
+    }
+
+    #[test]
+    fn la_reserva_deja_hueco_para_bucle_volumen_y_velocidad() {
+        assert_eq!(
+            ancho_reservado_derecha(),
+            tema::ANCHO_DROPDOWN_VELOCIDAD
+                + tema::ANCHO_BOTON_28 * 2.0
+                + tema::ESP_4 * 2.0
+                + tema::ESP_8
+        );
+    }
 }
