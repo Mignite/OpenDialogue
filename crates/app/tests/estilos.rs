@@ -135,6 +135,78 @@ fn apply_cuenta_captions_y_es_un_paso() {
     assert!(editor.editor_mut().puede_deshacer());
 }
 
+/// epaint 0.33 no expone `Shape::rect()`, así que cubrimos las variantes que
+/// dibuja el panel: rectángulos, texto, iconos circulares, líneas e imágenes.
+fn rect_de_forma(forma: &egui::Shape) -> Option<egui::Rect> {
+    match forma {
+        egui::Shape::Rect(rectangulo) => Some(rectangulo.rect),
+        egui::Shape::Text(texto) => Some(texto.galley.rect.translate(texto.pos.to_vec2())),
+        egui::Shape::Circle(circulo) => Some(egui::Rect::from_center_size(
+            circulo.center,
+            egui::Vec2::splat(circulo.radius * 2.0),
+        )),
+        egui::Shape::LineSegment { points, .. } => {
+            Some(egui::Rect::from_two_pos(points[0], points[1]))
+        }
+        egui::Shape::Mesh(malla) if !malla.vertices.is_empty() => {
+            let puntos: Vec<egui::Pos2> = malla.vertices.iter().map(|v| v.pos).collect();
+            let mut rect = egui::Rect::from_points(&puntos);
+            rect.max.x += 1.0; // el borde puede caer justo en el límite
+            Some(rect)
+        }
+        _ => None,
+    }
+}
+
+#[test]
+fn sin_overflow_a_300px() {
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(300.0, 700.0))
+        .build_ui_state(
+            |ui, estado: &mut EditorApp| {
+                let _ = rod_app::ui::paneles::estilos::mostrar(ui, estado, &EN);
+            },
+            app("Arial"),
+        );
+    rod_app::ui::tema::aplicar(&h.ctx);
+    h.run();
+
+    let mut formas = 0;
+    for recorte in &h.output().shapes {
+        let clip = recorte.clip_rect;
+        // El área sensible transparente del arnés mide 4 px de más; no pinta
+        // nada, así que no cuenta como control que desborda.
+        let invisible = matches!(
+            &recorte.shape,
+            egui::Shape::Rect(rectangulo)
+                if rectangulo.fill.a() == 0 && rectangulo.stroke.width == 0.0
+        );
+        if !invisible
+            && clip.is_finite()
+            && clip.max.x > 0.0
+            && let Some(rect) = rect_de_forma(&recorte.shape)
+        {
+            assert!(
+                rect.max.x <= clip.max.x + 1.0,
+                "control fuera del panel: rect {rect:?}, clip {clip:?}, forma {:?}",
+                recorte.shape
+            );
+        }
+        if let egui::Shape::Text(texto) = &recorte.shape {
+            for seccion in &texto.galley.job.sections {
+                assert!(
+                    seccion.format.font_id.size >= 11.0,
+                    "texto de {} px: {:?}",
+                    seccion.format.font_id.size,
+                    texto.galley.job.text
+                );
+            }
+        }
+        formas += 1;
+    }
+    assert!(formas > 0, "el panel dibujó algo");
+}
+
 #[test]
 fn deshacer_restaura_el_preset_borrado() {
     let mut editor = app("Arial");

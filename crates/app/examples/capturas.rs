@@ -132,8 +132,29 @@ fn capturar_editor(
     .expect("abre el clip de prueba");
     let mut app = app;
     if let Some(panel) = panel {
+        if panel == rod_app::editor_app::Panel::Estilos {
+            *app.presets_mut() = vec![
+                rod_core::PresetAss {
+                    id: "p-kiwi".into(),
+                    nombre: "Kiwi".into(),
+                    fontname: "Arial".into(),
+                    fontsize: 48.0,
+                    ..rod_core::preset_por_defecto()
+                },
+                rod_core::PresetAss {
+                    id: "p-citron".into(),
+                    nombre: "Citron".into(),
+                    fontname: "Georgia".into(),
+                    fontsize: 42.0,
+                    ..rod_core::preset_por_defecto()
+                },
+            ];
+            app.preset_seleccionado = Some("p-kiwi".into());
+        }
         rod_app::editor_app::update(&mut app, rod_app::editor_app::MensajeEditor::Panel(panel));
-        if panel == rod_app::editor_app::Panel::Subtitulos {
+        if panel == rod_app::editor_app::Panel::Subtitulos
+            || panel == rod_app::editor_app::Panel::Estilos
+        {
             let id = app.proyecto().captions[0].id.clone();
             rod_app::editor_app::update(
                 &mut app,
@@ -211,6 +232,15 @@ fn main() {
             rod_app::textos::Idioma::En,
             Some(rod_app::editor_app::Panel::Subtitulos),
         );
+        for ancho in [1100_u32, 1440, 2560] {
+            capturar_editor(
+                &format!("revision-estilos-{ancho}"),
+                ancho as f32,
+                900.0,
+                rod_app::textos::Idioma::En,
+                Some(rod_app::editor_app::Panel::Estilos),
+            );
+        }
     }
 
     if fase == "diagnostico" {

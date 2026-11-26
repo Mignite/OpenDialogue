@@ -56,9 +56,29 @@ fn mezclar(fondo: u8, frente: u8, alfa: u8) -> u8 {
 }
 
 /// Rasteriza una muestra del preset con el mismo pipeline del `.ass` exportado.
+///
+/// `escala = 1.0` no toca ningún valor: la imagen es byte-idéntica a la del
+/// overlay. En una miniatura (`escala < 1`) el `fontsize` baja con el canvas,
+/// pero se frena en 20 px para que la muestra se pueda leer; el resto de
+/// medidas se escalan con el mismo factor efectivo y así el texto no queda
+/// cortado ni desplazado.
 pub fn render_subtitle(preset: &PresetAss, texto: &str, escala: f32) -> RgbaImage {
     let ancho = (CANVAS.0 as f32 * escala).max(1.0) as u32;
     let alto = (CANVAS.1 as f32 * escala).max(1.0) as u32;
+    let fuente = if escala >= 1.0 {
+        preset.fontsize
+    } else {
+        f64::from(escala_de_preview(preset.fontsize as f32, alto as f32))
+    };
+    let factor = fuente / preset.fontsize.max(f64::MIN_POSITIVE);
+    let mut escalado = preset.clone();
+    escalado.fontsize = fuente;
+    escalado.outline = preset.outline * factor;
+    escalado.shadow = preset.shadow * factor;
+    escalado.margin_l = (preset.margin_l as f64 * factor) as i32;
+    escalado.margin_r = (preset.margin_r as f64 * factor) as i32;
+    escalado.margin_v = (preset.margin_v as f64 * factor) as i32;
+
     let caption = Caption {
         id: "preview".into(),
         inicio: 0.0,
@@ -73,7 +93,7 @@ pub fn render_subtitle(preset: &PresetAss, texto: &str, escala: f32) -> RgbaImag
         color: String::new(),
         preset_id: Some(preset.id.clone()),
     };
-    let ass = build_ass(&[caption], &[hablante], |_| preset.clone(), ancho, alto);
+    let ass = build_ass(&[caption], &[hablante], |_| escalado.clone(), ancho, alto);
     let mut subs = Subtitulos::nuevo(ancho, alto, &ass);
     let bitmaps = subs.render(100);
     componer(ancho, alto, bitmaps)

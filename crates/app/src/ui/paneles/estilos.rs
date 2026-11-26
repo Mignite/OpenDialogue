@@ -188,6 +188,12 @@ fn vista_previa(
             preset.shadow,
             preset.bold,
             preset.italic,
+            (
+                preset.alignment,
+                preset.margin_l,
+                preset.margin_r,
+                preset.margin_v,
+            ),
         )
     );
     let textura = state.texturas_preset.entry(clave).or_insert_with(|| {
