@@ -78,7 +78,7 @@ fn reasignar_una_tecla_tomada_pide_intercambio() {
     abierto.busqueda = "Undo".into();
     let estado = (Preferencias::default(), abierto);
     let mut harness = harness(estado);
-    harness.get_by_label("Change Undo").click();
+    harness.get_by_label("Change").click();
     harness.run();
     harness.key_press_modifiers(
         Modifiers {

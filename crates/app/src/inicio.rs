@@ -230,6 +230,7 @@ mod tests {
     #[test]
     fn miniatura_ausente_muestra_placeholder_y_presente_devuelve_ruta() {
         let dir = std::env::temp_dir().join(format!("rod-inicio-miniatura-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let reciente = crate::recientes::Reciente {
             ruta: PathBuf::from("/p/mi.cdp"),

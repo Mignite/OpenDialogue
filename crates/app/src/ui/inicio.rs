@@ -512,8 +512,12 @@ fn tarjeta_reciente(
                 .id_salt(("puntos", &reciente.ruta)),
         );
         let respuesta = egui::containers::menu::MenuButton::from_button(
-            egui::Button::new("")
-                .frame(false)
+            // Etiqueta accesible (el glifo se pinta abajo solo en hover), con
+            // el texto transparente para no dibujarlo dos veces.
+            egui::Button::new(
+                RichText::new(kit::glifo(Icono::Puntos)).color(Color32::TRANSPARENT),
+            )
+            .frame(false)
                 .fill(Color32::TRANSPARENT)
                 .stroke(Stroke::NONE)
                 .min_size(zona.size()),

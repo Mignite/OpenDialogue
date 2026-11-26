@@ -151,12 +151,21 @@ fn arrastrar_el_divisor_encoge_el_timeline() {
         );
     h.run();
     // El borde del panel cae en 219 (210 del alto más 9 px de margen del frame).
+    // El borde del panel inferior depende de la altura real del panel, que
+    // ahora descuenta la barra de texto. Se calcula, no se fija a ojo.
+    let alto_abajo = rod_app::ui::editor::alto_timeline(
+        &h.state().0,
+        &h.state().1,
+        0.0,
+        1200.0,
+    );
+    let borde_y = 700.0 - alto_abajo + 9.0;
     h.input_mut()
         .events
-        .push(egui::Event::PointerMoved(egui::pos2(600.0, 219.0)));
+        .push(egui::Event::PointerMoved(egui::pos2(600.0, borde_y)));
     h.step();
     h.input_mut().events.push(egui::Event::PointerButton {
-        pos: egui::pos2(600.0, 219.0),
+        pos: egui::pos2(600.0, borde_y),
         button: egui::PointerButton::Primary,
         pressed: true,
         modifiers: egui::Modifiers::NONE,
@@ -383,7 +392,8 @@ fn ensanchar_y_encoger_el_panel_lateral_no_vuelve_al_inicial() {
     h.run();
     let inicial = h.state().1.ancho_panel;
     // El borde del SidePanel está en 1200 - ancho, con unos px de margen.
-    let borde = 1200.0 - inicial;
+    // El borde del SidePanel lleva el margen del frame (8 px).
+    let borde = 1200.0 - inicial + 8.0;
     h.input_mut()
         .events
         .push(egui::Event::PointerMoved(egui::pos2(borde, 350.0)));

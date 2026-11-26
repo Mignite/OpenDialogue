@@ -2378,6 +2378,7 @@ mod tests {
     #[test]
     fn abrir_reciente_sin_miniatura_regenera_en_el_playhead() {
         let dir = std::env::temp_dir().join(format!("rod-miniatura-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let cdp = dir.join("mi.cdp");
         let proyecto = Proyecto {

@@ -48,7 +48,7 @@ fn estado_guardado_lleva_punto() {
 }
 
 #[test]
-fn el_menu_es_compacto_y_solo_muestra_etiquetas() {
+fn el_menu_muestra_los_atajos_en_la_columna_derecha() {
     let mut harness = egui_kittest::Harness::builder()
         .with_size(egui::vec2(1440.0, 900.0))
         .build_ui(|ui| {
@@ -56,9 +56,9 @@ fn el_menu_es_compacto_y_solo_muestra_etiquetas() {
         });
     harness.get_by_label("Archivo").click();
     harness.run();
-    // Menú corto: sin columna de atajos (ésos están en Ajustes).
+    // Columna de atajos a la derecha, alineada con la etiqueta.
     harness.get_by_label("Guardar");
-    assert_eq!(harness.query_all_by_label("Ctrl+S").count(), 0);
+    assert_eq!(harness.query_all_by_label("Ctrl+S").count(), 1);
     harness.get_by_label("Cargar SRT");
 }
 
@@ -72,7 +72,7 @@ fn la_cabecera_solo_lleva_los_tres_controles_de_ventana() {
             .count(),
         0
     );
-    for tooltip in ["minimizar", "maximizar", "cerrar"] {
+    for tooltip in [ES.minimizar, ES.maximizar, ES.cerrar_ventana] {
         harness.get_by_label(tooltip);
     }
 }
@@ -80,7 +80,7 @@ fn la_cabecera_solo_lleva_los_tres_controles_de_ventana() {
 #[test]
 fn arrastrar_la_cabecera_emite_start_drag() {
     let mut h = cabecera();
-    let centro = h.get_by_label("arrastrar-ventana").rect().center();
+    let centro = h.get_by_label(ES.arrastrar_ventana).rect().center();
     let destino = centro + egui::vec2(60.0, 40.0);
     let mut enviados = Vec::new();
     h.input_mut().events.push(egui::Event::PointerMoved(centro));
@@ -113,7 +113,7 @@ fn arrastrar_la_cabecera_emite_start_drag() {
 #[test]
 fn los_controles_de_ventana_emiten_su_comando() {
     let mut harness = cabecera();
-    harness.get_by_label("minimizar").click();
+    harness.get_by_label(ES.minimizar).click();
     harness.step();
     assert!(
         comandos_de_vista(&harness).contains(&egui::ViewportCommand::Minimized(true)),

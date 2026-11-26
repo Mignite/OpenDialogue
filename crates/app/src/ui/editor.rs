@@ -252,10 +252,17 @@ pub fn show(
             if divisor.double_clicked() {
                 alternar_tope = true;
             }
-            if divisor.dragged()
-                && let Some(pointer) = divisor.interact_pointer_pos()
-            {
-                arrastre_divisor = Some(pointer.y);
+            if divisor.dragged() {
+                // Al arrastrar fuera de la franja, `interact_pointer_pos`
+                // devuelve None: se cae al último puntero conocido para que
+                // el divisor siga al dedo hasta el borde de la ventana.
+                let y = divisor
+                    .interact_pointer_pos()
+                    .or_else(|| ctx.input(|i| i.pointer.latest_pos()))
+                    .map(|p| p.y);
+                if let Some(y) = y {
+                    arrastre_divisor = Some(y);
+                }
             }
             if divisor.hovered() {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
@@ -280,7 +287,9 @@ pub fn show(
             memoria.insert_temp(id_animando, true);
         });
     }
-    *medidas = medidas_en_ctx(ctx, medidas);
+    // La altura calculada aquí es la definitiva: guardarla de nuevo para que
+    // el `medidas_en_ctx` del siguiente frame no reviva el valor prearrastre.
+    guardar_medidas(ctx, medidas);
 
     // El monitor va a sangre: sin el frame del `CentralPanel` el video toca
     // los bordes del área que le queda entre el inspector y la timeline.

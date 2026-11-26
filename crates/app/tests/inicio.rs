@@ -221,7 +221,11 @@ fn con_muchos_recientes_expandidos_se_puede_desplazar() {
 #[test]
 fn el_menu_de_la_tarjeta_no_abre_el_proyecto() {
     let mut h = una_tarjeta();
-    h.get_by_label("···").click();
+    // El menú de puntos solo aparece cuando la tarjeta está bajo el puntero.
+    h.get_by_label("RobloxTerror.cdp").hover();
+    h.run();
+    h.get_by_label(rod_app::ui::kit::glifo(rod_app::ui::kit::Icono::Puntos))
+        .click();
     h.run();
     assert!(
         h.state().2.is_none(),

@@ -115,12 +115,9 @@ pub fn mostrar(
                         .filter_map(|comando| atajos.atajo(*comando))
                         .map(|atajo| ancho_texto(ui, &atajo.to_string(), fuente_mono.clone()))
                         .fold(0.0, f32::max);
-                    let ancho_menu = (ancho_etiqueta
-                        + ancho_atajo
-                        + tema::ESP_12
-                        + tema::ESP_20
-                        + tema::ESP_8)
-                        .max(tema::ANCHO_FILTRO);
+                    let ancho_menu =
+                        (ancho_etiqueta + ancho_atajo + tema::ESP_12 + tema::ESP_20 + tema::ESP_8)
+                            .max(tema::ANCHO_FILTRO);
                     ui.set_min_width(ancho_menu);
                     ui.set_max_width(ancho_menu);
 
