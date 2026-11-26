@@ -184,7 +184,10 @@ pub fn make_proyecto(lineas: usize, hablantes: usize, seed: u64, duracion: f64) 
         let hablante_id = if hablantes == 0 || i % 13 == 12 {
             None
         } else {
-            Some(format!("h{}", (i + seed as usize) % hablantes.min(NOMBRES.len())))
+            Some(format!(
+                "h{}",
+                (i + seed as usize) % hablantes.min(NOMBRES.len())
+            ))
         };
         proyecto.captions.push(Caption {
             id: format!("cap-{i}"),
@@ -304,14 +307,7 @@ pub fn recientes_fixture() -> Vec<Reciente> {
             92.0,
             &[(paleta[2], 30.0), (paleta[5], 24.0), (paleta[9], 38.0)],
         ),
-        reciente(
-            "entrevista-calle.cdp",
-            1,
-            1,
-            30,
-            12.0,
-            &[(paleta[4], 12.0)],
-        ),
+        reciente("entrevista-calle.cdp", 1, 1, 30, 12.0, &[(paleta[4], 12.0)]),
         reciente("vacio.cdp", 0, 0, 240, 0.0, &[]),
     ];
     let cache = rod_app::thumbnail::carpeta_cache();
@@ -368,11 +364,7 @@ pub fn editor_de(proyecto: Proyecto, panel: Panel, duracion: f64) -> EditorApp {
     let elegida = candidatas
         .iter()
         .filter(|c| c.2 >= 100)
-        .min_by(|a, b| {
-            (a.1 - objetivo)
-                .abs()
-                .total_cmp(&(b.1 - objetivo).abs())
-        })
+        .min_by(|a, b| (a.1 - objetivo).abs().total_cmp(&(b.1 - objetivo).abs()))
         .or_else(|| candidatas.first());
     let (posicion, id) = match elegida {
         Some(c) => (c.1, Some(c.3.clone())),
@@ -408,8 +400,11 @@ pub struct MarcoEditor {
 }
 
 fn fondo(ctx: &egui::Context) {
-    ctx.layer_painter(egui::LayerId::background())
-        .rect_filled(ctx.content_rect(), 0.0, tema::FONDO);
+    ctx.layer_painter(egui::LayerId::background()).rect_filled(
+        ctx.content_rect(),
+        0.0,
+        tema::FONDO,
+    );
 }
 
 pub fn construir_inicio(
@@ -419,11 +414,16 @@ pub fn construir_inicio(
     idioma: Idioma,
 ) -> Harness<'static, MarcoInicio> {
     let textos = idioma.textos();
+    let mut tema_aplicado = false;
     let mut harness = Harness::builder()
         .wgpu()
         .with_size(egui::vec2(ancho, alto))
         .build_state(
             move |ctx, marco: &mut MarcoInicio| {
+                if !tema_aplicado {
+                    tema::aplicar(ctx);
+                    tema_aplicado = true;
+                }
                 fondo(ctx);
                 let _ = chrome::mostrar(
                     ctx,
@@ -438,7 +438,8 @@ pub fn construir_inicio(
                 egui::CentralPanel::default()
                     .frame(tema::panel(tema::FONDO))
                     .show(ctx, |ui| {
-                        let _ = ui::inicio::mostrar(ui, &mut marco.estado, textos, &mut marco.prefs);
+                        let _ =
+                            ui::inicio::mostrar(ui, &mut marco.estado, textos, &mut marco.prefs);
                     });
             },
             MarcoInicio {
@@ -460,11 +461,16 @@ pub fn construir_editor(
     let textos = idioma.textos();
     let nombre = editor_app::nombre_proyecto(&editor).to_owned();
     let medidas = ui::editor::MedidasEditor::default();
+    let mut tema_aplicado = false;
     let mut harness = Harness::builder()
         .wgpu()
         .with_size(egui::vec2(ancho, alto))
         .build_state(
             move |ctx, marco: &mut MarcoEditor| {
+                if !tema_aplicado {
+                    tema::aplicar(ctx);
+                    tema_aplicado = true;
+                }
                 fondo(ctx);
                 let _ = chrome::mostrar(
                     ctx,
@@ -543,11 +549,16 @@ pub fn capturar_ajustes(
     let mut ajustes = ui::ajustes::EstadoAjustes::default();
     ajustes.pestana = pestana;
     ajustes.abrir();
+    let mut tema_aplicado = false;
     let mut harness = Harness::builder()
         .wgpu()
         .with_size(egui::vec2(ancho, alto))
         .build_state(
             move |ctx, marco: &mut MarcoAjustes| {
+                if !tema_aplicado {
+                    tema::aplicar(ctx);
+                    tema_aplicado = true;
+                }
                 fondo(ctx);
                 let _ = chrome::mostrar(
                     ctx,
@@ -592,11 +603,16 @@ pub fn capturar_atajos(
     let textos = idioma.textos();
     let mut prefs = Preferencias::default();
     prefs.idioma = idioma;
+    let mut tema_aplicado = false;
     let mut harness = Harness::builder()
         .wgpu()
         .with_size(egui::vec2(ancho, alto))
         .build_state(
             move |ctx, marco: &mut MarcoAtajos| {
+                if !tema_aplicado {
+                    tema::aplicar(ctx);
+                    tema_aplicado = true;
+                }
                 fondo(ctx);
                 let _ = chrome::mostrar(
                     ctx,
@@ -618,12 +634,7 @@ pub fn capturar_atajos(
                             &mut marco.inicio.prefs,
                         );
                     });
-                ui::atajos::mostrar(
-                    ctx,
-                    textos,
-                    &MapaAtajos::por_defecto(),
-                    &mut marco.atajos,
-                );
+                ui::atajos::mostrar(ctx, textos, &MapaAtajos::por_defecto(), &mut marco.atajos);
             },
             MarcoAtajos {
                 inicio: MarcoInicio { estado, prefs },
@@ -649,11 +660,16 @@ pub fn capturar_toast(
     let mut toasts = ui::toast::Toasts::default();
     toasts.push(texto.to_owned(), true);
     let nombre_proyecto = editor_app::nombre_proyecto(&editor).to_owned();
+    let mut tema_aplicado = false;
     let mut harness = Harness::builder()
         .wgpu()
         .with_size(egui::vec2(ancho, alto))
         .build_state(
             move |ctx, marco: &mut MarcoToast| {
+                if !tema_aplicado {
+                    tema::aplicar(ctx);
+                    tema_aplicado = true;
+                }
                 fondo(ctx);
                 let _ = chrome::mostrar(
                     ctx,
@@ -805,12 +821,8 @@ pub fn hoja_contacto(fase: &str) {
             let imagen = image::open(&ruta).ok()?.to_rgba8();
             // La textura de egui no pasa de 2048 px de lado: la miniatura de la
             // hoja se reduce a 440 px de ancho (16:9).
-            let imagen = image::imageops::resize(
-                &imagen,
-                440,
-                247,
-                image::imageops::FilterType::Triangle,
-            );
+            let imagen =
+                image::imageops::resize(&imagen, 440, 247, image::imageops::FilterType::Triangle);
             let (ancho, alto) = imagen.dimensions();
             let color = egui::ColorImage::from_rgba_unmultiplied(
                 [ancho as usize, alto as usize],
@@ -831,11 +843,16 @@ pub fn hoja_contacto(fase: &str) {
     let ancho = CELDA * COLUMNAS as f32 + 40.0;
     let alto = (ALTO_IMG + 42.0) * filas as f32 + 40.0;
 
+    let mut tema_aplicado = false;
     let mut harness = Harness::builder()
         .wgpu()
         .with_size(egui::vec2(ancho, alto))
         .build_ui_state(
             |ui, entradas: &mut Vec<(String, egui::ColorImage)>| {
+                if !tema_aplicado {
+                    tema::aplicar(ui.ctx());
+                    tema_aplicado = true;
+                }
                 fondo(ui.ctx());
                 egui::ScrollArea::vertical()
                     .auto_shrink(false)
