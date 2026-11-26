@@ -1,4 +1,33 @@
 #[test]
+fn limites_de_scroll_por_pistas() {
+    use rod_app::ui::timeline::{desplazar, filas_visibles, max_scroll_pistas};
+
+    assert_eq!(filas_visibles(700.0), 12);
+    assert_eq!(max_scroll_pistas(15, 700.0), 3.0);
+    assert_eq!(max_scroll_pistas(4, 700.0), 0.0);
+    assert_eq!(desplazar(2.0, 5.0, 15, 700.0), 3.0);
+    assert_eq!(desplazar(0.0, -1.0, 15, 700.0), 0.0);
+}
+
+#[test]
+fn clic_con_scroll_selecciona_el_carril_visible() {
+    use rod_app::timeline::{ALTO_CARRIL, ALTO_REGLA};
+    use rod_app::ui::timeline::punto;
+
+    let p = punto(egui::vec2(300.0, ALTO_REGLA + 20.0), 2.0);
+    assert_eq!(p.y, ALTO_REGLA + 2.0 * ALTO_CARRIL + 20.0);
+}
+
+#[test]
+fn regla_sigue_busca_tiempo_con_scroll() {
+    use rod_app::timeline::ALTO_REGLA;
+    use rod_app::ui::timeline::punto;
+
+    let p = punto(egui::vec2(300.0, 8.0), 2.0);
+    assert!(p.y < ALTO_REGLA);
+}
+
+#[test]
 fn alto_extra_no_guarda_altura_hinchada() {
     use rod_app::editor_app::EditorApp;
     use rod_app::ui::editor::MedidasEditor;

@@ -113,6 +113,21 @@ pub fn menu_contexto(ui: &mut Ui, id: &str, mensajes: &mut Vec<MensajeEditor>, t
 /// Margen izquierdo para los nombres de carril. El eje empieza después.
 const GUTTER: f32 = 104.0;
 
+/// Carriles que caben bajo la regla en un panel de la altura dada.
+pub fn filas_visibles(alto: f32) -> usize {
+    (((alto - ALTO_REGLA) / ALTO_CARRIL).floor().max(1.0)) as usize
+}
+
+/// Cuántas filas se pueden desplazar: las que sobran tras las visibles.
+pub fn max_scroll_pistas(filas: usize, alto: f32) -> f32 {
+    filas.saturating_sub(filas_visibles(alto)) as f32
+}
+
+/// Nueva posición de scroll tras una muesca de rueda, acotada al rango útil.
+pub fn desplazar(scroll: f32, lineas: f32, filas: usize, alto: f32) -> f32 {
+    (scroll + lineas).clamp(0.0, max_scroll_pistas(filas, alto))
+}
+
 /// Etiqueta adaptativa: `m:ss` para ticks de 1 s o más, `m:ss.d` si no.
 fn etiqueta_regla(segundos: f64, paso: f64) -> String {
     let minutos = (segundos / 60.0).floor() as u64;
@@ -124,8 +139,15 @@ fn etiqueta_regla(segundos: f64, paso: f64) -> String {
     }
 }
 
-fn punto(rel: egui::Vec2) -> timeline::Punto {
-    timeline::Punto::new(rel.x - GUTTER, rel.y)
+/// Coordenada local -> carril absoluto. La regla no se desplaza: un clic ahí
+/// sigue pidiendo buscar tiempo, aunque las pistas estén bajadas.
+pub fn punto(rel: egui::Vec2, scroll: f32) -> timeline::Punto {
+    let y = if rel.y < ALTO_REGLA {
+        rel.y
+    } else {
+        rel.y + scroll * ALTO_CARRIL
+    };
+    timeline::Punto::new(rel.x - GUTTER, y)
 }
 
 pub fn playhead(state: &EditorApp) -> f64 {
@@ -249,10 +271,14 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
     );
 
     // Carriles: fondo alterno y nombre con el punto semántico del hablante.
+    // El scroll se aplica aquí, en la frontera de la UI: la lógica pura sigue
+    // recibiendo carriles absolutos.
+    let scroll = state.scroll_pistas;
     for fila in 0..filas {
-        let y = rect.min.y + ALTO_REGLA + fila as f32 * ALTO_CARRIL;
-        if y + ALTO_CARRIL > rect.max.y {
-            break;
+        let relativo = (fila as f32 - scroll) * ALTO_CARRIL;
+        let y = rect.min.y + ALTO_REGLA + relativo;
+        if y + ALTO_CARRIL <= rect.min.y + ALTO_REGLA || y >= rect.max.y {
+            continue;
         }
         painter.rect_filled(
             egui::Rect::from_min_max(
@@ -287,7 +313,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
                 tema::color(rod_core::color_identidad(hablante, fila - 1)),
             )
         };
-        let centro = ALTO_REGLA + fila as f32 * ALTO_CARRIL + ALTO_CARRIL / 2.0;
+        let centro = ALTO_REGLA + relativo + ALTO_CARRIL / 2.0;
         painter.circle_filled(gutter.min + egui::vec2(12.0, centro), 3.0, color);
         painter.text(
             gutter.min + egui::vec2(22.0, centro),
@@ -313,7 +339,9 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
 
     // Waveform apagada en el carril de audio: se pinta de los picos ya
     // decodificados, nunca se recalcula por frame.
-    if let Some(picos) = &state.picos {
+    if scroll == 0.0
+        && let Some(picos) = &state.picos
+    {
         let base = rect.min.y + ALTO_REGLA;
         let altura = ALTO_CARRIL - 6.0;
         let pico = picos
@@ -368,7 +396,11 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
         if x1 <= area.min.x || x0 >= area.max.x {
             continue;
         }
-        let y = rect.min.y + ALTO_REGLA + fila as f32 * ALTO_CARRIL + 7.0;
+        let relativo = (fila as f32 - scroll) * ALTO_CARRIL;
+        let y = rect.min.y + ALTO_REGLA + relativo + 7.0;
+        if y + ALTO_CARRIL <= rect.min.y + ALTO_REGLA || y >= rect.max.y {
+            continue;
+        }
         let clip = egui::Rect::from_min_max(
             egui::pos2(x0.max(area.min.x), y),
             egui::pos2(x1.min(area.max.x), y + ALTO_CARRIL - 14.0),
@@ -452,36 +484,41 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
     {
         mensajes.push(MensajeEditor::Timeline(Mensaje::Pulsar(punto(
             pos - rect.min,
+            scroll,
         ))));
         mensajes.push(MensajeEditor::Timeline(Mensaje::Soltar(punto(
             pos - rect.min,
+            scroll,
         ))));
     }
     if respuesta.drag_started()
         && let Some(pos) = respuesta.interact_pointer_pos()
     {
-        let tiempo = vista.tiempo_de(punto(pos - rect.min).x).max(0.0);
+        let tiempo = vista.tiempo_de(punto(pos - rect.min, scroll).x).max(0.0);
         mensajes.push(MensajeEditor::ScrubInicio(tiempo));
         mensajes.push(MensajeEditor::Timeline(Mensaje::Pulsar(punto(
             pos - rect.min,
+            scroll,
         ))));
     }
     if respuesta.dragged()
         && let Some(pos) = respuesta.interact_pointer_pos()
     {
-        let tiempo = vista.tiempo_de(punto(pos - rect.min).x).max(0.0);
+        let tiempo = vista.tiempo_de(punto(pos - rect.min, scroll).x).max(0.0);
         mensajes.push(MensajeEditor::ScrubMover(tiempo));
         mensajes.push(MensajeEditor::Timeline(Mensaje::Arrastrar(punto(
             pos - rect.min,
+            scroll,
         ))));
     }
     if respuesta.drag_stopped()
         && let Some(pos) = respuesta.interact_pointer_pos()
     {
-        let tiempo = vista.tiempo_de(punto(pos - rect.min).x).max(0.0);
+        let tiempo = vista.tiempo_de(punto(pos - rect.min, scroll).x).max(0.0);
         mensajes.push(MensajeEditor::ScrubFin(tiempo));
         mensajes.push(MensajeEditor::Timeline(Mensaje::Soltar(punto(
             pos - rect.min,
+            scroll,
         ))));
     }
     let (modificadores, lineas) =
@@ -491,10 +528,28 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
         let cursor = ui
             .input(|entrada| entrada.pointer.latest_pos())
             .unwrap_or_else(|| area.center());
-        mensajes.push(MensajeEditor::Timeline(Mensaje::Rueda {
-            lineas,
-            punto: punto(cursor - rect.min),
-        }));
+        if modificadores.ctrl || modificadores.command {
+            // Zoom anclado al cursor, como antes.
+            mensajes.push(MensajeEditor::Timeline(Mensaje::Rueda {
+                lineas,
+                punto: punto(cursor - rect.min, scroll),
+            }));
+        } else if modificadores.shift {
+            // Pan horizontal de tiempo, como antes.
+            mensajes.push(MensajeEditor::Timeline(Mensaje::Rueda {
+                lineas,
+                punto: punto(cursor - rect.min, scroll),
+            }));
+        } else {
+            // Rueda simple: recorrer pistas. El offset ya está limitado a las
+            // filas que sobran, así que no se puede pasar del último carril.
+            mensajes.push(MensajeEditor::ScrollPistas(desplazar(
+                scroll,
+                lineas,
+                filas,
+                rect.height(),
+            )));
+        }
     }
     let _ = timeline::UMBRAL_CLIC;
     mensajes

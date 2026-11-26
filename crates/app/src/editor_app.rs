@@ -139,6 +139,8 @@ pub enum MensajeEditor {
     /// Un campo del preset. El id y el campo son la clave del borrador.
     EditarPreset(String, CampoPreset, String),
     Timeline(timeline::Mensaje),
+    /// Primera fila visible del timeline, ya limitada por la UI.
+    ScrollPistas(f32),
     /// Zoom del timeline: `factor > 1` acerca. El ancla es el playhead.
     Zoom(f64),
     /// El usuario enciende o apaga el seguimiento del playhead.
@@ -353,6 +355,9 @@ pub struct EditorApp {
     /// Ancho del canvas del timeline, que lo publica el propio canvas. Sin él
     /// no se puede saber cuántos segundos caben (pan, seguimiento, zoom).
     pub(crate) ancho_timeline: f32,
+    /// Primera fila visible del timeline, en carriles. Lo mueve la rueda y la
+    /// scrollbar; es estado de vista, no entra en `Historial`.
+    pub scroll_pistas: f32,
     /// La vista persigue al playhead mientras se reproduce. Se apaga al usar
     /// la rueda o la barra, y se enciende con el botón.
     pub seguir: bool,
@@ -538,6 +543,7 @@ impl EditorApp {
             // sentido y el seguimiento espera; el primer `Ancho` lo arregla y,
             // de paso, ajusta la ventana al video.
             ancho_timeline: 0.0,
+            scroll_pistas: 0.0,
             seguir: true,
             snap: true,
             objetivo_vista: None,
@@ -2026,6 +2032,9 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             }
             state.borradores_preset.remove(&(id.clone(), campo));
             return guardar_presets(state);
+        }
+        MensajeEditor::ScrollPistas(fila) => {
+            state.scroll_pistas = fila.max(0.0);
         }
         MensajeEditor::Timeline(mensaje) => match mensaje {
             timeline::Mensaje::Ancho(ancho) => {
