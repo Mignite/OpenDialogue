@@ -398,6 +398,8 @@ pub struct MarcoEditor {
     pub formato: wgpu::TextureFormat,
     /// Estado del punto de la cabecera: `true` = cambios sin guardar.
     pub sucio: bool,
+    /// Ancho del eje que publica el widget de timeline en el primer frame.
+    pub ancho_eje: Option<f32>,
 }
 
 fn fondo(ctx: &egui::Context) {
@@ -471,7 +473,7 @@ pub fn construir_editor(
                 );
                 let formato = marco.formato;
                 let gpu = Arc::clone(&marco.gpu);
-                let _ = ui::editor::show(
+                for mensaje in ui::editor::show(
                     ctx,
                     &mut marco.editor,
                     formato,
@@ -479,7 +481,13 @@ pub fn construir_editor(
                     textos,
                     &MapaAtajos::por_defecto(),
                     &mut marco.medidas,
-                );
+                ) {
+                    if let MensajeEditor::Timeline(rod_app::timeline::Mensaje::Ancho(ancho)) =
+                        mensaje
+                    {
+                        marco.ancho_eje = Some(ancho);
+                    }
+                }
             },
             MarcoEditor {
                 editor,
@@ -487,13 +495,13 @@ pub fn construir_editor(
                 gpu: Arc::new(Mutex::new(None)),
                 formato: wgpu::TextureFormat::Rgba8Unorm,
                 sucio: true,
+                ancho_eje: None,
             },
         );
     tema::aplicar(&harness.ctx);
     harness.run();
-    // El ancho real del eje solo se conoce tras medir el widget: se encaja
-    // entonces, igual que hace la app al abrir un video.
-    harness.state_mut().editor.encajar_timeline();
+    let ancho_eje = harness.state().ancho_eje.unwrap_or(0.0);
+    harness.state_mut().editor.encuadrar_timeline(ancho_eje);
     harness.run();
     harness
 }
@@ -654,7 +662,7 @@ pub fn capturar_toast(
                 );
                 let formato = marco.editor.formato;
                 let gpu = Arc::clone(&marco.editor.gpu);
-                let _ = ui::editor::show(
+                for mensaje in ui::editor::show(
                     ctx,
                     &mut marco.editor.editor,
                     formato,
@@ -662,7 +670,13 @@ pub fn capturar_toast(
                     textos,
                     &MapaAtajos::por_defecto(),
                     &mut marco.editor.medidas,
-                );
+                ) {
+                    if let MensajeEditor::Timeline(rod_app::timeline::Mensaje::Ancho(ancho)) =
+                        mensaje
+                    {
+                        marco.editor.ancho_eje = Some(ancho);
+                    }
+                }
                 let _ = marco.toasts.mostrar(ctx, textos);
             },
             MarcoToast {
@@ -672,13 +686,19 @@ pub fn capturar_toast(
                     gpu: Arc::new(Mutex::new(None)),
                     formato: wgpu::TextureFormat::Rgba8Unorm,
                     sucio: true,
+                    ancho_eje: None,
                 },
                 toasts,
             },
         );
     tema::aplicar(&harness.ctx);
     harness.run();
-    harness.state_mut().editor.editor.encajar_timeline();
+    let ancho_eje = harness.state().editor.ancho_eje.unwrap_or(0.0);
+    harness
+        .state_mut()
+        .editor
+        .editor
+        .encuadrar_timeline(ancho_eje);
     harness.run();
     guardar(&mut harness, fase, nombre);
 }

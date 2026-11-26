@@ -606,11 +606,13 @@ impl EditorApp {
         refrescar_preview(self);
     }
 
-    /// Arnés de capturas: encuadra la timeline entera con el ancho ya medido
-    /// del eje. Se llama tras el primer frame, cuando el widget ya se midió.
+    /// Arnés de capturas: fija el ancho del eje y encaja la vista con él.
+    /// El widget lo mide en el primer frame y lo publica con `Ancho`; la app
+    /// normal lo aplica en su bucle, el arnés lo aplica aquí.
     #[cfg(feature = "test-video")]
-    pub fn encajar_timeline(&mut self) {
-        self.vista = self.vista.encajar(self.duration, self.ancho_timeline);
+    pub fn encuadrar_timeline(&mut self, ancho_px: f32) {
+        self.ancho_timeline = ancho_px;
+        self.vista = self.vista.encajar(self.duration, ancho_px);
     }
 
     /// Con el primer frame ya rasterizado se regenera la miniatura que faltaba
