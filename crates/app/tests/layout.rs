@@ -304,6 +304,144 @@ fn borrar_caption_no_toca_la_seleccion() {
 }
 
 #[test]
+fn el_picker_de_color_aparece_con_un_solo_clic() {
+    use egui_kittest::kittest::Queryable;
+    use rod_app::editor_app::EditorApp;
+    use rod_app::textos::EN;
+
+    let video = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../testdata/clip-15s-2audio.mp4"
+    );
+    let mut editor = EditorApp::desde_video(video).expect("abre el clip de prueba");
+    let mut preset = rod_core::preset_por_defecto();
+    preset.id = "p-color".into();
+    preset.nombre = "Color".into();
+    editor.presets_mut().push(preset);
+    editor.preset_seleccionado = Some("p-color".into());
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(320.0, 700.0))
+        .build_ui_state(
+            |ui, estado: &mut EditorApp| {
+                let mensajes = rod_app::ui::paneles::estilos::mostrar(ui, estado, &EN);
+                for mensaje in mensajes {
+                    let _ = rod_app::editor_app::update(estado, mensaje);
+                }
+            },
+            editor,
+        );
+    rod_app::ui::tema::aplicar(&h.ctx);
+    h.run();
+    let swatch = h
+        .get_all_by_role_and_label(egui::accesskit::Role::Button, "")
+        .next()
+        .expect("swatch de color");
+    let antes = h
+        .query_all_by_role(egui::accesskit::Role::SpinButton)
+        .count();
+    swatch.click();
+    h.step();
+    h.run();
+    assert!(
+        h.query_all_by_role(egui::accesskit::Role::SpinButton)
+            .count()
+            > antes + 2,
+        "el picker completo no apareció tras un clic"
+    );
+}
+
+#[test]
+fn ensanchar_y_encoger_el_panel_lateral_no_vuelve_al_inicial() {
+    use rod_app::editor_app::EditorApp;
+    use rod_app::ui::editor::MedidasEditor;
+    use rod_app::video::Gpu;
+    use std::sync::{Arc, Mutex};
+
+    let video = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../testdata/clip-15s-2audio.mp4"
+    );
+    let editor = EditorApp::desde_video(video).expect("abre el clip de prueba");
+    let estado = (editor, MedidasEditor::default(), Arc::new(Mutex::new(None)));
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(1200.0, 700.0))
+        .build_state(
+            |ctx, (e, m, gpu): &mut (EditorApp, MedidasEditor, Arc<Mutex<Option<Gpu>>>)| {
+                let _ = rod_app::ui::editor::show(
+                    ctx,
+                    e,
+                    wgpu::TextureFormat::Rgba8Unorm,
+                    gpu.clone(),
+                    &rod_app::textos::EN,
+                    &rod_app::comandos::MapaAtajos::por_defecto(),
+                    m,
+                );
+            },
+            estado,
+        );
+    h.run();
+    let inicial = h.state().1.ancho_panel;
+    // El borde del SidePanel está en 1200 - ancho, con unos px de margen.
+    let borde = 1200.0 - inicial;
+    h.input_mut()
+        .events
+        .push(egui::Event::PointerMoved(egui::pos2(borde, 350.0)));
+    h.step();
+    h.input_mut().events.push(egui::Event::PointerButton {
+        pos: egui::pos2(borde, 350.0),
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.step();
+    h.input_mut()
+        .events
+        .push(egui::Event::PointerMoved(egui::pos2(borde - 20.0, 350.0)));
+    h.step();
+    h.input_mut().events.push(egui::Event::PointerButton {
+        pos: egui::pos2(borde - 20.0, 350.0),
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.step();
+    assert!(
+        h.state().1.ancho_panel > inicial + 10.0,
+        "el panel volvió a {:.1} desde {inicial:.1}",
+        h.state().1.ancho_panel
+    );
+}
+
+#[test]
+fn enfocar_el_texto_no_mueve_el_playhead() {
+    use rod_app::editor_app::{EditorApp, MensajeEditor, update};
+
+    let video = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../testdata/clip-15s-2audio.mp4"
+    );
+    let mut editor = EditorApp::desde_video(video).expect("abre el clip de prueba");
+    editor.editor_mut().agregar(rod_core::Caption {
+        id: "cap-texto".into(),
+        inicio: 1.0,
+        fin: 2.0,
+        texto: "hola".into(),
+        hablante_id: None,
+    });
+    assert!((editor.tiempo_ui() - 0.0).abs() < 0.5);
+    let _ = update(
+        &mut editor,
+        MensajeEditor::SeleccionarSinSeek("cap-texto".into()),
+    );
+    assert_eq!(editor.seleccion(), &["cap-texto".to_owned()]);
+    assert!(
+        (editor.tiempo_ui() - 0.0).abs() < 0.5,
+        "el playhead se movió a {}",
+        editor.tiempo_ui()
+    );
+}
+
+#[test]
 fn tope_respeta_la_ventana_y_el_suelo() {
     assert_eq!(rod_app::ui::editor::alto_maximo_timeline(900.0), 630.0);
     assert_eq!(rod_app::ui::editor::alto_maximo_timeline(200.0), 160.0);

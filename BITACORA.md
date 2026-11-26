@@ -1,5 +1,18 @@
 # Bitácora
 
+## 2026-11-26 — Divisor lateral, picker y playhead
+
+- El ancho del panel lateral volvía a su valor inicial por la misma causa que
+  el timeline: `lado.response.rect.width()` crecía con el `PanelState` de egui.
+  Ahora usa `exact_width` con el valor de preferencias y un `interact` propio.
+- Color: el swatch abría un popup que contenía otro botón que había que pulsar
+  para ver el picker. Se usa `color_picker_color32` con `Alpha::Opaque`, así
+  que el selector completo aparece al primer clic.
+- Enfocar el campo de texto emitía `Seleccionar`, cuyo handler hace seek al
+  inicio del caption; mpv aterrizaba un frame antes. El foco ahora emite
+  `SeleccionarSinSeek`: resalta la línea sin mover el playhead.
+
+
 ## 2026-11-26 — Tres arreglos de paneles
 
 - Buscar fuente en Styles cerraba el desplegable: el `ComboBox` de egui 0.33

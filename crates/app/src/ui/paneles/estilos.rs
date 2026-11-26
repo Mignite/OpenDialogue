@@ -507,7 +507,14 @@ fn campo_color(
             );
             egui::Popup::from_toggle_button_response(&boton).show(|ui| {
                 let mut editable = color;
-                ui.color_edit_button_srgba(&mut editable);
+                // El picker completo (2D + canales) aparece ya en el popup,
+                // sin un segundo botón que haya que pulsar. Los colores del
+                // preset son opacos: no se ofrece canal alfa.
+                egui::widgets::color_picker::color_picker_color32(
+                    ui,
+                    &mut editable,
+                    egui::widgets::color_picker::Alpha::Opaque,
+                );
                 if editable != color {
                     borrador = format!(
                         "#{:02X}{:02X}{:02X}",

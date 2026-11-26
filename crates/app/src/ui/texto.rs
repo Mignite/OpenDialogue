@@ -56,7 +56,7 @@ pub fn color_borde_campo(hay_linea: bool, foco: bool) -> egui::Color32 {
 
 /// Al enfocar el campo, la línea que se edita pasa a estar seleccionada arriba.
 pub fn mensaje_al_enfocar(state: &EditorApp) -> Option<MensajeEditor> {
-    EstadoTexto::objetivo(state).map(MensajeEditor::Seleccionar)
+    EstadoTexto::objetivo(state).map(MensajeEditor::SeleccionarSinSeek)
 }
 
 fn pintar_borde_rayado(painter: &egui::Painter, rect: egui::Rect, color: egui::Color32) {

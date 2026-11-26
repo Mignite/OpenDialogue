@@ -134,6 +134,9 @@ pub enum MensajeEditor {
     Panel(Panel),
     /// Preset abierto en el panel de estilos.
     SeleccionarPreset(String),
+    /// Selecciona sin llevar el playhead al inicio: al enfocar el campo de
+    /// texto queremos resaltar la línea, no saltar al frame anterior.
+    SeleccionarSinSeek(String),
     /// Duplica el preset seleccionado (parte del actual, como el oráculo).
     NuevoPreset,
     BorrarPreset(String),
@@ -1741,6 +1744,11 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
                         .collect(),
                 );
             }
+            sincronizar_borrador(state);
+        }
+        MensajeEditor::SeleccionarSinSeek(id) => {
+            state.texto.manual = true;
+            state.editor.seleccionar_uno(&id);
             sincronizar_borrador(state);
         }
         MensajeEditor::Seleccionar(id) => {

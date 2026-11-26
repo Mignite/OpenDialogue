@@ -81,13 +81,37 @@ pub fn show(
     let mut mensajes = Vec::new();
 
     if medidas.panel_visible {
-        let lado = egui::SidePanel::right("inspector")
-            .resizable(true)
-            .default_width(medidas.ancho_panel)
-            .min_width(tema::ANCHO_PANEL_MIN)
-            .max_width(tema::ANCHO_PANEL_MAX)
+        let ancho = medidas
+            .ancho_panel
+            .clamp(tema::ANCHO_PANEL_MIN, tema::ANCHO_PANEL_MAX);
+        medidas.ancho_panel = ancho;
+        let mut arrastre_panel: Option<f32> = None;
+        egui::SidePanel::right("inspector")
+            .resizable(false)
+            .exact_width(ancho)
             .frame(tema::panel(tema::PANEL))
             .show(ctx, |ui| {
+                // Como en el timeline: el `PanelState` de egui acumula el rect
+                // entre frames, así que el ancho sale de `medidas` y el
+                // arrastre escribe en ella desde el borde izquierdo del panel.
+                let borde = ui.max_rect().min.x;
+                let franja = egui::Rect::from_x_y_ranges(
+                    (borde - tema::ESP_4)..=(borde + tema::ESP_4),
+                    ui.max_rect().y_range(),
+                );
+                let divisor = ui.interact(
+                    franja,
+                    egui::Id::new("divisor-panel-lateral"),
+                    egui::Sense::drag(),
+                );
+                if divisor.dragged()
+                    && let Some(pointer) = divisor.interact_pointer_pos()
+                {
+                    arrastre_panel = Some(pointer.x);
+                }
+                if divisor.hovered() {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+                }
                 let lineas = state.editor.proyecto().captions.len();
                 let hablantes = state.editor.proyecto().hablantes.len();
                 if let Some(panel) = kit::tab_bar(
@@ -107,12 +131,10 @@ pub fn show(
                     Panel::Estilos => mensajes.extend(estilos::mostrar(ui, state, textos)),
                 }
             });
-        // El rect devuelto incluye el marco: nunca debe exceder el máximo.
-        medidas.ancho_panel = lado
-            .response
-            .rect
-            .width()
-            .clamp(tema::ANCHO_PANEL_MIN, tema::ANCHO_PANEL_MAX);
+        if let Some(x) = arrastre_panel {
+            medidas.ancho_panel =
+                (ctx.content_rect().max.x - x).clamp(tema::ANCHO_PANEL_MIN, tema::ANCHO_PANEL_MAX);
+        }
     }
 
     let tope = alto_maximo_timeline(ctx.content_rect().height());
