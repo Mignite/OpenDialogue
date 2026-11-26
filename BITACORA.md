@@ -1,5 +1,22 @@
 # Bitácora
 
+## 2026-11-26 — Tres arreglos de paneles
+
+- Buscar fuente en Styles cerraba el desplegable: el `ComboBox` de egui 0.33
+  usa `CloseOnClick` por defecto, que cierra con **cualquier** clic, incluso
+  dentro del popup. Ahora usa `CloseOnClickOutside`; test de UI con kittest que
+  escribe en el campo y comprueba que la opción sigue accesible.
+- El selector de estilo de Speakers se salía del panel: nombre, contador,
+  keycap, mute, solo y estilo competían por la misma fila de 284 px y la
+  tarjeta crecía a 357 px. Ahora es tarjeta de dos líneas: arriba color/nombre/
+  contador/keycap/···, abajo mute/solo/estilo con ancho calculado. Test de
+  no-desborde a 300 px.
+- Subtitles: cada fila tiene basura junto al lápiz. Borra esa línea sin
+  cambiar la selección (`BorrarCaption`), con un paso de historial y el toast
+  de «línea eliminada». Alternativa descartada: seleccionar la fila y usar
+  `BorrarSeleccion`, que robaba la selección del usuario.
+
+
 ## 2026-11-26 — Layout del editor: divisor y pistas
 
 - El divisor del timeline parecía no responder hacia arriba: `editor.rs` le

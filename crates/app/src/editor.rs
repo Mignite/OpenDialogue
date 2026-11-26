@@ -307,6 +307,18 @@ impl EstadoEditor {
         }
     }
 
+    /// Borra una línea concreta sin cambiar la selección actual (el botón de
+    /// basura de cada fila no debe robar la selección del usuario).
+    pub fn borrar_caption(&mut self, id: &str) -> bool {
+        let antes = self.documento.proyecto.captions.len();
+        self.documento
+            .proyecto
+            .captions
+            .retain(|caption| caption.id != id);
+        self.seleccion.retain(|seleccionado| seleccionado != id);
+        antes != self.documento.proyecto.captions.len()
+    }
+
     pub fn borrar_seleccion(&mut self) -> usize {
         let selected = self
             .seleccion

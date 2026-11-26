@@ -181,6 +181,129 @@ fn arrastrar_el_divisor_encoge_el_timeline() {
 }
 
 #[test]
+fn buscar_fuente_no_cierra_el_desplegable() {
+    use egui_kittest::kittest::Queryable;
+    use rod_app::editor_app::EditorApp;
+    use rod_app::textos::EN;
+
+    let video = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../testdata/clip-15s-2audio.mp4"
+    );
+    let editor = EditorApp::desde_video(video).expect("abre el clip de prueba");
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(320.0, 700.0))
+        .build_ui_state(
+            |ui, estado: &mut EditorApp| {
+                let _ = rod_app::ui::paneles::estilos::mostrar(ui, estado, &EN);
+            },
+            editor,
+        );
+    rod_app::ui::tema::aplicar(&h.ctx);
+    h.run();
+    h.get_by_role(egui::accesskit::Role::ComboBox).click();
+    h.run();
+    // El campo de búsqueda del popup es el único TextInput vacío.
+    let busqueda = h
+        .get_all_by_role(egui::accesskit::Role::TextInput)
+        .find(|nodo| nodo.value().unwrap_or_default().is_empty())
+        .expect("campo de búsqueda visible");
+    busqueda.click();
+    busqueda.type_text("Ari");
+    h.run();
+    assert!(
+        h.query_by_role_and_label(egui::accesskit::Role::Button, "Arial")
+            .is_some(),
+        "el popup se cerró al buscar"
+    );
+}
+
+#[test]
+fn speakers_no_desborda_a_300px() {
+    use rod_app::editor_app::EditorApp;
+    use rod_app::textos::EN;
+
+    let video = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../testdata/clip-15s-2audio.mp4"
+    );
+    let mut editor = EditorApp::desde_video(video).expect("abre el clip de prueba");
+    editor
+        .editor_mut()
+        .proyecto_mut()
+        .hablantes
+        .push(rod_core::Hablante {
+            id: "h1".into(),
+            nombre: "Hablante 1".into(),
+            tecla: "1".into(),
+            color: String::new(),
+            preset_id: None,
+        });
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(300.0, 700.0))
+        .build_ui_state(
+            |ui, estado: &mut EditorApp| {
+                let _ = rod_app::ui::paneles::hablantes::mostrar(ui, estado, &EN);
+            },
+            editor,
+        );
+    rod_app::ui::tema::aplicar(&h.ctx);
+    h.run();
+    for recorte in &h.output().shapes {
+        let clip = recorte.clip_rect;
+        // El área sensible transparente del arnés es más ancha; no pinta nada.
+        if let egui::Shape::Rect(r) = &recorte.shape {
+            if r.fill.a() == 0 && r.stroke.width == 0.0 {
+                continue;
+            }
+        }
+        let rect = match &recorte.shape {
+            egui::Shape::Rect(r) => r.rect,
+            egui::Shape::Text(t) => t.galley.rect.translate(t.pos.to_vec2()),
+            _ => continue,
+        };
+        if clip.is_finite() && clip.max.x > 0.0 && rect.max.x > 0.0 {
+            assert!(
+                rect.max.x <= 301.0,
+                "control fuera del panel: {rect:?} en {clip:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn borrar_caption_no_toca_la_seleccion() {
+    use rod_app::editor_app::{EditorApp, MensajeEditor, update};
+
+    let video = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../testdata/clip-15s-2audio.mp4"
+    );
+    let mut editor = EditorApp::desde_video(video).expect("abre el clip de prueba");
+    for id in ["c0", "c1"] {
+        editor.editor_mut().agregar(rod_core::Caption {
+            id: id.into(),
+            inicio: 0.0,
+            fin: 1.0,
+            texto: "hola".into(),
+            hablante_id: None,
+        });
+    }
+    update(&mut editor, MensajeEditor::Seleccionar("c0".into()));
+    let _ = update(&mut editor, MensajeEditor::BorrarCaption("c1".into()));
+    let ids: Vec<_> = editor
+        .proyecto()
+        .captions
+        .iter()
+        .map(|caption| caption.id.as_str())
+        .collect();
+    assert_eq!(ids, vec!["c0"]);
+    assert_eq!(editor.seleccion(), &["c0".to_owned()]);
+    let _ = update(&mut editor, MensajeEditor::Deshacer);
+    assert_eq!(editor.proyecto().captions.len(), 2);
+}
+
+#[test]
 fn tope_respeta_la_ventana_y_el_suelo() {
     assert_eq!(rod_app::ui::editor::alto_maximo_timeline(900.0), 630.0);
     assert_eq!(rod_app::ui::editor::alto_maximo_timeline(200.0), 160.0);

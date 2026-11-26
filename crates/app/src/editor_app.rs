@@ -91,6 +91,8 @@ pub enum MensajeEditor {
         shift: bool,
     },
     BorrarSeleccion,
+    /// Borra una línea concreta desde el botón de basura de su fila.
+    BorrarCaption(String),
     Deshacer,
     Rehacer,
     /// Texto que el usuario escribe. No toca el proyecto hasta `AplicarTexto`:
@@ -1850,6 +1852,20 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             }
             // Válido o no, el campo vuelve a mostrar el valor del proyecto.
             sincronizar_borrador(state);
+        }
+        MensajeEditor::BorrarCaption(id) => {
+            if state
+                .editor
+                .proyecto()
+                .captions
+                .iter()
+                .any(|caption| caption.id == id)
+            {
+                state.editor.registrar_historial();
+                state.editor.borrar_caption(&id);
+                sincronizar_borrador(state);
+                refrescar_preview(state);
+            }
         }
         MensajeEditor::BorrarSeleccion => {
             // Sin selección no hay paso de historial: un Ctrl+Z vacío es peor

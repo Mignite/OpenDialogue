@@ -95,7 +95,7 @@ pub const COLOR_SIN_HABLANTE: Color32 = Color32::from_rgb(0x66, 0x66, 0x66);
 pub const COLOR_WAVEFORM: Color32 = Color32::from_rgb(0x3A, 0x4A, 0x5A);
 pub const ALTO_TABS: f32 = 36.0;
 pub const SEPARACION_TABS: f32 = 16.0;
-pub const ALTO_TARJETA_HABLANTE: f32 = 56.0;
+pub const ALTO_TARJETA_HABLANTE: f32 = 76.0;
 pub const TAMANO_PUNTO_GRANDE: f32 = 12.0;
 pub const GROSOR_BARRA_HABLANTE: f32 = 3.0;
 /// Fondo de la fila seleccionada en la lista de subtítulos.

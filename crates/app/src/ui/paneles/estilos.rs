@@ -341,6 +341,10 @@ fn editor_preset(
     let mut elegida: Option<String> = None;
     egui::ComboBox::from_id_salt(("fuente-preset", &preset.id))
         .width(ancho)
+        // Por defecto egui cierra el popup con cualquier clic, incluso dentro:
+        // el campo de búsqueda se cerraba al pulsarlo. Solo cerrar al clic
+        // fuera o con Escape.
+        .close_behavior(egui::containers::PopupCloseBehavior::CloseOnClickOutside)
         .selected_text(&fuente)
         .show_ui(ui, |ui| {
             ui.add_sized(

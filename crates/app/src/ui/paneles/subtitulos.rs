@@ -240,6 +240,26 @@ fn dibujar_lista(
                                 mensajes.push(MensajeEditor::Seleccionar(caption.id.clone()));
                                 mensajes.push(MensajeEditor::Comando(Comando::EditarTexto));
                             }
+                            // Basura junto al lápiz: borra esta línea sin
+                            // cambiar la selección ni pedir confirmación.
+                            let x1 = fila.max.x - tema::ALTO_CHIP - tema::ESP_4 - tema::ESP_2;
+                            let basura = egui::Rect::from_min_max(
+                                egui::pos2(
+                                    x1 - tema::ALTO_CHIP,
+                                    fila.max.y - tema::ALTO_CHIP - tema::ESP_2,
+                                ),
+                                egui::pos2(x1, fila.max.y - tema::ESP_2),
+                            );
+                            if kit::icon_button_en(
+                                ui,
+                                basura,
+                                Icono::Papelera,
+                                textos.comando(Comando::Eliminar),
+                            )
+                            .clicked()
+                            {
+                                mensajes.push(MensajeEditor::BorrarCaption(caption.id.clone()));
+                            }
                         });
                     });
 

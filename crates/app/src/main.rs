@@ -441,7 +441,9 @@ impl eframe::App for RustyDialogue {
         let borro = mensajes_editor.iter().any(|mensaje| {
             matches!(
                 mensaje,
-                MensajeEditor::BorrarSeleccion | MensajeEditor::Comando(Comando::Eliminar)
+                MensajeEditor::BorrarSeleccion
+                    | MensajeEditor::BorrarCaption(_)
+                    | MensajeEditor::Comando(Comando::Eliminar)
             )
         });
         let borro_preset = mensajes_editor
