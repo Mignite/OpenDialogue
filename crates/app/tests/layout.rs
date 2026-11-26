@@ -1,4 +1,33 @@
 #[test]
+fn rueda_simple_baja_las_pistas_y_shift_hace_pan() {
+    use rod_app::ui::timeline::{Rueda, gesto_rueda};
+
+    // winit entrega delta.y = -40 al girar hacia abajo: hay que avanzar filas.
+    assert_eq!(
+        gesto_rueda(egui::Modifiers::NONE, egui::vec2(0.0, -40.0)),
+        Rueda::Pistas(1.0)
+    );
+    // Con Shift, egui pone la muesca en .x y deja .y a 0.
+    assert_eq!(
+        gesto_rueda(egui::Modifiers::SHIFT, egui::vec2(40.0, 0.0)),
+        Rueda::Pan(1.0)
+    );
+    assert_eq!(
+        gesto_rueda(egui::Modifiers::CTRL, egui::vec2(0.0, -40.0)),
+        Rueda::Zoom(-1.0)
+    );
+}
+
+#[test]
+fn scroll_se_ajusta_al_quitar_hablantes() {
+    use rod_app::ui::timeline::scroll_visible;
+
+    // Tres filas desplazadas con 12 hablantes; al quedar 4 no queda recorrido.
+    assert_eq!(scroll_visible(3.0, 13, 700.0), 1.0);
+    assert_eq!(scroll_visible(3.0, 5, 700.0), 0.0);
+}
+
+#[test]
 fn sin_scrollbar_cuando_todas_caben() {
     use rod_app::ui::timeline::{max_scroll_pistas, scroll_desde_barra};
 

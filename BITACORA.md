@@ -1,5 +1,27 @@
 # Bitácora
 
+## 2026-11-26 — Layout del editor: divisor y pistas
+
+- El divisor del timeline parecía no responder hacia arriba: `editor.rs` le
+  ponía `max_height(alto_abajo)`, igual a su altura actual, así que el video
+  tenía un mínimo efectivo de ~580 px y solo se veían 2–3 pistas. Ahora el
+  tope es el 70 % de la ventana, con suelo de 160 px y la altura sigue
+  guardada en `Preferencias`.
+- Las pistas que no cabían simplemente no se dibujaban (`timeline.rs` rompía
+  el bucle al llegar al borde). Se añadió scroll con la regla fija y una
+  scrollbar de 10 px. El offset se suma en `ui/timeline.rs` a la `y` del
+  `Punto`, así que `timeline.rs` y `arrastre.rs` no cambiaron: sus tests
+  siguen pasando sin reescribir geometría.
+- Alternativa descartada: envolver el timeline en `ScrollArea::vertical()`.
+  Sale gratis pero desplaza también la regla y cambia el rect que recibe los
+  eventos; había que rehacer la geometría de clics.
+- Rueda: antes simple = pan horizontal, Ctrl/Shift = zoom. Ahora simple =
+  pistas, Ctrl = zoom, Shift = pan. Es la única regresión de gesto aceptada y
+  fue decisión del autor. El slider de zoom sigue disponible.
+- Coste si falla: el usuario vuelve a quedarse sin ver las pistas de los
+  hablantes restantes, que era el problema reportado.
+
+
 ## 2026-11-26 — `mpv.lib` no encontrado al compilar
 
 - `cargo run` fallaba en el linker con `LNK1181: cannot open input file

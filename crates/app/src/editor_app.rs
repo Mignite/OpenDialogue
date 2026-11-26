@@ -2053,7 +2053,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
                 // playhead, el siguiente frame desharía el gesto.
                 state.seguir = false;
                 state.objetivo_vista = None;
-                if state.modificadores.ctrl || state.modificadores.shift {
+                if state.modificadores.ctrl || state.modificadores.command {
                     // Zoom anclado al cursor: el tiempo bajo el ratón no se
                     // mueve. 1.15 por muesca, el mismo paso que el oráculo.
                     let factor = 1.15_f64.powf(f64::from(lineas));

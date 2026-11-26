@@ -128,6 +128,34 @@ pub fn desplazar(scroll: f32, lineas: f32, filas: usize, alto: f32) -> f32 {
     (scroll + lineas).clamp(0.0, max_scroll_pistas(filas, alto))
 }
 
+/// Gestos posibles de la rueda sobre el timeline. `Zoom` y `Pan` conservan el
+/// sentido de `raw_scroll_delta`; `Pistas` ya usa el convenio nativo (girar
+/// hacia abajo avanza por los carriles).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Rueda {
+    Zoom(f32),
+    Pan(f32),
+    Pistas(f32),
+}
+
+/// Reparte la rueda según el modificador. egui 0.33 mueve la muesca a `.x`
+/// cuando Shift está pulsado y deja `.y` a 0, así que el pan lee `.x`.
+pub fn gesto_rueda(modificadores: egui::Modifiers, delta: egui::Vec2) -> Rueda {
+    if modificadores.ctrl || modificadores.command {
+        Rueda::Zoom(delta.y / 40.0)
+    } else if modificadores.shift {
+        Rueda::Pan(delta.x / 40.0)
+    } else {
+        Rueda::Pistas(-delta.y / 40.0)
+    }
+}
+
+/// Scroll que se puede usar este frame, aunque el estado venga de una vista
+/// con más hablantes (se borran y el recorrido desaparece).
+pub fn scroll_visible(scroll: f32, filas: usize, alto: f32) -> f32 {
+    scroll.clamp(0.0, max_scroll_pistas(filas, alto))
+}
+
 /// Posición de scroll que corresponde a un punto de la scrollbar.
 pub fn scroll_desde_barra(y_rel: f32, alto: f32, filas: usize) -> f32 {
     let max = max_scroll_pistas(filas, alto);
@@ -287,7 +315,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
     // Carriles: fondo alterno y nombre con el punto semántico del hablante.
     // El scroll se aplica aquí, en la frontera de la UI: la lógica pura sigue
     // recibiendo carriles absolutos.
-    let scroll = state.scroll_pistas;
+    let scroll = scroll_visible(state.scroll_pistas, filas, rect.height());
     for fila in 0..filas {
         let relativo = (fila as f32 - scroll) * ALTO_CARRIL;
         let y = rect.min.y + ALTO_REGLA + relativo;
@@ -561,28 +589,30 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
             scroll,
         ))));
     }
-    let (modificadores, lineas) =
-        ui.input(|entrada| (entrada.modifiers, entrada.raw_scroll_delta.y / 40.0));
+    let (modificadores, delta) = ui.input(|entrada| (entrada.modifiers, entrada.raw_scroll_delta));
     mensajes.push(MensajeEditor::Modificadores(modificadores));
-    if lineas != 0.0 {
-        let cursor = ui
-            .input(|entrada| entrada.pointer.latest_pos())
-            .unwrap_or_else(|| area.center());
-        if modificadores.ctrl || modificadores.command {
-            // Zoom anclado al cursor, como antes.
+    match gesto_rueda(modificadores, delta) {
+        Rueda::Zoom(lineas) if lineas != 0.0 => {
+            let cursor = ui
+                .input(|entrada| entrada.pointer.latest_pos())
+                .unwrap_or_else(|| area.center());
             mensajes.push(MensajeEditor::Timeline(Mensaje::Rueda {
                 lineas,
                 punto: punto(cursor - rect.min, scroll),
             }));
-        } else if modificadores.shift {
-            // Pan horizontal de tiempo, como antes.
+        }
+        Rueda::Pan(lineas) if lineas != 0.0 => {
+            let cursor = ui
+                .input(|entrada| entrada.pointer.latest_pos())
+                .unwrap_or_else(|| area.center());
             mensajes.push(MensajeEditor::Timeline(Mensaje::Rueda {
                 lineas,
                 punto: punto(cursor - rect.min, scroll),
             }));
-        } else {
-            // Rueda simple: recorrer pistas. El offset ya está limitado a las
-            // filas que sobran, así que no se puede pasar del último carril.
+        }
+        Rueda::Pistas(lineas) if lineas != 0.0 => {
+            // El offset ya está limitado a las filas que sobran, así que no se
+            // puede pasar del último carril.
             mensajes.push(MensajeEditor::ScrollPistas(desplazar(
                 scroll,
                 lineas,
@@ -590,6 +620,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
                 rect.height(),
             )));
         }
+        _ => {}
     }
     let _ = timeline::UMBRAL_CLIC;
     mensajes
