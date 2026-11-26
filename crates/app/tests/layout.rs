@@ -1,4 +1,20 @@
 #[test]
+fn sin_scrollbar_cuando_todas_caben() {
+    use rod_app::ui::timeline::{max_scroll_pistas, scroll_desde_barra};
+
+    assert_eq!(max_scroll_pistas(4, 700.0), 0.0);
+    assert_eq!(scroll_desde_barra(350.0, 700.0, 4), 0.0);
+}
+
+#[test]
+fn scrollbar_mapa_el_tamanio_de_la_barra() {
+    use rod_app::ui::timeline::scroll_desde_barra;
+
+    assert_eq!(scroll_desde_barra(0.0, 700.0, 15), 0.0);
+    assert_eq!(scroll_desde_barra(700.0, 700.0, 15), 3.0);
+}
+
+#[test]
 fn limites_de_scroll_por_pistas() {
     use rod_app::ui::timeline::{desplazar, filas_visibles, max_scroll_pistas};
 

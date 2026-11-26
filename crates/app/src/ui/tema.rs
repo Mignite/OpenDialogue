@@ -64,6 +64,8 @@ pub const ANCHO_SUBRAYADO: f32 = 72.0;
 pub const ANCHO_FILTRO: f32 = 160.0;
 pub const ALTO_BOTON_CHICO: f32 = 28.0;
 pub const GROSOR_PUNTEADO: f32 = 1.5;
+/// Barra vertical de las pistas del timeline.
+pub const ANCHO_SCROLLBAR: f32 = 10.0;
 pub const ANCHO_PANEL_DEFECTO: f32 = 320.0;
 pub const ANCHO_PANEL_MIN: f32 = 280.0;
 pub const ANCHO_PANEL_MAX: f32 = 420.0;

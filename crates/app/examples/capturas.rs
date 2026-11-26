@@ -98,13 +98,14 @@ fn capturar_editor(
     alto: f32,
     idioma: rod_app::textos::Idioma,
     panel: Option<rod_app::editor_app::Panel>,
+    num_hablantes: usize,
 ) {
     let video = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../testdata/clip-15s-2audio.mp4"
     );
     let mut proyecto = rod_core::Proyecto::nuevo(video);
-    for i in 0..7 {
+    for i in 0..num_hablantes {
         proyecto.hablantes.push(rod_core::Hablante {
             id: format!("h{i}"),
             nombre: format!("Hablante {i}"),
@@ -223,6 +224,7 @@ fn main() {
                 900.0,
                 rod_app::textos::Idioma::En,
                 Some(rod_app::editor_app::Panel::Subtitulos),
+                7,
             );
         }
         capturar_editor(
@@ -231,6 +233,7 @@ fn main() {
             900.0,
             rod_app::textos::Idioma::En,
             Some(rod_app::editor_app::Panel::Subtitulos),
+            7,
         );
         for ancho in [1100_u32, 1440, 2560] {
             capturar_editor(
@@ -239,6 +242,17 @@ fn main() {
                 900.0,
                 rod_app::textos::Idioma::En,
                 Some(rod_app::editor_app::Panel::Estilos),
+                7,
+            );
+        }
+        for ancho in [1100_u32, 1440, 2560] {
+            capturar_editor(
+                &format!("revision-pistas-{ancho}"),
+                ancho as f32,
+                900.0,
+                rod_app::textos::Idioma::En,
+                Some(rod_app::editor_app::Panel::Subtitulos),
+                12,
             );
         }
     }
@@ -354,6 +368,7 @@ fn main() {
                 900.0,
                 rod_app::textos::Idioma::En,
                 Some(panel),
+                7,
             );
         }
     }
@@ -380,6 +395,7 @@ fn main() {
                 alto,
                 rod_app::textos::Idioma::En,
                 None,
+                7,
             );
         }
         capturar(

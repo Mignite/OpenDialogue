@@ -128,6 +128,15 @@ pub fn desplazar(scroll: f32, lineas: f32, filas: usize, alto: f32) -> f32 {
     (scroll + lineas).clamp(0.0, max_scroll_pistas(filas, alto))
 }
 
+/// Posición de scroll que corresponde a un punto de la scrollbar.
+pub fn scroll_desde_barra(y_rel: f32, alto: f32, filas: usize) -> f32 {
+    let max = max_scroll_pistas(filas, alto);
+    if alto <= 0.0 || max <= 0.0 {
+        return 0.0;
+    }
+    (y_rel / alto * max).clamp(0.0, max)
+}
+
 /// Etiqueta adaptativa: `m:ss` para ticks de 1 s o más, `m:ss.d` si no.
 fn etiqueta_regla(segundos: f64, paso: f64) -> String {
     let minutos = (segundos / 60.0).floor() as u64;
@@ -204,8 +213,13 @@ fn paso_de_regla(escala: f64) -> f64 {
 }
 
 pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<MensajeEditor> {
+    let alto = ui.available_height();
     let (rect, respuesta) = ui.allocate_exact_size(
-        Vec2::new(ui.available_width(), ui.available_height()),
+        Vec2::new(ui.available_width() - tema::ANCHO_SCROLLBAR, alto),
+        egui::Sense::click_and_drag(),
+    );
+    let (barra, respuesta_barra) = ui.allocate_exact_size(
+        Vec2::new(tema::ANCHO_SCROLLBAR, alto),
         egui::Sense::click_and_drag(),
     );
     let painter = ui.painter();
@@ -472,6 +486,32 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
             ],
             egui::Stroke::new(1.0_f32, tema::ACENTO),
         ));
+    }
+
+    // Scrollbar: solo cuando hay más pistas que caben. El pulgar crece con
+    // la fracción visible y se desplaza por el recorrido que sobra.
+    let max_scroll = max_scroll_pistas(filas, rect.height());
+    if max_scroll > 0.0 {
+        painter.rect_filled(barra, egui::CornerRadius::ZERO, tema::LATERAL);
+        let pulgar_alto = barra.height() * filas_visibles(rect.height()) as f32 / filas as f32;
+        let pulgar_y = barra.min.y + scroll / max_scroll * (barra.height() - pulgar_alto);
+        painter.rect_filled(
+            egui::Rect::from_min_max(
+                egui::pos2(barra.min.x, pulgar_y),
+                egui::pos2(barra.max.x, pulgar_y + pulgar_alto),
+            ),
+            egui::CornerRadius::same(3),
+            tema::BORDE_CONTROL,
+        );
+        if (respuesta_barra.clicked() || respuesta_barra.dragged())
+            && let Some(pos) = respuesta_barra.interact_pointer_pos()
+        {
+            mensajes.push(MensajeEditor::ScrollPistas(scroll_desde_barra(
+                pos.y - barra.min.y,
+                barra.height(),
+                filas,
+            )));
+        }
     }
 
     // Los eventos llegan en coordenadas locales del rect del timeline: el
