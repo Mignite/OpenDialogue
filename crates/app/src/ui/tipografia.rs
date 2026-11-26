@@ -187,7 +187,7 @@ mod tests {
         let ctx = egui::Context::default();
         instalar(&ctx);
         // epaint solo crea el Fonts view después del primer `run`.
-        ctx.run(Default::default(), |_| {});
+        let _ = ctx.run(Default::default(), |_| {});
         let medir = |peso| {
             ctx.fonts_mut(|f| {
                 f.layout_no_wrap(

@@ -21,12 +21,24 @@ pub const BORDE_HOVER: Color32 = Color32::from_rgb(0x4A, 0x4A, 0x4A);
 pub const TEXTO: Color32 = Color32::from_rgb(0xE6, 0xE6, 0xE6);
 pub const TEXTO_MENU: Color32 = Color32::from_rgb(0xCF, 0xCF, 0xCF);
 pub const TEXTO_2: Color32 = Color32::from_rgb(0xA0, 0xA0, 0xA0);
-pub const TEXTO_3: Color32 = Color32::from_rgb(0x92, 0x92, 0x92);
+/// Gris terciario. #929292 daba 4,49:1 sobre `CONTROL`; #969696 da 4,72:1.
+pub const TEXTO_3: Color32 = Color32::from_rgb(0x96, 0x96, 0x96);
 /// Solo foco, selección, playhead y marca activa.
 pub const ACENTO: Color32 = Color32::from_rgb(0x3B, 0x8E, 0xFF);
 pub const PRIMARIO: Color32 = Color32::from_rgb(0x27, 0x66, 0xDB);
 pub const PRIMARIO_HOVER: Color32 = Color32::from_rgb(0x2F, 0x72, 0xE8);
+/// Relleno de acento, no de texto: `PELIGRO` aquí es un borde o una franja.
 pub const PELIGRO: Color32 = Color32::from_rgb(0xC4, 0x2B, 0x1C);
+/// Rojo de *texto* de error. `PELIGRO` daba 3,07:1 sobre FONDO y 2,78:1 sobre
+/// PANEL; este da 6,22:1 / 5,62:1 / 4,99:1 sobre FONDO / PANEL / CONTROL.
+pub const ERROR_TEXTO: Color32 = Color32::from_rgb(0xFF, 0x6B, 0x5B);
+/// Azul tenue para banners informativos (recuperación, avisos). 8,81:1 sobre
+/// FONDO, 7,96:1 sobre PANEL y 7,07:1 sobre CONTROL.
+pub const BANNER_INFO: Color32 = Color32::from_rgb(0x8A, 0xBB, 0xFF);
+/// Colores del logotipo (antes hex sueltos en `kit.rs`).
+pub const LOGO_FONDO: Color32 = Color32::from_rgb(0x23, 0x23, 0x23);
+pub const LOGO_AMBAR: Color32 = Color32::from_rgb(0xFF, 0xB0, 0x20);
+pub const LOGO_VIOLETA: Color32 = Color32::from_rgb(0x8F, 0x6B, 0xFF);
 
 // Alias que usan las vistas todavía sin reescribir. Se retiran cuando cada
 // vista pase a los nombres de la spec.
@@ -104,8 +116,51 @@ pub const CPS_MAXIMO: f32 = 17.0;
 pub const CARACTERES_MAXIMOS: usize = 42;
 /// Fondo de la zona de arrastre.
 pub const FONDO_ZONA: Color32 = Color32::from_rgb(0x1E, 0x1E, 0x1E);
-/// Duración de las transiciones de hover.
+/// Duración de las transiciones de hover. 140 ms, dentro de 120–160 ms.
 pub const ANIMACION: f32 = 0.14;
+pub const ANIMACION_MS: u64 = 140;
+/// Retraso de tooltip con atajo accesible.
+pub const TOOLTIP_DELAY: f32 = 0.4;
+/// Grosor del anillo de foco en color de acento.
+pub const GROSOR_FOCO: f32 = 2.0;
+/// Expansion del rect para dibujar el anillo por fuera.
+pub const EXPANSION_FOCO: f32 = 1.0;
+/// Grosor de los bordes de un píxel.
+pub const GROSOR_BORDE: f32 = 1.0;
+/// Altura exacta de un pill (tab, chip compacto), sin margen vertical.
+pub const ALTO_PILL: f32 = 16.0;
+/// Radio de un pill: la mitad de su altura.
+pub const RADIO_PILL: f32 = 8.0;
+/// Ancho mínimo del pill cuando no trae texto.
+pub const ANCHO_PILL_MIN: f32 = 16.0;
+/// Keycap de atajo: glifo mono en una caja de 20×20 como mínimo.
+pub const ALTO_KEYCAP: f32 = 20.0;
+pub const ANCHO_KEYCAP_MIN: f32 = 20.0;
+/// Punto circular de color (hablante, swatch).
+pub const TAMANO_PUNTO_COLOR: f32 = 10.0;
+/// Ancho del campo hex junto al swatch de color.
+pub const ANCHO_CAMPO_HEX: f32 = 96.0;
+/// Margen del contador en las pestañas: `Margin::symmetric(5, 1)`.
+pub const MARGEN_CONTADOR_X: i8 = 5;
+pub const MARGEN_CONTADOR_Y: i8 = 1;
+/// Ancho mínimo de los botones principal y secundario.
+pub const ANCHO_BOTON_MIN: f32 = 120.0;
+/// Opacidad del fondo de un banner informativo (rgba *sin* premultiplicar).
+pub const ALFA_BANNER: u8 = 32;
+/// Logotipo en la barra de título y desplazamiento respecto al título.
+pub const TAMANO_LOGO: f32 = 26.0;
+pub const DESPLAZAMIENTO_LOGO: f32 = -16.0;
+/// Duración de vida de un toast.
+pub const VIDA_TOAST_S: f64 = 6.0;
+/// Medidas del editor: gutter de la timeline y suelos del splitter.
+pub const ANCHO_GUTTER: f32 = 104.0;
+pub const ALTO_VIDEO_MIN: f32 = 140.0;
+pub const ALTO_PANEL_SUPERIOR_MIN: f32 = 180.0;
+pub const ALTO_PANEL_INFERIOR_MIN: f32 = 160.0;
+/// Escala de la rejilla del logotipo (SVG de 512 unidades).
+pub const ESCALA_LOGO: f32 = 512.0;
+pub const RADIO_LOGO: f32 = 64.0;
+pub const BORDE_LOGO: f32 = 16.0;
 
 /// Interpolación lineal de colores para transiciones cortas.
 pub fn mezclar(a: Color32, b: Color32, t: f32) -> Color32 {
@@ -126,6 +181,12 @@ pub fn radio_superficie() -> egui::CornerRadius {
 pub fn radio_control() -> egui::CornerRadius {
     egui::CornerRadius::same(RADIO_CONTROL as u8)
 }
+
+/// Radio totalmente redondeado de un pill de 16 px.
+pub fn radio_pill() -> egui::CornerRadius {
+    egui::CornerRadius::same(RADIO_PILL as u8)
+}
+
 pub const ESP_72: f32 = 72.0;
 
 pub const ALTO_CHIP: f32 = 24.0;
@@ -268,7 +329,9 @@ pub fn estilo() -> Style {
     visuals.window_fill = PANEL;
     visuals.extreme_bg_color = CONTROL;
     visuals.faint_bg_color = RIEL;
-    visuals.selection.bg_fill = ACENTO;
+    // ACENTO (#3B8EFF) con TEXTO daba 2,59:1. La fila seleccionada usa un azul
+    // oscuro que mantiene 9,17:1 con TEXTO y sigue siendo claramente visible.
+    visuals.selection.bg_fill = SELECCION_FILA;
     visuals.selection.stroke.color = ACENTO;
     visuals.hyperlink_color = ACENTO;
     visuals.widgets.hovered.bg_fill = ELEVADO;
@@ -312,8 +375,8 @@ pub fn estilo() -> Style {
     estilo.spacing.button_padding = egui::vec2(ESP_8, ESP_4);
     estilo.spacing.interact_size = egui::vec2(ALTO_CONTROL, ALTO_CONTROL);
     estilo.spacing.menu_spacing = ESP_2;
-    estilo.animation_time = 0.14;
-    estilo.interaction.tooltip_delay = 0.4;
+    estilo.animation_time = ANIMACION;
+    estilo.interaction.tooltip_delay = TOOLTIP_DELAY;
     estilo
 }
 
@@ -383,12 +446,33 @@ mod tests {
             (TEXTO_2, PANEL),
             (TEXTO_3, PANEL),
             (TEXTO_2, CONTROL),
+            (TEXTO_3, CONTROL),
             (Color32::WHITE, PRIMARIO),
             (TEXTO_MENU, FONDO),
+            // Antes: ACENTO con TEXTO daba 2,59:1.
+            (TEXTO, SELECCION_FILA),
+            // Antes: PELIGRO daba 3,07:1 sobre FONDO y 2,78:1 sobre PANEL.
+            (ERROR_TEXTO, FONDO),
+            (ERROR_TEXTO, PANEL),
+            (ERROR_TEXTO, CONTROL),
+            (BANNER_INFO, FONDO),
+            (BANNER_INFO, PANEL),
+            (BANNER_INFO, CONTROL),
         ] {
             let c = contraste(texto, fondo);
             assert!(c >= 4.5, "{texto:?} sobre {fondo:?} da {c:.2}");
         }
+    }
+
+    #[test]
+    fn la_seleccion_es_llana_y_el_foco_es_de_dos_pixeles() {
+        assert_eq!(estilo().visuals.selection.bg_fill, SELECCION_FILA);
+        assert_eq!(ANIMACION_MS, (ANIMACION * 1000.0).round() as u64);
+        assert_eq!(GROSOR_FOCO, 2.0);
+        assert_eq!(ALTO_PILL, 16.0);
+        assert_eq!(RADIO_PILL, ALTO_PILL / 2.0);
+        assert_eq!(ALTO_KEYCAP, 20.0);
+        assert_eq!(TOOLTIP_DELAY, 0.4);
     }
 
     #[test]

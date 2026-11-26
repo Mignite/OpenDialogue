@@ -1,4 +1,4 @@
-﻿//! Textos visibles en los dos idiomas soportados.
+//! Textos visibles en los dos idiomas soportados.
 //!
 //! Una tabla por idioma, ambas del mismo tipo: si falta una frase, no compila.
 //! No hay claves de cadena que admitan erratas silenciosas.
@@ -121,6 +121,30 @@ pub struct Textos {
     pub preset_eliminado: &'static str,
     pub sin_subtitulos: &'static str,
     pub importar_archivo: &'static str,
+    // Fundación: claves compartidas por las áreas A–E.
+    pub tiempo: &'static str,
+    pub pista_audio: &'static str,
+    pub sin_estilo: &'static str,
+    pub fit_all: &'static str,
+    pub hide_empty_tracks: &'static str,
+    pub collapse_track: &'static str,
+    pub restore: &'static str,
+    pub discard: &'static str,
+    pub video_not_found: &'static str,
+    pub locate_video: &'static str,
+    pub sin_atajo: &'static str,
+    pub preview_texto: &'static str,
+    pub variante_no_disponible: &'static str,
+    pub minimizar: &'static str,
+    pub maximizar: &'static str,
+    pub cerrar_ventana: &'static str,
+    pub arrastrar_ventana: &'static str,
+    pub atajo_abrir_proyecto: &'static str,
+    pub inicio_transporte: &'static str,
+    pub cuadro_anterior: &'static str,
+    pub cuadro_siguiente: &'static str,
+    pub fin_transporte: &'static str,
+    pub volumen: &'static str,
 }
 
 pub const ES: Textos = Textos {
@@ -213,6 +237,29 @@ pub const ES: Textos = Textos {
     preset_eliminado: "Estilo eliminado",
     sin_subtitulos: "Aún no hay subtítulos",
     importar_archivo: "Importar archivo",
+    tiempo: "Tiempo",
+    pista_audio: "Audio",
+    sin_estilo: "Estilo / Sin estilo",
+    fit_all: "Ajustar todo",
+    hide_empty_tracks: "Ocultar pistas vacías",
+    collapse_track: "Contraer pista",
+    restore: "Restaurar",
+    discard: "Descartar",
+    video_not_found: "Video no encontrado",
+    locate_video: "Localizar video…",
+    sin_atajo: "Sin atajo",
+    preview_texto: "Vista previa",
+    variante_no_disponible: "Variante no disponible",
+    minimizar: "Minimizar",
+    maximizar: "Maximizar",
+    cerrar_ventana: "Cerrar ventana",
+    arrastrar_ventana: "Arrastrar ventana",
+    atajo_abrir_proyecto: "Ctrl+O",
+    inicio_transporte: "Inicio",
+    cuadro_anterior: "Cuadro anterior",
+    cuadro_siguiente: "Cuadro siguiente",
+    fin_transporte: "Fin",
+    volumen: "Volumen",
 };
 
 pub const EN: Textos = Textos {
@@ -305,6 +352,29 @@ pub const EN: Textos = Textos {
     preset_eliminado: "Style deleted",
     sin_subtitulos: "No subtitles yet",
     importar_archivo: "Import file",
+    tiempo: "Time",
+    pista_audio: "Audio",
+    sin_estilo: "Style / No style",
+    fit_all: "Fit all",
+    hide_empty_tracks: "Hide empty tracks",
+    collapse_track: "Collapse track",
+    restore: "Restore",
+    discard: "Discard",
+    video_not_found: "Video not found",
+    locate_video: "Locate video…",
+    sin_atajo: "None",
+    preview_texto: "Preview",
+    variante_no_disponible: "Variant not available",
+    minimizar: "Minimize",
+    maximizar: "Maximize",
+    cerrar_ventana: "Close window",
+    arrastrar_ventana: "Drag window",
+    atajo_abrir_proyecto: "Ctrl+O",
+    inicio_transporte: "Start",
+    cuadro_anterior: "Previous frame",
+    cuadro_siguiente: "Next frame",
+    fin_transporte: "End",
+    volumen: "Volume",
 };
 
 impl Textos {
@@ -447,6 +517,43 @@ impl Textos {
             }
         }
     }
+
+    /// Contador de solapes, con singular y plural en los dos idiomas.
+    pub fn solapes(&self, n: usize) -> String {
+        if self.es {
+            if n == 1 {
+                "1 solape".into()
+            } else {
+                format!("{n} solapes")
+            }
+        } else if n == 1 {
+            "1 overlap".into()
+        } else {
+            format!("{n} overlaps")
+        }
+    }
+
+    /// Aviso de recuperación reconstruido en la capa app: el texto del core es
+    /// español fijo y no se puede traducir allí. `fecha` ya viene formateada y
+    /// `lineas` es `recovery.proyecto.captions.len()`.
+    pub fn fecha_recuperacion(&self, fecha: &str, lineas: usize) -> String {
+        let subtitulos = if self.es {
+            if lineas == 1 {
+                "subtítulo"
+            } else {
+                "subtítulos"
+            }
+        } else if lineas == 1 {
+            "subtitle"
+        } else {
+            "subtitles"
+        };
+        if self.es {
+            format!("Copia automática de {fecha} · {lineas} {subtitulos}")
+        } else {
+            format!("Autosaved {fecha} · {lineas} {subtitulos}")
+        }
+    }
 }
 
 impl Textos {
@@ -498,5 +605,28 @@ impl Textos {
             Comando::PanelEstilos => "Styles panel",
             Comando::Ajustes => "Preferences",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn las_tablas_traen_las_claves_nuevas_y_los_plurales() {
+        for tabla in [&ES, &EN] {
+            assert_eq!(tabla.atajo_abrir_proyecto, "Ctrl+O");
+            assert!(!tabla.sin_estilo.is_empty());
+            assert!(!tabla.tiempo.is_empty());
+            assert!(!tabla.pista_audio.is_empty());
+            assert!(tabla.solapes(1).starts_with('1'));
+            assert!(tabla.fecha_recuperacion("hace 3 min", 2).contains("2"));
+        }
+        assert_eq!(ES.sin_estilo, "Estilo / Sin estilo");
+        assert_eq!(EN.sin_estilo, "Style / No style");
+        assert!(ES.solapes(2).contains("solapes"));
+        assert!(EN.solapes(2).contains("overlaps"));
+        assert!(ES.fecha_recuperacion("hace 3 min", 1).contains("subtítulo"));
+        assert!(EN.fecha_recuperacion("3 min ago", 1).contains("subtitle"));
     }
 }

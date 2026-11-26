@@ -1,4 +1,4 @@
-﻿//! Componentes compartidos. Ningún widget suelto en las vistas: tamaños,
+//! Componentes compartidos. Ningún widget suelto en las vistas: tamaños,
 //! colores y tipografía vienen siempre de `tema`.
 
 use egui::{Color32, CornerRadius, FontId, Rect, Response, RichText, Sense, Stroke, Ui, Vec2};
@@ -35,7 +35,13 @@ pub enum Icono {
     Ojo,
     Mute,
     Solo,
+    /// Tres puntos horizontales (`···`) de menú «más opciones».
+    Puntos,
     ChevronAbajo,
+    /// Imán de Snap.
+    Iman,
+    /// Punto de mira de Follow playhead.
+    Objetivo,
     Punto,
     Reloj,
     Subir,
@@ -76,7 +82,10 @@ impl Icono {
         Icono::Ojo,
         Icono::Mute,
         Icono::Solo,
+        Icono::Puntos,
         Icono::ChevronAbajo,
+        Icono::Iman,
+        Icono::Objetivo,
         Icono::Punto,
         Icono::Reloj,
         Icono::Subir,
@@ -120,7 +129,10 @@ pub fn glifo(icono: Icono) -> &'static str {
         Icono::Ojo => r::EYE,
         Icono::Mute => r::SPEAKER_SLASH,
         Icono::Solo => r::HEADPHONES,
+        Icono::Puntos => r::DOTS_THREE,
         Icono::ChevronAbajo => r::CARET_DOWN,
+        Icono::Iman => r::MAGNET,
+        Icono::Objetivo => r::CROSSHAIR,
         Icono::Punto => r::DOT,
         Icono::Reloj => r::CLOCK,
         Icono::Subir => r::UPLOAD,
@@ -141,6 +153,17 @@ pub fn icono(ui: &mut Ui, icono: Icono) -> Response {
             .font(FontId::proportional(tema::TAMANO_ICONO))
             .color(tema::TEXTO_MENU),
     )
+}
+
+/// Glifo suelto con tooltip accesible (texto + atajo mono). Para los lugares
+/// donde el área no puede colocar un botón, pero el icono sigue siendo accionable.
+pub fn icono_con_tooltip(ui: &mut Ui, icon: Icono, tooltip: &str, atajo: Option<&str>) -> Response {
+    icono(ui, icon).on_hover_ui(|ui| {
+        ui.label(RichText::new(tooltip).font(tema::fuente(Estilo::Base)));
+        if let Some(atajo) = atajo {
+            ui.label(RichText::new(atajo).font(tema::fuente(Estilo::Mono)));
+        }
+    })
 }
 
 /// Botón de icono con hover, estado activo y tooltip con atajo opcional.
@@ -186,8 +209,27 @@ pub fn icon_button(
 }
 
 /// Icono colocado en un rect explícito: no consume ancho del layout, así que
-/// no puede desbordar el `min_rect` del panel que lo contiene.
+/// no puede desbordar el `min_rect` del panel que lo contiene. Hover, active y
+/// foco igual que `icon_button`.
 pub fn icon_button_en(ui: &mut Ui, rect: Rect, icono: Icono, tooltip: &str) -> Response {
+    // El fondo se pinta ANTES del botón: si se pintara después, el rectángulo
+    // taparía el glifo. El estado se lee del puntero sobre el rect explícito.
+    let sobre = ui.rect_contains_pointer(rect);
+    let pulsado = sobre
+        && ui
+            .ctx()
+            .input(|i| i.pointer.button_down(egui::PointerButton::Primary));
+    if sobre {
+        ui.painter().rect_filled(
+            rect,
+            CornerRadius::same(tema::RADIO_CONTROL as u8),
+            if pulsado {
+                tema::CONTROL
+            } else {
+                tema::COLOR_HOVER
+            },
+        );
+    }
     let respuesta = ui.put(
         rect,
         egui::Button::new(
@@ -200,16 +242,20 @@ pub fn icon_button_en(ui: &mut Ui, rect: Rect, icono: Icono, tooltip: &str) -> R
         .corner_radius(CornerRadius::same(tema::RADIO_CONTROL as u8))
         .min_size(rect.size()),
     );
+    if respuesta.has_focus() {
+        anillo_foco(ui, &respuesta);
+    }
     respuesta.on_hover_ui(|ui| {
         ui.label(RichText::new(tooltip).font(tema::fuente(Estilo::Base)));
     })
 }
 
-fn anillo_foco(ui: &mut Ui, respuesta: &Response) {
+/// Trazo de 2 px en acento alrededor del widget con foco.
+pub fn anillo_foco(ui: &mut Ui, respuesta: &Response) {
     ui.painter().rect_stroke(
-        respuesta.rect.expand(1.0),
+        respuesta.rect.expand(tema::EXPANSION_FOCO),
         CornerRadius::same(tema::RADIO_CONTROL as u8),
-        Stroke::new(2.0_f32, tema::ACENTO),
+        Stroke::new(tema::GROSOR_FOCO, tema::ACENTO),
         egui::StrokeKind::Outside,
     );
 }
@@ -224,7 +270,7 @@ pub fn boton_primario(ui: &mut Ui, texto: &str, icono: Icono) -> Response {
         )
         .fill(tema::PRIMARIO)
         .corner_radius(CornerRadius::same(tema::RADIO_SUPERFICIE as u8))
-        .min_size(Vec2::new(120.0, tema::ALTO_BOTON)),
+        .min_size(Vec2::new(tema::ANCHO_BOTON_MIN, tema::ALTO_BOTON)),
     );
     if respuesta.has_focus() {
         anillo_foco(ui, &respuesta);
@@ -243,7 +289,7 @@ pub fn boton_secundario(ui: &mut Ui, texto: &str, icono: Icono) -> Response {
         .fill(tema::CONTROL)
         .stroke(Stroke::new(1.0_f32, tema::BORDE_CONTROL))
         .corner_radius(CornerRadius::same(tema::RADIO_SUPERFICIE as u8))
-        .min_size(Vec2::new(120.0, tema::ALTO_BOTON)),
+        .min_size(Vec2::new(tema::ANCHO_BOTON_MIN, tema::ALTO_BOTON)),
     );
     if respuesta.has_focus() {
         anillo_foco(ui, &respuesta);
@@ -290,7 +336,10 @@ pub fn tab_bar(
             );
             if let Some(n) = contador {
                 egui::Frame {
-                    inner_margin: egui::Margin::symmetric(5, 1),
+                    inner_margin: egui::Margin::symmetric(
+                        tema::MARGEN_CONTADOR_X,
+                        tema::MARGEN_CONTADOR_Y,
+                    ),
                     fill: tema::COLOR_HOVER,
                     corner_radius: tema::radio_control(),
                     ..egui::Frame::NONE
@@ -354,7 +403,11 @@ pub fn campo_tiempo(ui: &mut Ui, valor: &mut String, invalido: bool) -> Response
         egui::TextEdit::singleline(valor)
             .font(fuente)
             .desired_width(ancho)
-            .text_color(if invalido { tema::PELIGRO } else { tema::TEXTO }),
+            .text_color(if invalido {
+                tema::ERROR_TEXTO
+            } else {
+                tema::TEXTO
+            }),
     );
     if invalido {
         ui.painter().rect_stroke(
@@ -382,7 +435,7 @@ pub fn recuadro_punteado(ui: &mut Ui, alto: f32, texto: &str) {
     let (rect, _) =
         ui.allocate_exact_size(Vec2::new(ui.available_width(), alto), egui::Sense::hover());
     // egui 0.33 no tiene trazo discontinuo: se dibuja a segmentos.
-    let trazo = Stroke::new(1.5_f32, tema::BORDE_HOVER);
+    let trazo = Stroke::new(tema::GROSOR_PUNTEADO, tema::BORDE_HOVER);
     let pintor = ui.painter();
     let dash = tema::ESP_8;
     let hueco = tema::ESP_4;
@@ -441,19 +494,155 @@ pub fn tarjeta<R>(ui: &mut Ui, contenido: impl FnOnce(&mut Ui) -> R) -> (Respons
     (marco.response, marco.inner)
 }
 
+/// Tecla de atajo: glifo mono en una caja pequeña con borde de control.
+pub fn keycap(ui: &mut Ui, texto: &str) -> Response {
+    ui.scope(|ui| {
+        let widgets = &mut ui.visuals_mut().widgets;
+        widgets.inactive.bg_fill = tema::CONTROL;
+        widgets.hovered.bg_fill = tema::ELEVADO;
+        widgets.active.bg_fill = tema::CONTROL;
+        let respuesta = ui.add(
+            egui::Button::new(
+                RichText::new(texto)
+                    .font(tema::fuente(Estilo::Mono))
+                    .color(tema::TEXTO),
+            )
+            .corner_radius(tema::radio_control())
+            .min_size(Vec2::new(tema::ANCHO_KEYCAP_MIN, tema::ALTO_KEYCAP)),
+        );
+        if respuesta.has_focus() {
+            anillo_foco(ui, &respuesta);
+        }
+        respuesta
+    })
+    .inner
+}
+
+/// Pestaña o chip compacto de exactamente `ALTO_PILL` px, sin margen vertical.
+/// `color` es el color del texto (por ejemplo el tinte del hablante).
+pub fn pill(ui: &mut Ui, texto: &str, color: Color32) -> Response {
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        let widgets = &mut ui.visuals_mut().widgets;
+        widgets.inactive.bg_fill = tema::CONTROL;
+        widgets.hovered.bg_fill = tema::ELEVADO;
+        widgets.active.bg_fill = tema::CONTROL;
+        let respuesta = ui.add(
+            egui::Button::new(
+                RichText::new(texto)
+                    .font(tema::fuente(Estilo::Pequeno))
+                    .color(color),
+            )
+            .corner_radius(tema::radio_pill())
+            .min_size(Vec2::new(tema::ANCHO_PILL_MIN, tema::ALTO_PILL)),
+        );
+        if respuesta.has_focus() {
+            anillo_foco(ui, &respuesta);
+        }
+        respuesta
+    })
+    .inner
+}
+
+/// Etiqueta de sección: 11 px medium, gris terciario y letra espaciada.
+pub fn etiqueta_seccion(ui: &mut Ui, texto: &str) {
+    let fuente = tema::fuente(Estilo::Etiqueta);
+    let mut trabajo =
+        egui::text::LayoutJob::simple_singleline(texto.into(), fuente.clone(), tema::TEXTO_3);
+    if let Some(seccion) = trabajo.sections.first_mut() {
+        seccion.format.extra_letter_spacing = fuente.size * tema::LETRA_ESPACIADO;
+    }
+    ui.add(egui::Label::new(trabajo).selectable(false));
+}
+
+/// Aviso informativo con fondo tenue. El color se compone con rgba *sin*
+/// premultiplicar: `Color32::from_rgb` + `gamma_multiply` produce un halo
+/// saturado con el painter de egui.
+pub fn banner_informativo(ui: &mut Ui, texto: &str, color: Color32) {
+    let fondo = Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), tema::ALFA_BANNER);
+    egui::Frame {
+        inner_margin: egui::Margin::symmetric(tema::ESP_12 as i8, tema::ESP_8 as i8),
+        fill: fondo,
+        stroke: Stroke::new(tema::GROSOR_BORDE, color),
+        corner_radius: tema::radio_superficie(),
+        ..egui::Frame::NONE
+    }
+    .show(ui, |ui| {
+        ui.label(
+            RichText::new(texto)
+                .font(tema::fuente(Estilo::Base))
+                .color(color),
+        );
+    });
+}
+
+/// Punto de color y campo hex editable, con foco de 2 px en el campo.
+pub fn campo_color(ui: &mut Ui, hex: &mut String) -> Response {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = tema::ESP_8;
+        let color = tema::color_de_hex(hex);
+        let (rect, _) =
+            ui.allocate_exact_size(Vec2::splat(tema::TAMANO_PUNTO_COLOR), Sense::hover());
+        let centro = rect.center();
+        let radio = rect.width() / 2.0;
+        ui.painter().circle_filled(centro, radio, color);
+        ui.painter().circle_stroke(
+            centro,
+            radio,
+            Stroke::new(tema::GROSOR_BORDE, tema::BORDE_CONTROL),
+        );
+        let respuesta = ui.add(
+            egui::TextEdit::singleline(hex)
+                .font(tema::fuente(Estilo::Mono))
+                .desired_width(tema::ANCHO_CAMPO_HEX),
+        );
+        if respuesta.has_focus() {
+            anillo_foco(ui, &respuesta);
+        }
+        respuesta
+    })
+    .inner
+}
+
+/// Interruptor con etiqueta y foco de 2 px.
+pub fn toggle(ui: &mut Ui, activo: &mut bool, etiqueta: &str) -> Response {
+    let respuesta = ui.add(egui::Checkbox::new(
+        activo,
+        RichText::new(etiqueta).font(tema::fuente(Estilo::Base)),
+    ));
+    if respuesta.has_focus() {
+        anillo_foco(ui, &respuesta);
+    }
+    respuesta
+}
+
+/// DragValue con sufijo y rango, y foco de 2 px.
+pub fn drag_value_con_sufijo(
+    ui: &mut Ui,
+    valor: &mut f64,
+    sufijo: &str,
+    rango: std::ops::RangeInclusive<f64>,
+) -> Response {
+    let respuesta = ui.add(egui::DragValue::new(valor).suffix(sufijo).range(rango));
+    if respuesta.has_focus() {
+        anillo_foco(ui, &respuesta);
+    }
+    respuesta
+}
+
 /// Logotipo OpenDialogue: dos burbujas superpuestas, calcado del SVG que
 /// aportó el usuario. Se dibuja con shapes para no depender de un decoder SVG.
 pub fn logo(ui: &mut Ui, tamaño: f32) {
     let (rect, _) = ui.allocate_exact_size(Vec2::splat(tamaño), Sense::hover());
     let pintor = ui.painter();
-    let escala = tamaño / 512.0;
+    let escala = tamaño / tema::ESCALA_LOGO;
     let punto = |x: f32, y: f32| egui::pos2(rect.min.x + x * escala, rect.min.y + y * escala);
-    let fondo = tema::color("#232323");
-    let ambar = tema::color("#FFB020");
-    let violeta = tema::color("#8F6BFF");
+    let fondo = tema::LOGO_FONDO;
+    let ambar = tema::LOGO_AMBAR;
+    let violeta = tema::LOGO_VIOLETA;
 
     pintor.circle_filled(rect.center(), tamaño * 0.5, fondo);
-    let radio_ambar = egui::CornerRadius::same((64.0 * escala).round() as u8);
+    let radio_ambar = egui::CornerRadius::same((tema::RADIO_LOGO * escala).round() as u8);
     pintor.rect_filled(
         egui::Rect::from_min_max(punto(85.0, 96.0), punto(330.0, 277.0)),
         radio_ambar,
@@ -468,8 +657,8 @@ pub fn logo(ui: &mut Ui, tamaño: f32) {
         ambar,
         egui::Stroke::NONE,
     ));
-    let radio_violeta = egui::CornerRadius::same((64.0 * escala).round() as u8);
-    let borde = egui::Stroke::new(16.0 * escala, fondo);
+    let radio_violeta = egui::CornerRadius::same((tema::RADIO_LOGO * escala).round() as u8);
+    let borde = egui::Stroke::new(tema::BORDE_LOGO * escala, fondo);
     pintor.rect(
         egui::Rect::from_min_max(punto(181.0, 192.0), punto(426.0, 373.0)),
         radio_violeta,
