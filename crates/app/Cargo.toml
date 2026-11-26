@@ -3,6 +3,11 @@ name = "rod-app"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+[features]
+# Arnés de capturas (`examples/ui_audit.rs`): permite inyectar un frame fijo y
+# fijar el reloj sin pedirle nada a mpv. No se activa en builds normales.
+test-video = []
+
 [dependencies]
 rod-core.workspace = true
 rod-player.workspace = true

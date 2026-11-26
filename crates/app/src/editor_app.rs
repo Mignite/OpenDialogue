@@ -593,6 +593,26 @@ impl EditorApp {
         Ok(estado)
     }
 
+    /// Arnés de capturas (`--features test-video`): fija duración, playhead y
+    /// el frame compuesto sin depender de lo que entregue mpv. No existe en
+    /// builds normales, así que no puede filtrarse a la app.
+    #[cfg(feature = "test-video")]
+    pub fn preparar_captura(&mut self, duracion: f64, posicion: f64, pixels: Vec<u8>) {
+        self.duration = duracion;
+        self.position = posicion;
+        self.paused = true;
+        self.pixels = pixels;
+        self.rx_picos = None;
+        refrescar_preview(self);
+    }
+
+    /// Arnés de capturas: encuadra la timeline entera con el ancho ya medido
+    /// del eje. Se llama tras el primer frame, cuando el widget ya se midió.
+    #[cfg(feature = "test-video")]
+    pub fn encajar_timeline(&mut self) {
+        self.vista = self.vista.encajar(self.duration, self.ancho_timeline);
+    }
+
     /// Con el primer frame ya rasterizado se regenera la miniatura que faltaba
     /// al abrir. No se hace en el constructor: allí `pixels` está a ceros.
     fn regenerar_miniatura_en(&mut self, base: &Path) {
