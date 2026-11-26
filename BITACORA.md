@@ -1,5 +1,28 @@
 # Bitácora
 
+## 2026-11-26 — Selección y campo de texto
+
+- El clic en un clip de la timeline no seleccionaba: el `ui.interact` que se
+  registraba bajo el puntero para el menú contextual se comía el clic antes del
+  `allocate` principal, así que `Mensaje::Pulsar` nunca llegaba. El menú ahora
+  se engancha a la respuesta del timeline y el clip se identifica por geometría;
+  el clic vuelve a seleccionar y el menú sigue actuando sobre lo señalado.
+- El campo conservaba el texto de una línea ya pasada: `sincronizar_objetivo`
+  solo cargaba cuando había objetivo, nunca limpiaba al desaparecer. Ahora
+  limpia borrador/original al no quedar línea bajo el playhead ni selección, y
+  dibuja borde rayado gris para expresar que no hay nada que editar; con línea
+  el borde es normal y con foco, de acento.
+- Unificado con la selección: clic en el campo selecciona arriba la línea que
+  edita; el playhead autoselecciona la primera línea que lo contiene mientras
+  no haya selección manual; las flechas verticales dentro del campo alternan
+  entre líneas solapadas. Alternativas descartadas: seguir priorizando la
+  selección antigua (dejaba texto stale) y dejar el menú contextual en un
+  widget por clip (rompía el clic y el test de rendimiento).
+- Verificación: `cargo test --workspace` y `cargo clippy -p rod-app -- -D
+  warnings` limpios; tests nuevos en `tests/seleccion_texto.rs`; capturas
+  `revision-editor-{1100,1440,2560}` regeneradas.
+
+
 ## 2026-11-25 — Reorganización de la edición de subtítulos
 
 - Spec `docs/superpowers/specs/2026-11-25-editor-subtitulos-design.md` y plan

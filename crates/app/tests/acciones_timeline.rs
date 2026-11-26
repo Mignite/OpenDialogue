@@ -38,9 +38,10 @@ fn borrar_multiples_y_deshacer_restaura_el_grupo() {
 fn entradas_y_salidas_se_fijan_en_el_playhead() {
     let mut app = editor();
     let _ = rod_app::editor_app::update(&mut app, MensajeEditor::Step(3.5));
-    app.editor_mut().seleccionar_uno("c2");
+    let _ = rod_app::editor_app::update(&mut app, MensajeEditor::Seleccionar("c2".into()));
     let _ = rod_app::editor_app::update(&mut app, MensajeEditor::Comando(Comando::Entrada));
     let _ = rod_app::editor_app::update(&mut app, MensajeEditor::Step(1.0));
+    let _ = rod_app::editor_app::update(&mut app, MensajeEditor::Seleccionar("c2".into()));
     let _ = rod_app::editor_app::update(&mut app, MensajeEditor::Comando(Comando::Salida));
     let caption = app
         .proyecto()

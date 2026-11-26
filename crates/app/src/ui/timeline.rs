@@ -357,6 +357,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
 
     // Clips: el color del hablante manda; el azul marca selección.
     let puntero = ui.ctx().input(|entrada| entrada.pointer.latest_pos());
+    let mut id_bajo_puntero: Option<String> = None;
     for caption in state.editor.proyecto().captions.iter() {
         let fila = rod_core::caption_row_index(caption.hablante_id.as_deref(), hablantes);
         if fila >= filas {
@@ -410,19 +411,18 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
                 tema::TEXTO,
             );
         }
-        // Solo registramos el widget del menú bajo el puntero: registrar un
-        // interact por clip con 543 líneas cuesta varios ms por frame.
         if puntero.is_some_and(|punto| clip.contains(punto)) {
-            let id = caption.id.clone();
-            let respuesta = ui.interact(
-                clip,
-                ui.make_persistent_id(("clip", &id)),
-                egui::Sense::click(),
-            );
-            respuesta.context_menu(|ui| {
-                menu_contexto(ui, &id, &mut mensajes, textos);
-            });
+            id_bajo_puntero = Some(caption.id.clone());
         }
+    }
+
+    // El menú se engancha a la respuesta del timeline, no a un widget por clip:
+    // un `interact` bajo el cursor se comía el clic y `pulsar` nunca elegía el
+    // caption tocado. Con 543 líneas además costaba varios ms por frame.
+    if let Some(id) = id_bajo_puntero {
+        respuesta.context_menu(|ui| {
+            menu_contexto(ui, &id, &mut mensajes, textos);
+        });
     }
 
     // Playhead con tirador.

@@ -188,6 +188,8 @@ pub struct EstadoTexto {
     pub nueva_linea: bool,
     /// Líneas visibles del campo (1–3).
     pub lineas: u8,
+    /// El usuario eligió una línea a mano; el playhead no la sobrescribe.
+    pub manual: bool,
 }
 
 impl Default for EstadoTexto {
@@ -209,6 +211,7 @@ impl EstadoTexto {
             ultimo_tipeo: None,
             nueva_linea: false,
             lineas: 1,
+            manual: false,
         }
     }
 
@@ -1131,6 +1134,53 @@ fn agregar_fragmento(state: &mut EditorApp) -> Tarea {
     Tarea::Ninguna
 }
 
+/// El playhead elige la primera línea que lo contiene mientras el usuario no
+/// haya fijado una a mano.
+pub fn autoseleccionar_bajo_playhead(state: &mut EditorApp) {
+    if state.texto.manual {
+        return;
+    }
+    let id = estado_bajo_playhead(state).first().cloned();
+    if let Some(id) = id {
+        if state.editor.seleccion != [id.clone()] {
+            state.editor.seleccionar_uno(&id);
+            sincronizar_borrador(state);
+        }
+    } else if !state.editor.seleccion.is_empty() {
+        state.editor.seleccion.clear();
+    }
+}
+
+/// Ids de las líneas que contienen el playhead, en orden de lista.
+pub fn estado_bajo_playhead(state: &EditorApp) -> Vec<String> {
+    state
+        .editor
+        .proyecto()
+        .captions
+        .iter()
+        .filter(|caption| state.position >= caption.inicio && state.position <= caption.fin)
+        .map(|caption| caption.id.clone())
+        .collect()
+}
+
+/// Flechas verticales dentro del campo: alterna entre líneas solapadas.
+pub fn ciclar_bajo_playhead(state: &mut EditorApp, paso: i32) {
+    let ids = estado_bajo_playhead(state);
+    if ids.is_empty() {
+        return;
+    }
+    let actual = state
+        .editor
+        .seleccion
+        .first()
+        .and_then(|id| ids.iter().position(|otro| otro == id))
+        .unwrap_or(0);
+    let siguiente = (actual as i32 + paso).rem_euclid(ids.len() as i32) as usize;
+    state.editor.seleccionar_uno(&ids[siguiente]);
+    state.texto.manual = true;
+    sincronizar_borrador(state);
+}
+
 /// `[` fija la entrada y `]` la salida en el playhead, sobre la selección.
 fn marcar_tiempo(state: &mut EditorApp, entrada: bool) {
     let Some(id) = state.editor.seleccion.first().cloned() else {
@@ -1406,6 +1456,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
                 state.position = state.player.position();
             }
             state.paused = state.player.paused();
+            autoseleccionar_bajo_playhead(state);
             seguir_playhead(state);
             autosave(state);
             if frame_changed
@@ -1563,12 +1614,15 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             }
         }
         MensajeEditor::Step(delta) => {
+            state.texto.manual = false;
             state.position = (state.position + delta).clamp(0.0, state.duration);
+            autoseleccionar_bajo_playhead(state);
             if let Err(error) = state.player.seek(state.position) {
                 eprintln!("no se pudo hacer seek: {error}");
             }
         }
         MensajeEditor::SeleccionarConModificador { id, ctrl, shift } => {
+            state.texto.manual = true;
             if ctrl {
                 state.editor.alternar_seleccion(&id);
             } else if shift {
@@ -1594,6 +1648,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             sincronizar_borrador(state);
         }
         MensajeEditor::Seleccionar(id) => {
+            state.texto.manual = true;
             state.editor.seleccionar_uno(&id);
             sincronizar_borrador(state);
             // Un clic en la lista lleva el preview al inicio del caption.
@@ -1943,6 +1998,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
                         seleccion,
                     } => {
                         state.editando_hablante = None;
+                        state.texto.manual = true;
                         state.editor.reemplazar_seleccion(seleccion);
                         sincronizar_borrador(state);
                         state.arrastre = Some(arrastre);
@@ -2031,6 +2087,8 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             let objetivo = snap_a_frame(tiempo, state.duration);
             state.position = objetivo;
             state.scrub_ui_time = None;
+            state.texto.manual = false;
+            autoseleccionar_bajo_playhead(state);
             let _ = state.player.seek(objetivo);
         }
         MensajeEditor::Seguir => {

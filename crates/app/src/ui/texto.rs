@@ -19,6 +19,68 @@ pub fn sesion_vencida(ultimo: Option<std::time::Instant>, ahora: std::time::Inst
     ultimo.is_some_and(|instante| ahora.duration_since(instante) > Duration::from_millis(1000))
 }
 
+/// Sincroniza el borrador con la línea activa (selección o playhead). Cuando
+/// no hay línea, limpia el campo en vez de conservar el texto de la anterior.
+pub fn sincronizar_objetivo(state: &mut EditorApp) {
+    let objetivo = EstadoTexto::objetivo(state);
+    if state.texto.objetivo == objetivo {
+        return;
+    }
+    let texto = objetivo
+        .as_ref()
+        .and_then(|id| {
+            state
+                .editor
+                .proyecto()
+                .captions
+                .iter()
+                .find(|caption| &caption.id == id)
+        })
+        .map(|caption| caption.texto.clone())
+        .unwrap_or_default();
+    state.texto.objetivo = objetivo;
+    state.texto.borrador = texto.clone();
+    state.texto.original = texto;
+    state.texto.lineas = 1;
+}
+
+pub fn color_borde_campo(hay_linea: bool, foco: bool) -> egui::Color32 {
+    if foco {
+        tema::ACENTO
+    } else if hay_linea {
+        tema::BORDE
+    } else {
+        tema::COLOR_SIN_HABLANTE
+    }
+}
+
+/// Al enfocar el campo, la línea que se edita pasa a estar seleccionada arriba.
+pub fn mensaje_al_enfocar(state: &EditorApp) -> Option<MensajeEditor> {
+    EstadoTexto::objetivo(state).map(MensajeEditor::Seleccionar)
+}
+
+fn pintar_borde_rayado(painter: &egui::Painter, rect: egui::Rect, color: egui::Color32) {
+    const PASO: f32 = 10.0;
+    let mut x = rect.min.x;
+    while x < rect.max.x {
+        painter.line_segment(
+            [
+                egui::pos2(x, rect.min.y),
+                egui::pos2((x + 5.0).min(rect.max.x), rect.min.y),
+            ],
+            egui::Stroke::new(1.0_f32, color),
+        );
+        painter.line_segment(
+            [
+                egui::pos2(x, rect.max.y),
+                egui::pos2((x + 5.0).min(rect.max.x), rect.max.y),
+            ],
+            egui::Stroke::new(1.0_f32, color),
+        );
+        x += PASO;
+    }
+}
+
 fn cps(state: &EditorApp) -> f32 {
     let Some(id) = EstadoTexto::objetivo(state) else {
         return 0.0;
@@ -39,25 +101,8 @@ fn cps(state: &EditorApp) -> f32 {
 /// Dibuja la barra. Devuelve mensajes para el bucle del editor.
 pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec<MensajeEditor> {
     let mut mensajes = Vec::new();
+    sincronizar_objetivo(state);
     let objetivo = EstadoTexto::objetivo(state);
-    if objetivo.is_some() && state.texto.objetivo != objetivo {
-        let texto = objetivo
-            .as_ref()
-            .and_then(|id| {
-                state
-                    .editor
-                    .proyecto()
-                    .captions
-                    .iter()
-                    .find(|caption| &caption.id == id)
-            })
-            .map(|caption| caption.texto.clone())
-            .unwrap_or_default();
-        state.texto.objetivo = objetivo.clone();
-        state.texto.borrador = texto.clone();
-        state.texto.original = texto;
-        state.texto.lineas = 1;
-    }
     let hablante = objetivo.as_ref().and_then(|id| {
         let hablante_id = state
             .editor
@@ -139,6 +184,26 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
                     .frame(false),
             )
         };
+        let color_borde = color_borde_campo(objetivo.is_some(), state.texto.foco);
+        if objetivo.is_some() {
+            ui.painter().rect_stroke(
+                respuesta.rect.expand(tema::ESP_2),
+                tema::radio_control(),
+                egui::Stroke::new(1.0_f32, color_borde),
+                egui::StrokeKind::Inside,
+            );
+        } else {
+            pintar_borde_rayado(
+                ui.painter(),
+                respuesta.rect.expand(tema::ESP_2),
+                color_borde,
+            );
+        }
+        if respuesta.clicked()
+            && let Some(mensaje) = mensaje_al_enfocar(state)
+        {
+            mensajes.push(mensaje);
+        }
         let solicitar_foco = state.texto.foco && !respuesta.has_focus();
         if solicitar_foco {
             respuesta.request_focus();
@@ -171,6 +236,12 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
                 EstadoTexto::revertir(state);
                 respuesta.surrender_focus();
                 cerrada = true;
+            } else if !cerrada && ui.input(|entrada| entrada.key_pressed(Key::ArrowUp)) {
+                crate::editor_app::ciclar_bajo_playhead(state, -1);
+                sincronizar_objetivo(state);
+            } else if !cerrada && ui.input(|entrada| entrada.key_pressed(Key::ArrowDown)) {
+                crate::editor_app::ciclar_bajo_playhead(state, 1);
+                sincronizar_objetivo(state);
             } else {
                 state.texto.lineas =
                     (state.texto.borrador.matches('\n').count().clamp(0, 2) + 1) as u8;
