@@ -1,5 +1,8 @@
 //! Panel de hablantes: tarjetas compactas con color, atajo, estilo y mute/solo.
 
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use egui::{RichText, Stroke, Vec2};
 
 use crate::editor::MAX_HABLANTES;
@@ -8,8 +11,64 @@ use crate::textos::Textos;
 use crate::ui::kit::{self, Icono};
 use crate::ui::tema::{self, Estilo};
 
+#[derive(Clone, Copy, Default)]
+struct Conteo {
+    lineas: usize,
+    segundos: f64,
+}
+
+#[derive(Clone, Default)]
+struct Contadores {
+    firma: u64,
+    por_hablante: Arc<HashMap<String, Conteo>>,
+}
+
+/// Huella de lo que afecta a los contadores. Recorrer los captions para hacer
+/// este hash es O(captions), pero evita el producto hablantes × captions y
+/// cualquier clonación del proyecto en cada frame.
+fn firma_captions(proyecto: &rod_core::Proyecto) -> u64 {
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    proyecto.captions.len().hash(&mut hasher);
+    for caption in &proyecto.captions {
+        caption.hablante_id.hash(&mut hasher);
+        caption.inicio.to_bits().hash(&mut hasher);
+        caption.fin.to_bits().hash(&mut hasher);
+    }
+    for hablante in &proyecto.hablantes {
+        hablante.id.hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
+/// Contadores agrupados de una pasada, recalculados solo cuando cambia el
+/// proyecto. Viven en la memoria de egui porque la vista no puede añadir
+/// campos al modelo sin tocar otros archivos.
+fn contadores(ui: &egui::Ui, state: &EditorApp) -> Arc<HashMap<String, Conteo>> {
+    let firma = firma_captions(state.editor.proyecto());
+    let id = egui::Id::new("contadores-hablantes");
+    ui.memory_mut(|memoria| {
+        let cache = memoria.data.get_temp_mut_or(id, Contadores::default());
+        if cache.firma != firma {
+            let mut por_hablante: HashMap<String, Conteo> = HashMap::new();
+            for caption in &state.editor.proyecto().captions {
+                if let Some(id) = &caption.hablante_id {
+                    let entrada = por_hablante.entry(id.clone()).or_default();
+                    entrada.lineas += 1;
+                    entrada.segundos += (caption.fin - caption.inicio).max(0.0);
+                }
+            }
+            cache.firma = firma;
+            cache.por_hablante = Arc::new(por_hablante);
+        }
+        Arc::clone(&cache.por_hablante)
+    })
+}
+
 pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec<MensajeEditor> {
     let mut mensajes = Vec::new();
+    let conteos = contadores(ui, state);
 
     if ui
         .add_enabled(
@@ -30,23 +89,16 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
     }
 
     egui::ScrollArea::vertical().show(ui, |ui| {
-        let hablantes = state.editor.proyecto().hablantes.clone();
-        let captions = state.editor.proyecto().captions.clone();
-        for (indice, hablante) in hablantes.iter().enumerate() {
+        for (indice, hablante) in state.editor.proyecto().hablantes.iter().enumerate() {
             let color = tema::color(rod_core::color_identidad(hablante, indice));
-            let lineas: Vec<_> = captions
-                .iter()
-                .filter(|caption| caption.hablante_id.as_deref() == Some(&hablante.id))
-                .collect();
-            let segundos: f32 = lineas
-                .iter()
-                .map(|caption| (caption.fin - caption.inicio).max(0.0) as f32)
-                .sum();
-            let minutos = (segundos / 60.0).floor() as u32;
-            let resto = (segundos % 60.0).floor() as u32;
+            let conteo = conteos.get(&hablante.id).copied().unwrap_or_default();
+            let minutos = (conteo.segundos / 60.0).floor() as u32;
+            let resto = (conteo.segundos % 60.0).floor() as u32;
 
+            // 60 px de contenido en dos filas + ESP_12 arriba y abajo.
+            let altura = tema::ALTO_TARJETA_HABLANTE + tema::ESP_8;
             let (rect, respuesta) = ui.allocate_exact_size(
-                Vec2::new(ui.available_width(), tema::ALTO_TARJETA_HABLANTE),
+                Vec2::new(ui.available_width(), altura),
                 egui::Sense::click(),
             );
             let pintor = ui.painter();
@@ -62,23 +114,26 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
             pintor.rect_stroke(
                 rect,
                 tema::radio_superficie(),
-                Stroke::new(1.0_f32, tema::BORDE),
+                Stroke::new(tema::GROSOR_BORDE, tema::BORDE),
                 egui::StrokeKind::Inside,
             );
 
-            ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
-                ui.set_width(rect.width());
+            let interior = rect.shrink(tema::ESP_12);
+            ui.scope_builder(egui::UiBuilder::new().max_rect(interior), |ui| {
+                ui.set_width(interior.width());
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = tema::ESP_8;
-                        let _ = egui::containers::menu::MenuButton::from_button(
-                            egui::Button::new(
-                                RichText::new(rod_core::color_identidad(hablante, indice))
-                                    .color(egui::Color32::TRANSPARENT),
-                            )
-                            .fill(color)
-                            .stroke(Stroke::NONE)
-                            .min_size(Vec2::splat(tema::TAMANO_PUNTO_GRANDE)),
+
+                        // Botón sin texto: el hex sigue siendo su etiqueta
+                        // accesible, pero no ensancha el punto circular.
+                        let (respuesta_color, _) = egui::containers::menu::MenuButton::from_button(
+                            egui::Button::new("")
+                                .frame(false)
+                                .small()
+                                .fill(egui::Color32::TRANSPARENT)
+                                .stroke(Stroke::NONE)
+                                .min_size(Vec2::splat(tema::TAMANO_PUNTO_GRANDE)),
                         )
                         .ui(ui, |ui| {
                             ui.set_min_width(180.0);
@@ -104,6 +159,24 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
                                 }
                             }
                         });
+                        respuesta_color.widget_info(|| {
+                            egui::WidgetInfo::labeled(
+                                egui::WidgetType::Button,
+                                true,
+                                rod_core::color_identidad(hablante, indice),
+                            )
+                        });
+                        let centro = respuesta_color.rect.center();
+                        let radio = respuesta_color.rect.width() * 0.5;
+                        ui.painter().circle_filled(centro, radio, color);
+                        ui.painter().circle_stroke(
+                            centro,
+                            radio,
+                            Stroke::new(tema::GROSOR_BORDE, tema::BORDE_CONTROL),
+                        );
+                        if respuesta_color.has_focus() {
+                            kit::anillo_foco(ui, &respuesta_color);
+                        }
 
                         let borrador = state
                             .borradores_hablante
@@ -113,7 +186,7 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
                             .add(
                                 egui::TextEdit::singleline(borrador)
                                     .font(tema::fuente(Estilo::Base))
-                                    .desired_width(rect.width() * 0.28),
+                                    .desired_width(interior.width() * 0.28),
                             )
                             .lost_focus()
                         {
@@ -127,7 +200,7 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
                         ui.label(
                             RichText::new(format!(
                                 "{} · {:02}:{:02}",
-                                textos.lineas(lineas.len()),
+                                textos.lineas(conteo.lineas),
                                 minutos,
                                 resto
                             ))
@@ -135,11 +208,7 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
                             .color(tema::TEXTO_3),
                         );
 
-                        ui.label(
-                            RichText::new(&hablante.tecla)
-                                .font(tema::fuente(Estilo::Mono))
-                                .color(tema::TEXTO_2),
-                        );
+                        kit::keycap(ui, &hablante.tecla);
 
                         let _ = egui::containers::menu::MenuButton::from_button(
                             egui::Button::new("···").frame(false),
@@ -171,7 +240,7 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
                             Icono::Mute,
                             state.mute_hablantes.contains(&hablante.id),
                             "Mute",
-                            None,
+                            Some(textos.sin_atajo),
                         )
                         .clicked()
                         {
@@ -182,31 +251,45 @@ pub fn mostrar(ui: &mut egui::Ui, state: &mut EditorApp, textos: &Textos) -> Vec
                             Icono::Solo,
                             state.solo_hablantes.contains(&hablante.id),
                             "Solo",
-                            None,
+                            Some(textos.sin_atajo),
                         )
                         .clicked()
                         {
                             mensajes.push(MensajeEditor::AlternarSolo(hablante.id.clone()));
                         }
-                        let preset_actual = state
+                        let nombre_preset = state
                             .presets
                             .iter()
                             .find(|preset| Some(&preset.id) == hablante.preset_id.as_ref())
-                            .map(|preset| preset.nombre.clone())
-                            .unwrap_or_else(|| textos.sin_hablante.to_owned());
-                        egui::ComboBox::from_id_salt(("estilo", &hablante.id))
-                            .width((ui.available_width() - 28.0).max(60.0))
-                            .selected_text(tema::acortar(&preset_actual, 10))
+                            .map(|preset| preset.nombre.clone());
+                        let texto = match &nombre_preset {
+                            Some(nombre) => tema::acortar(nombre, 14),
+                            None => textos.sin_estilo.to_owned(),
+                        };
+                        let respuesta = egui::ComboBox::from_id_salt(("estilo", &hablante.id))
+                            .width((ui.available_width() - tema::ANCHO_BOTON_28).max(60.0))
+                            .selected_text(texto)
                             .show_ui(ui, |ui| {
+                                if ui.button(textos.sin_estilo).clicked() {
+                                    mensajes.push(MensajeEditor::AsignarPreset(
+                                        hablante.id.clone(),
+                                        None,
+                                    ));
+                                    ui.close();
+                                }
                                 for preset in &state.presets {
                                     if ui.button(&preset.nombre).clicked() {
                                         mensajes.push(MensajeEditor::AsignarPreset(
                                             hablante.id.clone(),
                                             Some(preset.id.clone()),
                                         ));
+                                        ui.close();
                                     }
                                 }
                             });
+                        if respuesta.response.has_focus() {
+                            kit::anillo_foco(ui, &respuesta.response);
+                        }
                     });
                 });
             });

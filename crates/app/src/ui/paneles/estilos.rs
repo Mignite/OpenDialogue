@@ -165,7 +165,7 @@ fn vista_previa(
     ui: &mut egui::Ui,
     state: &mut EditorApp,
     preset: &rod_core::PresetAss,
-    _textos: &Textos,
+    textos: &Textos,
 ) {
     let (rect, _) = ui.allocate_exact_size(
         Vec2::new(ui.available_width(), tema::ALTO_PREVIEW_STYLES),
@@ -183,6 +183,7 @@ fn vista_previa(
     let clave = format!(
         "{:?}",
         (
+            textos.preview_texto,
             &preset.id,
             &preset.fontname,
             preset.fontsize,
@@ -206,7 +207,7 @@ fn vista_previa(
         .or_insert_with(|| {
             let escala = tema::ALTO_PREVIEW_STYLES / crate::preview::CANVAS.1 as f32;
             let imagen =
-                crate::ui::estilos_render::render_subtitle(preset, "Aa Hola mundo", escala);
+                crate::ui::estilos_render::render_subtitle(preset, textos.preview_texto, escala);
             let color = egui::ColorImage::from_rgba_unmultiplied(
                 [imagen.width() as usize, imagen.height() as usize],
                 imagen.as_raw(),
@@ -219,7 +220,8 @@ fn vista_previa(
         });
     if textura.0 != clave {
         let escala = tema::ALTO_PREVIEW_STYLES / crate::preview::CANVAS.1 as f32;
-        let imagen = crate::ui::estilos_render::render_subtitle(preset, "Aa Hola mundo", escala);
+        let imagen =
+            crate::ui::estilos_render::render_subtitle(preset, textos.preview_texto, escala);
         let color = egui::ColorImage::from_rgba_unmultiplied(
             [imagen.width() as usize, imagen.height() as usize],
             imagen.as_raw(),
@@ -263,6 +265,8 @@ fn separador(ui: &mut egui::Ui) {
     ui.add_space(tema::ESP_12);
 }
 
+/// Etiqueta de sección con familia siempre registrada: `kit::etiqueta_seccion`
+/// usa la familia con nombre y revienta en el arnés sin fuentes instaladas.
 fn etiqueta(ui: &mut egui::Ui, texto: &str) {
     ui.label(
         RichText::new(texto.to_uppercase())
@@ -332,14 +336,14 @@ fn editor_preset(
     });
 
     separador(ui);
-    etiqueta(ui, "FONT");
+    etiqueta(ui, &textos.fuente.to_uppercase());
     let mut fuente = valor_campo(preset, CampoPreset::Fontname, &state.borradores_preset);
     let valor_inicial = fuente.clone();
     // El botón del ComboBox no pide foco en egui 0.33: `lost_focus` no dispara
     // al elegir. La selección se publica desde el propio closure, que es el
     // único sitio donde se sabe qué opción se pulsó.
     let mut elegida: Option<String> = None;
-    egui::ComboBox::from_id_salt(("fuente-preset", &preset.id))
+    let respuesta_combo = egui::ComboBox::from_id_salt(("fuente-preset", &preset.id))
         .width(ancho)
         // Por defecto egui cierra el popup con cualquier clic, incluso dentro:
         // el campo de búsqueda se cerraba al pulsarlo. Solo cerrar al clic
@@ -362,6 +366,9 @@ fn editor_preset(
                 }
             }
         });
+    if respuesta_combo.response.has_focus() {
+        kit::anillo_foco(ui, &respuesta_combo.response);
+    }
     if let Some(nombre) = elegida {
         mensajes.push(MensajeEditor::EditarPreset(
             preset.id.clone(),
@@ -371,22 +378,19 @@ fn editor_preset(
     }
 
     ui.horizontal(|ui| {
-        let mut tamano = valor_campo(preset, CampoPreset::Fontsize, &state.borradores_preset)
-            .parse::<f32>()
-            .unwrap_or(preset.fontsize as f32);
-        let respuesta = ui.add_sized(
-            Vec2::new(tema::ANCHO_DRAG_TAMANO, tema::ALTO_CONTROL),
-            egui::DragValue::new(&mut tamano)
-                .range(8.0..=200.0)
-                .suffix(" px"),
-        );
-        aplicar_campo(
-            preset,
-            CampoPreset::Fontsize,
-            tamano.to_string(),
-            respuesta,
-            mensajes,
-        );
+        ui.horizontal(|ui| {
+            let mut tamano = valor_campo(preset, CampoPreset::Fontsize, &state.borradores_preset)
+                .parse::<f64>()
+                .unwrap_or(preset.fontsize);
+            let respuesta = kit::drag_value_con_sufijo(ui, &mut tamano, " px", 8.0..=200.0);
+            aplicar_campo(
+                preset,
+                CampoPreset::Fontsize,
+                tamano.to_string(),
+                respuesta,
+                mensajes,
+            );
+        });
         for (campo, texto, negrita) in [
             (CampoPreset::Bold, "B", true),
             (CampoPreset::Italic, "I", false),
@@ -411,13 +415,13 @@ fn editor_preset(
                 ));
             }
             if !disponible {
-                respuesta.on_hover_text("Variante no disponible");
+                respuesta.on_hover_text(textos.variante_no_disponible);
             }
         }
     });
 
     separador(ui);
-    etiqueta(ui, "FILL");
+    etiqueta(ui, &textos.color.to_uppercase());
     campo_color(
         ui,
         state,
@@ -429,20 +433,19 @@ fn editor_preset(
     );
 
     separador(ui);
-    etiqueta(ui, "OUTLINE");
+    etiqueta(ui, &textos.contorno.to_uppercase());
     ui.horizontal(|ui| {
-        let mut grosor = preset.outline;
-        let respuesta = ui.add_sized(
-            Vec2::new(tema::ANCHO_DRAG_CONTORNO, tema::ALTO_CONTROL),
-            egui::DragValue::new(&mut grosor).suffix(" px"),
-        );
-        aplicar_campo(
-            preset,
-            CampoPreset::Outline,
-            grosor.to_string(),
-            respuesta,
-            mensajes,
-        );
+        ui.horizontal(|ui| {
+            let mut grosor = preset.outline;
+            let respuesta = kit::drag_value_con_sufijo(ui, &mut grosor, " px", 0.0..=20.0);
+            aplicar_campo(
+                preset,
+                CampoPreset::Outline,
+                grosor.to_string(),
+                respuesta,
+                mensajes,
+            );
+        });
         campo_color(
             ui,
             state,
@@ -455,34 +458,32 @@ fn editor_preset(
     });
 
     separador(ui);
-    etiqueta(ui, "SHADOW");
-    let mut sombra = preset.shadow;
-    let respuesta = ui.add_sized(
-        Vec2::new(tema::ANCHO_DRAG_CONTORNO, tema::ALTO_CONTROL),
-        egui::DragValue::new(&mut sombra).suffix(" px"),
-    );
-    aplicar_campo(
-        preset,
-        CampoPreset::Shadow,
-        sombra.to_string(),
-        respuesta,
-        mensajes,
-    );
+    etiqueta(ui, &textos.sombra.to_uppercase());
+    ui.horizontal(|ui| {
+        let mut sombra = preset.shadow;
+        let respuesta = kit::drag_value_con_sufijo(ui, &mut sombra, " px", 0.0..=20.0);
+        aplicar_campo(
+            preset,
+            CampoPreset::Shadow,
+            sombra.to_string(),
+            respuesta,
+            mensajes,
+        );
+    });
 
     separador(ui);
-    etiqueta(ui, etiqueta_margen(textos));
-    let mut margen = preset.margin_v;
-    let respuesta = ui.add_sized(
-        Vec2::new(tema::ANCHO_DRAG_CONTORNO, tema::ALTO_CONTROL),
-        egui::DragValue::new(&mut margen).suffix(" px"),
-    );
-    aplicar_campo(
-        preset,
-        CampoPreset::MarginV,
-        margen.to_string(),
-        respuesta,
-        mensajes,
-    );
+    etiqueta(ui, &etiqueta_margen(textos).to_uppercase());
+    ui.horizontal(|ui| {
+        let mut margen = preset.margin_v as f64;
+        let respuesta = kit::drag_value_con_sufijo(ui, &mut margen, " px", 0.0..=200.0);
+        aplicar_campo(
+            preset,
+            CampoPreset::MarginV,
+            margen.to_string(),
+            respuesta,
+            mensajes,
+        );
+    });
     ui.add_space(tema::ESP_12);
 }
 
@@ -501,10 +502,26 @@ fn campo_color(
     let mut borrador = valor;
     let respuesta = ui
         .horizontal(|ui| {
-            let boton = ui.add_sized(
-                Vec2::splat(tema::ANCHO_BOTON_28),
-                egui::Button::new("").fill(color),
+            ui.spacing_mut().item_spacing.x = tema::ESP_8;
+            let boton = ui.add(
+                egui::Button::new("")
+                    .frame(false)
+                    .small()
+                    .fill(egui::Color32::TRANSPARENT)
+                    .stroke(Stroke::NONE)
+                    .min_size(Vec2::splat(tema::TAMANO_PUNTO_COLOR)),
             );
+            let centro = boton.rect.center();
+            let radio = boton.rect.width() * 0.5;
+            ui.painter().circle_filled(centro, radio, color);
+            ui.painter().circle_stroke(
+                centro,
+                radio,
+                Stroke::new(tema::GROSOR_BORDE, tema::BORDE_CONTROL),
+            );
+            if boton.has_focus() {
+                kit::anillo_foco(ui, &boton);
+            }
             egui::Popup::from_toggle_button_response(&boton).show(|ui| {
                 let mut editable = color;
                 // El picker completo (2D + canales) aparece ya en el popup,
@@ -531,11 +548,14 @@ fn campo_color(
             });
             let respuesta = ui.add_sized(
                 Vec2::new(
-                    ancho - tema::ANCHO_BOTON_28 - tema::ESP_8,
+                    (ancho - tema::TAMANO_PUNTO_COLOR - tema::ESP_8).max(60.0),
                     tema::ALTO_CONTROL,
                 ),
-                egui::TextEdit::singleline(&mut borrador).font(tema::fuente(Estilo::Base)),
+                egui::TextEdit::singleline(&mut borrador).font(tema::fuente(Estilo::Mono)),
             );
+            if respuesta.has_focus() {
+                kit::anillo_foco(ui, &respuesta);
+            }
             if !es_hex_valido(&borrador) {
                 ui.painter().rect_stroke(
                     respuesta.rect,
