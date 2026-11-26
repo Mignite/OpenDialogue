@@ -6,6 +6,7 @@ pub mod atajos;
 pub mod borde;
 pub mod chrome;
 pub mod editor;
+pub mod estilos_render;
 pub mod iconos;
 pub mod inicio;
 pub mod kit;

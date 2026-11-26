@@ -17,6 +17,7 @@ serde = { version = "1", features = ["derive"] }
 # Codifica las miniaturas de recientes; también usado por `examples/preview.rs`.
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 egui-phosphor = "0.11"
+fontdb = "0.24"
 
 [dev-dependencies]
 egui_kittest = { version = "=0.33.0", features = ["eframe", "wgpu"] }

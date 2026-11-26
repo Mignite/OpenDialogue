@@ -115,6 +115,9 @@ pub struct Textos {
     pub cursiva: &'static str,
     pub mayusculas: &'static str,
     pub estilo: &'static str,
+    pub fuente_no_encontrada: &'static str,
+    pub margen_v: &'static str,
+    pub buscar_fuente: &'static str,
     pub sin_subtitulos: &'static str,
     pub importar_archivo: &'static str,
 }
@@ -203,6 +206,9 @@ pub const ES: Textos = Textos {
     cursiva: "Cursiva",
     mayusculas: "Mayúsculas",
     estilo: "Estilo",
+    fuente_no_encontrada: "Fuente no encontrada",
+    margen_v: "Margen V",
+    buscar_fuente: "Buscar fuente…",
     sin_subtitulos: "Aún no hay subtítulos",
     importar_archivo: "Importar archivo",
 };
@@ -291,6 +297,9 @@ pub const EN: Textos = Textos {
     cursiva: "Italic",
     mayusculas: "Uppercase",
     estilo: "Style",
+    fuente_no_encontrada: "Font not found",
+    margen_v: "Margin V",
+    buscar_fuente: "Search font…",
     sin_subtitulos: "No subtitles yet",
     importar_archivo: "Import file",
 };
@@ -365,6 +374,15 @@ impl Textos {
             "1 line".into()
         } else {
             format!("{n} lines")
+        }
+    }
+
+    /// Etiqueta del botón que aplica el preset a las líneas seleccionadas.
+    pub fn aplicar_a_lineas(&self, n: usize) -> String {
+        if self.es {
+            format!("Aplicar a {n} líneas seleccionadas")
+        } else {
+            format!("Apply to {n} selected lines")
         }
     }
 

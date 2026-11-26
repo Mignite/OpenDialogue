@@ -77,6 +77,13 @@ pub const TAMANO_ICONO_16: f32 = 16.0;
 pub const GROSOR_SPLITTER: f32 = 4.0;
 pub const ANCHO_DROPDOWN_VELOCIDAD: f32 = 56.0;
 pub const ANCHO_SLIDER_ZOOM: f32 = 72.0;
+// Estilos: banda de preview, cabecera y controles a todo el ancho.
+pub const ALTO_PREVIEW_STYLES: f32 = 64.0;
+pub const ALTO_CABECERA_PRESET: f32 = 36.0;
+pub const COLOR_PREVIEW_STYLES: Color32 = Color32::from_rgb(0x14, 0x14, 0x14);
+pub const TAMANO_PUNTO_ESTILO: f32 = 14.0;
+pub const ANCHO_DRAG_TAMANO: f32 = 96.0;
+pub const ANCHO_DRAG_CONTORNO: f32 = 80.0;
 pub const ALTO_PISTA_AUDIO: f32 = 56.0;
 pub const RADIO_CLIP: u8 = 3;
 pub const COLOR_FONDO_VIDEO: Color32 = Color32::from_rgb(0x0F, 0x0F, 0x0F);
