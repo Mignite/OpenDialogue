@@ -4,7 +4,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use egui::Ui;
+use egui::{Frame, Margin, Ui};
 
 use crate::comandos::MapaAtajos;
 use crate::editor_app::{EditorApp, MensajeEditor, Panel};
@@ -15,12 +15,50 @@ use crate::ui::paneles::{estilos, hablantes, subtitulos};
 use crate::ui::{tema, transporte};
 use crate::video::Gpu;
 
-/// Medidas del editor, persistidas en `Preferencias`.
-#[derive(Debug, Clone, PartialEq)]
+/// Altura de los carriles del timeline, elegible en su barra de herramientas.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AlturaPista {
+    Pequeña,
+    Mediana,
+    /// Igual que el carril de audio del mockup; es el valor inicial.
+    #[default]
+    Grande,
+}
+
+impl AlturaPista {
+    /// Tres alturas sin literales sueltos: todos vienen de `tema`.
+    pub fn px(self) -> f32 {
+        match self {
+            Self::Pequeña => tema::ALTO_CONTROL,
+            Self::Mediana => tema::ALTO_FILA_SUB,
+            Self::Grande => tema::ALTO_PISTA_AUDIO,
+        }
+    }
+}
+
+/// Medidas del editor. Solo las tres primeras se guardan en `Preferencias`;
+/// las de la timeline viven en la memoria de egui mientras dura la sesión.
+#[derive(Debug, Clone)]
 pub struct MedidasEditor {
     pub ancho_panel: f32,
     pub alto_timeline: f32,
     pub panel_visible: bool,
+    /// Ancho del margen de nombres del timeline, arrastrable.
+    pub ancho_gutter: f32,
+    pub altura_pista: AlturaPista,
+    pub ocultar_vacios: bool,
+    /// Ids de los carriles contraídos (`""` = el carril de audio).
+    pub pistas_colapsadas: Vec<String>,
+}
+
+/// `main.rs` compara dos `MedidasEditor` para decidir si escribe preferencias:
+/// un cambio de gutter no debe provocar una escritura en disco por frame.
+impl PartialEq for MedidasEditor {
+    fn eq(&self, otra: &Self) -> bool {
+        self.ancho_panel == otra.ancho_panel
+            && self.alto_timeline == otra.alto_timeline
+            && self.panel_visible == otra.panel_visible
+    }
 }
 
 impl Default for MedidasEditor {
@@ -29,6 +67,10 @@ impl Default for MedidasEditor {
             ancho_panel: tema::ANCHO_PANEL_DEFECTO,
             alto_timeline: 260.0,
             panel_visible: true,
+            ancho_gutter: tema::ANCHO_GUTTER,
+            altura_pista: AlturaPista::default(),
+            ocultar_vacios: false,
+            pistas_colapsadas: Vec::new(),
         }
     }
 }
@@ -47,14 +89,36 @@ impl From<&Preferencias> for MedidasEditor {
             ancho_panel: ancho,
             alto_timeline: prefs.alto_timeline,
             panel_visible: prefs.panel_visible,
+            ..Self::default()
         }
     }
 }
 
+/// Las medidas sin preferencias se guardan en la memoria de egui: `main.rs`
+/// reconstruye el struct desde el disco en cada frame y perdería el gutter, la
+/// altura de pista o el colapso si solo vivieran en el struct.
+fn id_medidas() -> egui::Id {
+    egui::Id::new("rod.medidas-editor")
+}
+
+pub(crate) fn medidas_en_ctx(ctx: &egui::Context, semilla: &MedidasEditor) -> MedidasEditor {
+    ctx.data(|memoria| memoria.get_temp::<MedidasEditor>(id_medidas()))
+        .unwrap_or_else(|| {
+            ctx.data_mut(|memoria| memoria.insert_temp(id_medidas(), semilla.clone()));
+            semilla.clone()
+        })
+}
+
+pub(crate) fn guardar_medidas(ctx: &egui::Context, medidas: &MedidasEditor) {
+    ctx.data_mut(|memoria| memoria.insert_temp(id_medidas(), medidas.clone()));
+}
+
 /// Tope del panel inferior: el video se puede encoger hasta dejarle el 70 %
-/// de la ventana al timeline, con un suelo de 160 px.
+/// de la ventana al timeline, sin quitarle nunca el suelo de `ALTO_VIDEO_MIN`.
 pub fn alto_maximo_timeline(alto_ventana: f32) -> f32 {
-    (alto_ventana * 0.7).max(160.0)
+    (alto_ventana * 0.7)
+        .min(alto_ventana - tema::ALTO_VIDEO_MIN)
+        .max(tema::ALTO_PANEL_INFERIOR_MIN)
 }
 
 /// Alto de la timeline: el campo de texto puede quitarle altura al crecer.
@@ -64,7 +128,8 @@ pub fn alto_timeline(
     _animacion: f32,
     ancho: f32,
 ) -> f32 {
-    (medidas.alto_timeline - crate::ui::texto::alto_extra(state, ancho)).max(160.0)
+    (medidas.alto_timeline - crate::ui::texto::alto_extra(state, ancho))
+        .max(tema::ALTO_PANEL_INFERIOR_MIN)
 }
 
 /// Distribución: inspector a la derecha, timeline abajo, monitor al centro.
@@ -79,6 +144,7 @@ pub fn show(
 ) -> Vec<MensajeEditor> {
     let _ = atajos;
     let mut mensajes = Vec::new();
+    *medidas = medidas_en_ctx(ctx, medidas);
 
     if medidas.panel_visible {
         let ancho = medidas
@@ -89,14 +155,20 @@ pub fn show(
         egui::SidePanel::right("inspector")
             .resizable(false)
             .exact_width(ancho)
-            .frame(tema::panel(tema::PANEL))
+            .frame(Frame {
+                inner_margin: Margin::symmetric(tema::ESP_12 as i8, tema::ESP_8 as i8),
+                corner_radius: tema::radio_superficie(),
+                fill: tema::PANEL,
+                stroke: egui::Stroke::new(tema::GROSOR_BORDE, tema::BORDE),
+                ..Frame::NONE
+            })
             .show(ctx, |ui| {
                 // Como en el timeline: el `PanelState` de egui acumula el rect
                 // entre frames, así que el ancho sale de `medidas` y el
                 // arrastre escribe en ella desde el borde izquierdo del panel.
                 let borde = ui.max_rect().min.x;
                 let franja = egui::Rect::from_x_y_ranges(
-                    (borde - tema::ESP_4)..=(borde + tema::ESP_4),
+                    (borde - tema::GROSOR_SPLITTER / 2.0)..=(borde + tema::GROSOR_SPLITTER / 2.0),
                     ui.max_rect().y_range(),
                 );
                 let divisor = ui.interact(
@@ -138,9 +210,25 @@ pub fn show(
     }
 
     let tope = alto_maximo_timeline(ctx.content_rect().height());
-    medidas.alto_timeline = medidas.alto_timeline.clamp(160.0, tope);
+    medidas.alto_timeline = medidas
+        .alto_timeline
+        .clamp(tema::ALTO_PANEL_INFERIOR_MIN, tope);
+    let suelo = tema::ALTO_PANEL_INFERIOR_MIN;
+    let id_objetivo = egui::Id::new("rod.splitter.objetivo");
+    let id_anim = egui::Id::new("rod.splitter.anim");
+    let id_animando = egui::Id::new("rod.splitter.animando");
+    let en_tope = ctx.data(|memoria| memoria.get_temp::<bool>(id_objetivo).unwrap_or(false));
+    let animando = ctx.data(|memoria| memoria.get_temp::<bool>(id_animando).unwrap_or(false));
+    if animando {
+        let t = ctx.animate_bool_with_time(id_anim, en_tope, tema::ANIMACION);
+        medidas.alto_timeline = suelo + (tope - suelo) * t;
+        if (t - f32::from(en_tope)).abs() < 0.001 {
+            ctx.data_mut(|memoria| memoria.insert_temp(id_animando, false));
+        }
+    }
     let alto_abajo = alto_timeline(state, medidas, tema::ANIMACION, ctx.content_rect().width());
     let mut arrastre_divisor: Option<f32> = None;
+    let mut alternar_tope = false;
     egui::TopBottomPanel::bottom("timeline")
         .resizable(false)
         .exact_height(alto_abajo)
@@ -151,13 +239,19 @@ pub fn show(
             let borde = ui.max_rect().min.y;
             let franja = egui::Rect::from_x_y_ranges(
                 ui.max_rect().x_range(),
-                (borde - tema::ESP_4)..=(borde + tema::ESP_4),
+                (borde - tema::GROSOR_SPLITTER / 2.0)..=(borde + tema::GROSOR_SPLITTER / 2.0),
             );
             let divisor = ui.interact(
                 franja,
                 egui::Id::new("divisor-timeline"),
-                egui::Sense::drag(),
+                egui::Sense::click_and_drag(),
             );
+            if divisor.drag_started() {
+                ctx.data_mut(|memoria| memoria.insert_temp(id_animando, false));
+            }
+            if divisor.double_clicked() {
+                alternar_tope = true;
+            }
             if divisor.dragged()
                 && let Some(pointer) = divisor.interact_pointer_pos()
             {
@@ -166,7 +260,8 @@ pub fn show(
             if divisor.hovered() {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
             }
-            mensajes.extend(crate::ui::timeline::toolbar(ui, state, textos));
+            mensajes.extend(crate::ui::timeline::toolbar(ui, state, textos, medidas));
+            guardar_medidas(ctx, medidas);
             mensajes.extend(crate::ui::timeline::mostrar(ui, state, textos));
         });
 
@@ -175,12 +270,25 @@ pub fn show(
     // leer `response.rect.height()` devolvía el panel al tope al arrastrar.
     // Aquí la altura es siempre la de `medidas` y el arrastre escribe en ella.
     if let Some(y) = arrastre_divisor {
-        medidas.alto_timeline = (ctx.content_rect().max.y - y).clamp(160.0, tope);
+        medidas.alto_timeline =
+            (ctx.content_rect().max.y - y).clamp(tema::ALTO_PANEL_INFERIOR_MIN, tope);
     }
+    if alternar_tope {
+        // Doble clic: alterna entre el suelo y el tope con la animación de 140 ms.
+        ctx.data_mut(|memoria| {
+            memoria.insert_temp(id_objetivo, !en_tope);
+            memoria.insert_temp(id_animando, true);
+        });
+    }
+    *medidas = medidas_en_ctx(ctx, medidas);
 
+    // El monitor va a sangre: sin el frame del `CentralPanel` el video toca
+    // los bordes del área que le queda entre el inspector y la timeline.
     egui::CentralPanel::default()
-        .frame(tema::panel(tema::FONDO))
+        .frame(Frame::NONE)
         .show(ctx, |ui| {
+            ui.painter()
+                .rect_filled(ui.max_rect(), 0.0, tema::COLOR_FONDO_VIDEO);
             mensajes.extend(mostrar(ui, state, formato, gpu, textos));
         });
 
@@ -207,8 +315,41 @@ pub fn mostrar(
     ui.painter()
         .rect_filled(rect, egui::CornerRadius::ZERO, tema::COLOR_FONDO_VIDEO);
     if !state.pixels.is_empty() {
+        // `state.layers` se sustituye por un Arc nuevo cada vez que mpv entrega
+        // un frame. Mientras sea el mismo, reutilizamos el Arc de píxeles: antes
+        // se copiaban 8,3 MB en cada repintado de la UI aunque no hubiera frame.
+        #[derive(Clone)]
+        struct CachePixeles {
+            capas: usize,
+            longitud: usize,
+            pixeles: Arc<Vec<u8>>,
+        }
+        let id = egui::Id::new("rod.pixeles-preview");
+        let marca = Arc::as_ptr(&state.layers) as usize;
+        let cache = ui
+            .ctx()
+            .data(|memoria| memoria.get_temp::<CachePixeles>(id));
+        let pixeles = match cache {
+            Some(cache) if cache.capas == marca && cache.longitud == state.pixels.len() => {
+                cache.pixeles
+            }
+            _ => {
+                let pixeles = Arc::new(state.pixels.clone());
+                ui.ctx().data_mut(|memoria| {
+                    memoria.insert_temp(
+                        id,
+                        CachePixeles {
+                            capas: marca,
+                            longitud: state.pixels.len(),
+                            pixeles: Arc::clone(&pixeles),
+                        },
+                    );
+                });
+                pixeles
+            }
+        };
         let frame = crate::video::Frame {
-            pixels: Arc::new(state.pixels.clone()),
+            pixels: pixeles,
             width: crate::preview::CANVAS.0,
             height: crate::preview::CANVAS.1,
             capas: Arc::clone(&state.layers),
@@ -229,11 +370,7 @@ pub fn mostrar(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
-
-    use egui_kittest::kittest::Queryable;
-
-    use super::MedidasEditor;
+    use super::AlturaPista;
     use crate::editor_app::{EditorApp, MensajeEditor, update};
 
     fn editor() -> EditorApp {
@@ -267,5 +404,13 @@ mod tests {
         assert_eq!(editor.editor.texto_de("cap-prueba"), Some("texto nuevo"));
         assert!(editor.editor.puede_deshacer());
         assert!(!editor.texto_inline_activo());
+    }
+
+    #[test]
+    fn las_tres_alturas_de_pista_son_crecientes() {
+        assert!(
+            AlturaPista::Pequeña.px() < AlturaPista::Mediana.px()
+                && AlturaPista::Mediana.px() < AlturaPista::Grande.px()
+        );
     }
 }

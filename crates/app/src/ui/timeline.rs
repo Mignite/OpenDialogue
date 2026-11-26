@@ -2,12 +2,15 @@
 //! nombre, clips con el color del hablante y playhead. El significado de cada
 //! gesto sigue en `timeline::pulsar`, que es código probado.
 
+use std::collections::HashSet;
+
 use egui::{Color32, Ui, Vec2};
 
 use crate::comandos::Comando;
 use crate::editor_app::{EditorApp, MensajeEditor};
 use crate::textos::Textos;
 use crate::timeline::{self, ALTO_CARRIL, ALTO_REGLA, Mensaje, Vista};
+use crate::ui::editor::{AlturaPista, MedidasEditor};
 use crate::ui::kit::{self, Icono};
 use crate::ui::tema::{self, Estilo};
 
@@ -24,9 +27,26 @@ pub fn slider_desde_zoom(escala: f64) -> f32 {
         / (Vista::ESCALA_MAXIMA / Vista::ESCALA_MINIMA).ln()) as f32
 }
 
+/// Botón compacto de la barra de herramientas, con tooltip y foco de 2 px.
+fn boton_toolbar(ui: &mut Ui, texto: &str, activo: bool) -> egui::Response {
+    let color = if activo { tema::ACENTO } else { tema::TEXTO_2 };
+    kit::pill(ui, texto, color).on_hover_ui(|ui| {
+        ui.label(
+            egui::RichText::new(texto)
+                .font(tema::fuente(Estilo::Base))
+                .color(tema::TEXTO),
+        );
+    })
+}
+
 /// Barra de herramientas de 32 px: etiqueta a la izquierda y acciones a la
 /// derecha. Ratón, menú contextual y atajos emiten los mismos comandos.
-pub fn toolbar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<MensajeEditor> {
+pub fn toolbar(
+    ui: &mut Ui,
+    state: &mut EditorApp,
+    textos: &Textos,
+    medidas: &mut MedidasEditor,
+) -> Vec<MensajeEditor> {
     let mut mensajes = Vec::new();
     ui.allocate_ui_with_layout(
         Vec2::new(ui.available_width(), tema::ALTO_TOOLBAR_TIMELINE),
@@ -35,22 +55,41 @@ pub fn toolbar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
             ui.spacing_mut().item_spacing.x = tema::ESP_4;
             tema::etiqueta(ui, textos.timeline.to_uppercase());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // El inspector se puede cerrar y reabrir desde aquí: el panel
+                // derecho desaparece sin perder la pestaña seleccionada.
+                if kit::icon_button(
+                    ui,
+                    Icono::Ojo,
+                    medidas.panel_visible,
+                    textos.seccion_ver,
+                    None,
+                )
+                .clicked()
+                {
+                    medidas.panel_visible = !medidas.panel_visible;
+                }
+
                 let mut zoom = slider_desde_zoom(state.vista.escala);
-                ui.add(
+                let slider = ui.add(
                     egui::Slider::new(&mut zoom, 0.0..=100.0)
                         .show_value(false)
                         .handle_shape(egui::style::HandleShape::Rect { aspect_ratio: 0.5 }),
                 );
+                if slider.has_focus() {
+                    kit::anillo_foco(ui, &slider);
+                }
                 let nueva = zoom_desde_slider(zoom);
                 if (nueva - state.vista.escala).abs() > 1e-9 {
                     mensajes.push(MensajeEditor::Zoom(state.vista.escala / nueva));
                 }
-                if kit::icon_button(ui, Icono::Bucle, state.seguir, textos.seguir, None).clicked() {
+                if kit::icon_button(ui, Icono::Objetivo, state.seguir, textos.seguir, None)
+                    .clicked()
+                {
                     mensajes.push(MensajeEditor::Seguir);
                 }
                 if kit::icon_button(
                     ui,
-                    Icono::Punto,
+                    Icono::Iman,
                     state.snap,
                     textos.comando(Comando::AlternarSnap),
                     None,
@@ -86,6 +125,33 @@ pub fn toolbar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
                 {
                     mensajes.push(MensajeEditor::Comando(Comando::Eliminar));
                 }
+
+                // El ancho publicado por la timeline es el del frame anterior;
+                // antes de la primera medida se usa el ancho disponible.
+                let ancho = if state.ancho_timeline > 0.0 {
+                    state.ancho_timeline
+                } else {
+                    ui.available_width() - medidas.ancho_gutter - tema::ANCHO_SCROLLBAR
+                };
+                if boton_toolbar(ui, textos.fit_all, false).clicked() {
+                    state.vista = state.vista.encajar(state.duration, ancho);
+                    state.scroll_pistas = 0.0;
+                }
+                if boton_toolbar(ui, textos.hide_empty_tracks, medidas.ocultar_vacios).clicked() {
+                    medidas.ocultar_vacios = !medidas.ocultar_vacios;
+                    state.scroll_pistas = 0.0;
+                }
+                // El layout es right_to_left: se inserta al revés para que en
+                // pantalla queden S, M, L de izquierda a derecha.
+                for (altura, etiqueta) in [
+                    (AlturaPista::Grande, "L"),
+                    (AlturaPista::Mediana, "M"),
+                    (AlturaPista::Pequeña, "S"),
+                ] {
+                    if boton_toolbar(ui, etiqueta, medidas.altura_pista == altura).clicked() {
+                        medidas.altura_pista = altura;
+                    }
+                }
             });
         },
     );
@@ -109,9 +175,6 @@ pub fn menu_contexto(ui: &mut Ui, id: &str, mensajes: &mut Vec<MensajeEditor>, t
         ui.close();
     }
 }
-
-/// Margen izquierdo para los nombres de carril. El eje empieza después.
-const GUTTER: f32 = 104.0;
 
 /// Carriles que caben bajo la regla en un panel de la altura dada.
 pub fn filas_visibles(alto: f32) -> usize {
@@ -184,7 +247,27 @@ pub fn punto(rel: egui::Vec2, scroll: f32) -> timeline::Punto {
     } else {
         rel.y + scroll * ALTO_CARRIL
     };
-    timeline::Punto::new(rel.x - GUTTER, y)
+    timeline::Punto::new(rel.x - tema::ANCHO_GUTTER, y)
+}
+
+/// Punto lógico para `pulsar`: la y sintética conserva la altura fija que la
+/// lógica de arrastre espera, aunque en pantalla el carril esté contraído.
+fn punto_en_fila(x: f32, fila_modelo: usize) -> timeline::Punto {
+    timeline::Punto::new(
+        x,
+        ALTO_REGLA + fila_modelo as f32 * ALTO_CARRIL + ALTO_CARRIL / 2.0,
+    )
+}
+
+/// Marcador de borde cuando el tiempo sale del área visible. `true` = izquierda.
+pub fn marca_borde(x: f32, min: f32, max: f32) -> Option<(f32, bool)> {
+    if x < min {
+        Some((min, true))
+    } else if x > max {
+        Some((max, false))
+    } else {
+        None
+    }
 }
 
 pub fn playhead(state: &EditorApp) -> f64 {
@@ -202,16 +285,16 @@ fn pintar_borde_punteado(painter: &egui::Painter, rect: egui::Rect, color: Color
         painter.line_segment(
             [
                 egui::pos2(x.min(rect.max.x), rect.min.y),
-                egui::pos2((x + 3.0).min(rect.max.x), rect.min.y),
+                egui::pos2((x + tema::ESP_2).min(rect.max.x), rect.min.y),
             ],
-            egui::Stroke::new(1.0_f32, color),
+            egui::Stroke::new(tema::GROSOR_BORDE, color),
         );
         painter.line_segment(
             [
                 egui::pos2(x.min(rect.max.x), rect.max.y),
-                egui::pos2((x + 3.0).min(rect.max.x), rect.max.y),
+                egui::pos2((x + tema::ESP_2).min(rect.max.x), rect.max.y),
             ],
-            egui::Stroke::new(1.0_f32, color),
+            egui::Stroke::new(tema::GROSOR_BORDE, color),
         );
         x += PASO;
     }
@@ -240,8 +323,52 @@ fn paso_de_regla(escala: f64) -> f64 {
     60.0
 }
 
+/// Un carril tal como se ve: el índice `modelo` es el que entiende `pulsar`.
+struct Fila {
+    id: String,
+    nombre: String,
+    color: Color32,
+    alto: f32,
+    modelo: usize,
+}
+
+/// Carril contraído: lo justo para el nombre y el chevron.
+fn alto_colapsado() -> f32 {
+    tema::ALTO_PILL * 2.0
+}
+
+/// y (en coordenadas de pantalla) del carril `indice` de la lista visible.
+fn y_de_fila(filas: &[Fila], indice: usize, inicio: f32, scroll: f32) -> f32 {
+    let mut y = inicio - scroll;
+    for fila in filas.iter().take(indice) {
+        y += fila.alto;
+    }
+    y
+}
+
+/// Índice visible bajo una y de pantalla; `None` sobre la regla.
+fn fila_en_y(filas: &[Fila], inicio: f32, scroll: f32, y: f32) -> Option<usize> {
+    if y < inicio {
+        return None;
+    }
+    let mut tope = inicio - scroll;
+    for (indice, fila) in filas.iter().enumerate() {
+        tope += fila.alto;
+        if y < tope {
+            return Some(indice);
+        }
+    }
+    None
+}
+
 pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<MensajeEditor> {
     let alto = ui.available_height();
+    let mut config = crate::ui::editor::medidas_en_ctx(ui.ctx(), &MedidasEditor::default());
+    let gutter_ancho = config
+        .ancho_gutter
+        .clamp(tema::ALTO_CONTROL, tema::ANCHO_FILTRO);
+    let alto_pista = config.altura_pista.px();
+
     let (rect, respuesta) = ui.allocate_exact_size(
         Vec2::new(ui.available_width() - tema::ANCHO_SCROLLBAR, alto),
         egui::Sense::click_and_drag(),
@@ -253,7 +380,8 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
     let painter = ui.painter();
     painter.rect_filled(rect, egui::CornerRadius::ZERO, tema::SUPERFICIE);
 
-    let gutter = egui::Rect::from_min_max(rect.min, egui::pos2(rect.min.x + GUTTER, rect.max.y));
+    let gutter =
+        egui::Rect::from_min_max(rect.min, egui::pos2(rect.min.x + gutter_ancho, rect.max.y));
     let area = egui::Rect::from_min_max(egui::pos2(gutter.max.x, rect.min.y), rect.max);
     painter.rect_filled(gutter, egui::CornerRadius::ZERO, tema::PANEL);
     painter.line_segment(
@@ -261,7 +389,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
             egui::pos2(gutter.max.x, rect.min.y),
             egui::pos2(gutter.max.x, rect.max.y),
         ],
-        egui::Stroke::new(1.0_f32, tema::BORDE),
+        egui::Stroke::new(tema::GROSOR_BORDE, tema::BORDE),
     );
 
     // Ancho real del eje. Solo se envía cuando cambia para no sobrescribir
@@ -271,10 +399,91 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
         mensajes.push(MensajeEditor::Timeline(Mensaje::Ancho(area.width())));
     }
 
+    // El borde del gutter se arrastra. Se registra sobre el Ui del timeline,
+    // que es el que tiene clip rect y capa para recibir el puntero.
+    let franja_gutter = egui::Rect::from_x_y_ranges(
+        (gutter.max.x - tema::GROSOR_SPLITTER / 2.0)..=(gutter.max.x + tema::GROSOR_SPLITTER / 2.0),
+        rect.y_range(),
+    );
+    let divisor_gutter = ui.interact(
+        franja_gutter,
+        egui::Id::new("divisor-gutter-timeline"),
+        egui::Sense::drag(),
+    );
+    if divisor_gutter.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+    }
+    if divisor_gutter.dragged()
+        && let Some(puntero) = divisor_gutter.interact_pointer_pos()
+    {
+        config.ancho_gutter =
+            (puntero.x - rect.min.x).clamp(tema::ALTO_CONTROL, tema::ANCHO_FILTRO);
+        crate::ui::editor::guardar_medidas(ui.ctx(), &config);
+    }
+
     let vista = state.vista;
-    let hablantes = &state.editor.proyecto().hablantes;
-    // Una pista por hablante; el bucle de dibujo ya para al llegar al borde.
-    let filas = hablantes.len() + 1;
+    let proyecto = state.editor.proyecto();
+    let hablantes = &proyecto.hablantes;
+
+    // Fila 0 = audio: siempre bajo la regla, nunca se desplaza.
+    let con_captiones: HashSet<&str> = proyecto
+        .captions
+        .iter()
+        .filter_map(|caption| caption.hablante_id.as_deref())
+        .collect();
+    let mut filas = Vec::with_capacity(hablantes.len() + 1);
+    let id_audio = "";
+    let push_fila = |id: String,
+                     nombre: String,
+                     color: Color32,
+                     modelo: usize,
+                     colapsada: bool,
+                     filas: &mut Vec<Fila>| {
+        filas.push(Fila {
+            id,
+            nombre,
+            color,
+            alto: if colapsada {
+                alto_colapsado()
+            } else {
+                alto_pista
+            },
+            modelo,
+        });
+    };
+    push_fila(
+        id_audio.to_owned(),
+        textos.pista_audio.to_owned(),
+        tema::TEXTO_3,
+        0,
+        config.pistas_colapsadas.iter().any(|id| id == id_audio),
+        &mut filas,
+    );
+    for (indice, hablante) in hablantes.iter().enumerate() {
+        if config.ocultar_vacios && !con_captiones.contains(hablante.id.as_str()) {
+            continue;
+        }
+        let nombre = if hablante.nombre.is_empty() {
+            hablante.tecla.clone()
+        } else {
+            hablante.nombre.clone()
+        };
+        push_fila(
+            hablante.id.clone(),
+            nombre,
+            tema::color(rod_core::color_identidad(hablante, indice)),
+            indice + 1,
+            config.pistas_colapsadas.contains(&hablante.id),
+            &mut filas,
+        );
+    }
+
+    let y_audio = rect.min.y + ALTO_REGLA;
+    let y_scroll = y_audio + filas[0].alto;
+    let alto_scroll = (rect.max.y - y_scroll).max(0.0);
+    let total_scroll: f32 = filas.iter().skip(1).map(|fila| fila.alto).sum();
+    let max_scroll = (total_scroll - alto_scroll).max(0.0);
+    let scroll = state.scroll_pistas.clamp(0.0, max_scroll);
 
     // Regla: marcas redondas con etiqueta en mono.
     painter.rect_filled(
@@ -289,13 +498,13 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
         if (area.min.x..=area.max.x).contains(&x) {
             painter.line_segment(
                 [
-                    egui::pos2(x, rect.min.y + 15.0),
+                    egui::pos2(x, rect.min.y + tema::ESP_16 - tema::ESP_2),
                     egui::pos2(x, rect.min.y + ALTO_REGLA),
                 ],
-                egui::Stroke::new(1.0_f32, tema::BORDE),
+                egui::Stroke::new(tema::GROSOR_BORDE, tema::BORDE),
             );
             painter.text(
-                egui::pos2(x + 4.0, rect.min.y + 8.0),
+                egui::pos2(x + tema::ESP_4, rect.min.y + tema::ESP_8),
                 egui::Align2::LEFT_CENTER,
                 etiqueta_regla(t, paso),
                 tema::fuente(Estilo::Timecode),
@@ -305,30 +514,28 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
         t += paso;
     }
     painter.text(
-        gutter.min + egui::vec2(10.0, 8.0),
+        gutter.min + egui::vec2(tema::ESP_12, tema::ESP_8),
         egui::Align2::LEFT_CENTER,
-        "TIEMPO",
+        textos.tiempo.to_uppercase(),
         tema::fuente(Estilo::Pequeno),
         tema::TEXTO_3,
     );
 
-    // Carriles: fondo alterno y nombre con el punto semántico del hablante.
-    // El scroll se aplica aquí, en la frontera de la UI: la lógica pura sigue
-    // recibiendo carriles absolutos.
-    let scroll = scroll_visible(state.scroll_pistas, filas, rect.height());
-    for fila in 0..filas {
-        let relativo = (fila as f32 - scroll) * ALTO_CARRIL;
-        let y = rect.min.y + ALTO_REGLA + relativo;
-        if y + ALTO_CARRIL <= rect.min.y + ALTO_REGLA || y >= rect.max.y {
+    // Carriles: fondo alterno, nombre y chevron de colapso.
+    let mut clique_chevron = false;
+    for indice in 0..filas.len() {
+        let y = y_de_fila(&filas, indice, y_audio, scroll);
+        let fila = &filas[indice];
+        if indice > 0 && (y + fila.alto <= y_scroll || y >= rect.max.y) {
             continue;
         }
         painter.rect_filled(
             egui::Rect::from_min_max(
                 egui::pos2(area.min.x, y),
-                egui::pos2(area.max.x, y + ALTO_CARRIL - 1.0),
+                egui::pos2(area.max.x, y + fila.alto - tema::GROSOR_BORDE),
             ),
             egui::CornerRadius::ZERO,
-            if fila % 2 == 0 {
+            if indice % 2 == 0 {
                 tema::PANEL
             } else {
                 tema::LATERAL
@@ -336,42 +543,74 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
         );
         painter.line_segment(
             [
-                egui::pos2(area.min.x, y + ALTO_CARRIL - 1.0),
-                egui::pos2(area.max.x, y + ALTO_CARRIL - 1.0),
+                egui::pos2(area.min.x, y + fila.alto - tema::GROSOR_BORDE),
+                egui::pos2(area.max.x, y + fila.alto - tema::GROSOR_BORDE),
             ],
-            egui::Stroke::new(1.0_f32, tema::BORDE),
+            egui::Stroke::new(tema::GROSOR_BORDE, tema::BORDE),
         );
-        let (nombre, color) = if fila == 0 {
-            ("Audio".to_string(), tema::TEXTO_3)
-        } else {
-            let hablante = &hablantes[fila - 1];
-            let nombre = if hablante.nombre.is_empty() {
-                hablante.tecla.clone()
-            } else {
-                hablante.nombre.clone()
-            };
-            (
-                tema::acortar(&nombre, 12),
-                tema::color(rod_core::color_identidad(hablante, fila - 1)),
-            )
-        };
-        let centro = ALTO_REGLA + relativo + ALTO_CARRIL / 2.0;
-        painter.circle_filled(gutter.min + egui::vec2(12.0, centro), 3.0, color);
+        let centro = y + fila.alto / 2.0;
+        painter.circle_filled(
+            gutter.min + egui::vec2(tema::ESP_16, centro - rect.min.y),
+            tema::GROSOR_SPLITTER,
+            fila.color,
+        );
         painter.text(
-            gutter.min + egui::vec2(22.0, centro),
+            gutter.min + egui::vec2(tema::ESP_24, centro - rect.min.y),
             egui::Align2::LEFT_CENTER,
-            tema::acortar(&nombre, 12),
+            tema::acortar(&fila.nombre, 12),
             tema::fuente(Estilo::Pequeno),
             tema::TEXTO_2,
         );
+
+        let angulo = egui::pos2(gutter.min.x + tema::ESP_8, centro);
+        let (punta, base) = if config.pistas_colapsadas.contains(&fila.id) {
+            (
+                egui::pos2(angulo.x - tema::ESP_2, angulo.y - tema::ESP_4),
+                [
+                    egui::pos2(angulo.x - tema::ESP_2, angulo.y + tema::ESP_4),
+                    egui::pos2(angulo.x + tema::ESP_4, angulo.y),
+                ],
+            )
+        } else {
+            (
+                egui::pos2(angulo.x - tema::ESP_4, angulo.y - tema::ESP_2),
+                [
+                    egui::pos2(angulo.x + tema::ESP_4, angulo.y - tema::ESP_2),
+                    egui::pos2(angulo.x, angulo.y + tema::ESP_4),
+                ],
+            )
+        };
+        painter.add(egui::Shape::convex_polygon(
+            vec![punta, base[0], base[1]],
+            tema::TEXTO_2,
+            egui::Stroke::NONE,
+        ));
+        let zona = egui::Rect::from_center_size(angulo, egui::Vec2::splat(tema::ESP_16));
+        let chevron = ui.interact(
+            zona,
+            egui::Id::new(("chevron-pista", fila.id.clone())),
+            egui::Sense::click(),
+        );
+        let colapsar = chevron.clicked();
+        let _ = chevron.on_hover_text(textos.collapse_track);
+        if colapsar {
+            clique_chevron = true;
+            if let Some(pos) = config
+                .pistas_colapsadas
+                .iter()
+                .position(|id| id.as_str() == fila.id)
+            {
+                config.pistas_colapsadas.remove(pos);
+            } else {
+                config.pistas_colapsadas.push(fila.id.clone());
+            }
+            crate::ui::editor::guardar_medidas(ui.ctx(), &config);
+        }
     }
 
     if hablantes.is_empty() {
         painter.text(
-            egui::pos2(
-                gutter.max.x + tema::ESP_8,
-                rect.min.y + ALTO_REGLA + ALTO_CARRIL + tema::ESP_8,
-            ),
+            egui::pos2(gutter.max.x + tema::ESP_8, y_scroll + tema::ESP_8),
             egui::Align2::LEFT_TOP,
             textos.pista_sin_hablantes,
             tema::fuente(Estilo::Pequeno),
@@ -379,32 +618,28 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
         );
     }
 
-    // Waveform apagada en el carril de audio: se pinta de los picos ya
-    // decodificados, nunca se recalcula por frame.
-    if scroll == 0.0
-        && let Some(picos) = &state.picos
-    {
-        let base = rect.min.y + ALTO_REGLA;
-        let altura = ALTO_CARRIL - 6.0;
+    // Waveform del carril de audio: se pintan los picos ya decodificados,
+    // nunca se recalculan por frame.
+    if let Some(picos) = &state.picos {
+        let altura = filas[0].alto - tema::ESP_8;
         let pico = picos
             .max
             .iter()
             .copied()
             .fold(0.0_f32, |a, b| a.max(b))
             .max(0.001);
-        let color_onda = tema::COLOR_WAVEFORM;
         for xpx in (0..area.width() as i32).step_by(3) {
             let segundo = vista.tiempo_de(xpx as f32);
             let indice = (segundo * picos.por_segundo as f64) as usize;
             let Some(&valor) = picos.max.get(indice) else {
                 continue;
             };
-            let alto = ((valor / pico).clamp(0.0, 1.0) * altura * 0.5).max(1.0);
+            let alto = ((valor / pico).clamp(0.0, 1.0) * altura * 0.5).max(tema::GROSOR_BORDE);
             let x = area.min.x + xpx as f32;
-            let centro = base + ALTO_CARRIL / 2.0;
+            let centro = y_audio + filas[0].alto / 2.0;
             painter.line_segment(
                 [egui::pos2(x, centro - alto), egui::pos2(x, centro + alto)],
-                egui::Stroke::new(2.0_f32, color_onda),
+                egui::Stroke::new(tema::GROSOR_SPLITTER / 2.0, tema::COLOR_WAVEFORM),
             );
         }
     }
@@ -415,11 +650,8 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
         let x = area.min.x + vista.x_de(t);
         if (area.min.x..=area.max.x).contains(&x) {
             painter.line_segment(
-                [
-                    egui::pos2(x, rect.min.y + ALTO_REGLA),
-                    egui::pos2(x, rect.max.y),
-                ],
-                egui::Stroke::new(1.0_f32, tema::BORDE.gamma_multiply(0.45)),
+                [egui::pos2(x, y_audio), egui::pos2(x, rect.max.y)],
+                egui::Stroke::new(tema::GROSOR_BORDE, tema::BORDE),
             );
         }
         t += paso;
@@ -428,24 +660,26 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
     // Clips: el color del hablante manda; el azul marca selección.
     let puntero = ui.ctx().input(|entrada| entrada.pointer.latest_pos());
     let mut id_bajo_puntero: Option<String> = None;
-    for caption in state.editor.proyecto().captions.iter() {
-        let fila = rod_core::caption_row_index(caption.hablante_id.as_deref(), hablantes);
-        if fila >= filas {
+    for caption in proyecto.captions.iter() {
+        let indice = match caption.hablante_id.as_deref() {
+            Some(id) => filas.iter().position(|fila| fila.id == id),
+            None => Some(0),
+        };
+        let Some(indice) = indice else {
             continue;
-        }
+        };
         let x0 = area.min.x + vista.x_de(caption.inicio);
         let x1 = area.min.x + vista.x_de(caption.fin);
         if x1 <= area.min.x || x0 >= area.max.x {
             continue;
         }
-        let relativo = (fila as f32 - scroll) * ALTO_CARRIL;
-        let y = rect.min.y + ALTO_REGLA + relativo + 7.0;
-        if y + ALTO_CARRIL <= rect.min.y + ALTO_REGLA || y >= rect.max.y {
+        let y = y_de_fila(&filas, indice, y_audio, scroll) + tema::ESP_8;
+        if indice > 0 && (y + alto_pista <= y_scroll || y >= rect.max.y) {
             continue;
         }
         let clip = egui::Rect::from_min_max(
             egui::pos2(x0.max(area.min.x), y),
-            egui::pos2(x1.min(area.max.x), y + ALTO_CARRIL - 14.0),
+            egui::pos2(x1.min(area.max.x), y + filas[indice].alto - tema::ESP_16),
         );
         let identidad = caption.hablante_id.as_deref().and_then(|id| {
             hablantes
@@ -458,29 +692,36 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
             tema::color(rod_core::color_identidad(hablante, indice))
         });
         let relleno = if identidad.is_some() {
-            color.gamma_multiply(0.22)
+            tema::mezclar(color, tema::SUPERFICIE, 0.78)
         } else {
-            Color32::from_white_alpha(38) // gris al 15 %
+            tema::mezclar(tema::COLOR_SIN_HABLANTE, tema::SUPERFICIE, 0.85)
         };
         painter.rect_filled(clip, egui::CornerRadius::same(tema::RADIO_CLIP), relleno);
-        if identidad.is_none() && !seleccionado && state.editor.proyecto().captions.len() <= 120 {
+        if identidad.is_none() && !seleccionado && proyecto.captions.len() <= 120 {
             pintar_borde_punteado(painter, clip, tema::COLOR_SIN_HABLANTE);
         } else {
             painter.rect_stroke(
                 clip,
                 egui::CornerRadius::same(tema::RADIO_CLIP),
                 egui::Stroke::new(
-                    if seleccionado { 2.0_f32 } else { 1.0_f32 },
+                    if seleccionado {
+                        tema::GROSOR_FOCO
+                    } else {
+                        tema::GROSOR_BORDE
+                    },
                     color_borde_clip(identidad, seleccionado),
                 ),
                 egui::StrokeKind::Inside,
             );
         }
-        if clip.width() > 56.0 {
+        if clip.width() > tema::ANCHO_DRAG_CONTORNO {
             painter.text(
-                clip.min + egui::vec2(5.0, 4.0),
+                clip.min + egui::vec2(tema::ESP_4, tema::ESP_4),
                 egui::Align2::LEFT_TOP,
-                tema::acortar(&caption.texto, (clip.width() / 7.0).max(4.0) as usize),
+                tema::acortar(
+                    &caption.texto,
+                    (clip.width() / tema::ESP_8).max(4.0) as usize,
+                ),
                 tema::fuente(Estilo::Pequeno),
                 tema::TEXTO,
             );
@@ -499,95 +740,117 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
         });
     }
 
-    // Playhead con tirador.
+    // Playhead con tirador y, si el tiempo salió del área, marcador de borde.
     let x = area.min.x + vista.x_de(playhead(state));
     if (area.min.x..=area.max.x).contains(&x) {
         painter.line_segment(
-            [egui::pos2(x, rect.min.y + 10.0), egui::pos2(x, rect.max.y)],
-            egui::Stroke::new(1.5_f32, tema::ACENTO),
+            [
+                egui::pos2(x, rect.min.y + tema::ESP_12),
+                egui::pos2(x, rect.max.y),
+            ],
+            egui::Stroke::new(tema::GROSOR_FOCO, tema::ACENTO),
         );
         painter.add(egui::Shape::closed_line(
             vec![
-                egui::pos2(x - 5.0, rect.min.y + 2.0),
-                egui::pos2(x + 5.0, rect.min.y + 2.0),
-                egui::pos2(x, rect.min.y + 10.0),
+                egui::pos2(x - tema::ESP_8, rect.min.y + tema::ESP_2),
+                egui::pos2(x + tema::ESP_8, rect.min.y + tema::ESP_2),
+                egui::pos2(x, rect.min.y + tema::ESP_12),
             ],
-            egui::Stroke::new(1.0_f32, tema::ACENTO),
+            egui::Stroke::new(tema::GROSOR_BORDE, tema::ACENTO),
+        ));
+    } else if let Some((borde, izquierda)) = marca_borde(x, area.min.x, area.max.x) {
+        painter.line_segment(
+            [egui::pos2(borde, rect.min.y), egui::pos2(borde, rect.max.y)],
+            egui::Stroke::new(tema::GROSOR_BORDE, tema::ACENTO),
+        );
+        let y = rect.min.y + ALTO_REGLA / 2.0;
+        let (punta, base) = if izquierda {
+            (
+                egui::pos2(borde + tema::GROSOR_BORDE, y),
+                [
+                    egui::pos2(borde + tema::ESP_8, y - tema::ESP_4),
+                    egui::pos2(borde + tema::ESP_8, y + tema::ESP_4),
+                ],
+            )
+        } else {
+            (
+                egui::pos2(borde - tema::GROSOR_BORDE, y),
+                [
+                    egui::pos2(borde - tema::ESP_8, y - tema::ESP_4),
+                    egui::pos2(borde - tema::ESP_8, y + tema::ESP_4),
+                ],
+            )
+        };
+        painter.add(egui::Shape::convex_polygon(
+            vec![punta, base[0], base[1]],
+            tema::ACENTO,
+            egui::Stroke::NONE,
         ));
     }
 
-    // Scrollbar: solo cuando hay más pistas que caben. El pulgar crece con
-    // la fracción visible y se desplaza por el recorrido que sobra.
-    let max_scroll = max_scroll_pistas(filas, rect.height());
+    // Scrollbar: solo cuando hay pistas que no caben bajo la regla fija.
     if max_scroll > 0.0 {
         painter.rect_filled(barra, egui::CornerRadius::ZERO, tema::LATERAL);
-        let pulgar_alto = barra.height() * filas_visibles(rect.height()) as f32 / filas as f32;
+        let pulgar_alto = (barra.height() * alto_scroll / total_scroll)
+            .max(tema::ALTO_CONTROL)
+            .min(barra.height());
         let pulgar_y = barra.min.y + scroll / max_scroll * (barra.height() - pulgar_alto);
         painter.rect_filled(
             egui::Rect::from_min_max(
                 egui::pos2(barra.min.x, pulgar_y),
                 egui::pos2(barra.max.x, pulgar_y + pulgar_alto),
             ),
-            egui::CornerRadius::same(3),
+            egui::CornerRadius::same(tema::RADIO_CONTROL as u8),
             tema::BORDE_CONTROL,
         );
         if (respuesta_barra.clicked() || respuesta_barra.dragged())
             && let Some(pos) = respuesta_barra.interact_pointer_pos()
         {
-            mensajes.push(MensajeEditor::ScrollPistas(scroll_desde_barra(
-                pos.y - barra.min.y,
-                barra.height(),
-                filas,
-            )));
+            mensajes.push(MensajeEditor::ScrollPistas(
+                (pos.y - barra.min.y) / barra.height() * max_scroll,
+            ));
         }
     }
 
     // Los eventos llegan en coordenadas locales del rect del timeline: el
     // margen de nombres ya está descontado por la geometría del eje.
-    // Clic sin arrastre: egui no marca `drag_started`, así que hay que
-    // despachar la pulsación y la suelta para que `pulsar` seleccione el clip
-    // tocado o busque el tiempo bajo el cursor.
+    // `punto_en_fila` devuelve la y lógica de `ALTO_CARRIL` que espera `pulsar`.
+    let punto_en = |pos: egui::Pos2| -> timeline::Punto {
+        let rel = pos - rect.min;
+        let fila = fila_en_y(&filas, y_audio - rect.min.y, scroll, rel.y).unwrap_or(0);
+        punto_en_fila(rel.x - gutter_ancho, filas[fila].modelo)
+    };
     if respuesta.clicked()
+        && !clique_chevron
         && let Some(pos) = respuesta.interact_pointer_pos()
     {
-        mensajes.push(MensajeEditor::Timeline(Mensaje::Pulsar(punto(
-            pos - rect.min,
-            scroll,
-        ))));
-        mensajes.push(MensajeEditor::Timeline(Mensaje::Soltar(punto(
-            pos - rect.min,
-            scroll,
-        ))));
+        let punto = punto_en(pos);
+        mensajes.push(MensajeEditor::Timeline(Mensaje::Pulsar(punto)));
+        mensajes.push(MensajeEditor::Timeline(Mensaje::Soltar(punto)));
     }
     if respuesta.drag_started()
+        && !divisor_gutter.dragged()
         && let Some(pos) = respuesta.interact_pointer_pos()
     {
-        let tiempo = vista.tiempo_de(punto(pos - rect.min, scroll).x).max(0.0);
+        let tiempo = vista.tiempo_de(punto_en(pos).x).max(0.0);
         mensajes.push(MensajeEditor::ScrubInicio(tiempo));
-        mensajes.push(MensajeEditor::Timeline(Mensaje::Pulsar(punto(
-            pos - rect.min,
-            scroll,
-        ))));
+        mensajes.push(MensajeEditor::Timeline(Mensaje::Pulsar(punto_en(pos))));
     }
     if respuesta.dragged()
+        && !divisor_gutter.dragged()
         && let Some(pos) = respuesta.interact_pointer_pos()
     {
-        let tiempo = vista.tiempo_de(punto(pos - rect.min, scroll).x).max(0.0);
+        let tiempo = vista.tiempo_de(punto_en(pos).x).max(0.0);
         mensajes.push(MensajeEditor::ScrubMover(tiempo));
-        mensajes.push(MensajeEditor::Timeline(Mensaje::Arrastrar(punto(
-            pos - rect.min,
-            scroll,
-        ))));
+        mensajes.push(MensajeEditor::Timeline(Mensaje::Arrastrar(punto_en(pos))));
     }
     if respuesta.drag_stopped()
+        && !divisor_gutter.dragged()
         && let Some(pos) = respuesta.interact_pointer_pos()
     {
-        let tiempo = vista.tiempo_de(punto(pos - rect.min, scroll).x).max(0.0);
+        let tiempo = vista.tiempo_de(punto_en(pos).x).max(0.0);
         mensajes.push(MensajeEditor::ScrubFin(tiempo));
-        mensajes.push(MensajeEditor::Timeline(Mensaje::Soltar(punto(
-            pos - rect.min,
-            scroll,
-        ))));
+        mensajes.push(MensajeEditor::Timeline(Mensaje::Soltar(punto_en(pos))));
     }
     let (modificadores, delta) = ui.input(|entrada| (entrada.modifiers, entrada.raw_scroll_delta));
     mensajes.push(MensajeEditor::Modificadores(modificadores));
@@ -598,7 +861,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
                 .unwrap_or_else(|| area.center());
             mensajes.push(MensajeEditor::Timeline(Mensaje::Rueda {
                 lineas,
-                punto: punto(cursor - rect.min, scroll),
+                punto: punto_en(cursor),
             }));
         }
         Rueda::Pan(lineas) if lineas != 0.0 => {
@@ -607,18 +870,13 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
                 .unwrap_or_else(|| area.center());
             mensajes.push(MensajeEditor::Timeline(Mensaje::Rueda {
                 lineas,
-                punto: punto(cursor - rect.min, scroll),
+                punto: punto_en(cursor),
             }));
         }
         Rueda::Pistas(lineas) if lineas != 0.0 => {
-            // El offset ya está limitado a las filas que sobran, así que no se
-            // puede pasar del último carril.
-            mensajes.push(MensajeEditor::ScrollPistas(desplazar(
-                scroll,
-                lineas,
-                filas,
-                rect.height(),
-            )));
+            mensajes.push(MensajeEditor::ScrollPistas(
+                (scroll + lineas * alto_pista).clamp(0.0, max_scroll),
+            ));
         }
         _ => {}
     }
@@ -630,7 +888,7 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
 mod tests {
     use crate::timeline::Punto as Point;
 
-    use super::playhead;
+    use super::{marca_borde, playhead, punto_en_fila};
     use crate::editor_app::{EditorApp, MensajeEditor, update};
     use crate::timeline::{Mensaje, Vista};
 
@@ -682,5 +940,24 @@ mod tests {
         let mut editor = editor();
         editor.position = f64::NAN;
         assert_eq!(playhead(&editor), 0.0);
+    }
+
+    #[test]
+    fn un_carril_contraido_sigue_apuntando_a_su_modelo() {
+        // Aunque el carril 3 se vea a 32 px, `pulsar` sigue recibiendo la y
+        // lógica de ALTO_CARRIL: el hablante es el mismo en los dos casos.
+        let punto = punto_en_fila(200.0, 3);
+        let esperado = super::ALTO_REGLA + 3.0 * crate::timeline::ALTO_CARRIL;
+        assert!((punto.x - 200.0).abs() < 1e-6);
+        assert!(punto.y > esperado && punto.y < esperado + crate::timeline::ALTO_CARRIL);
+    }
+
+    #[test]
+    fn el_marcador_solo_aparece_fuera_del_area() {
+        assert_eq!(marca_borde(50.0, 10.0, 100.0), None);
+        assert_eq!(marca_borde(10.0, 10.0, 100.0), None);
+        assert_eq!(marca_borde(100.0, 10.0, 100.0), None);
+        assert_eq!(marca_borde(-1.0, 10.0, 100.0), Some((10.0, true)));
+        assert_eq!(marca_borde(120.0, 10.0, 100.0), Some((100.0, false)));
     }
 }
