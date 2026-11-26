@@ -134,7 +134,8 @@ pub enum MensajeEditor {
     SeleccionarPreset(String),
     /// Duplica el preset seleccionado (parte del actual, como el oráculo).
     NuevoPreset,
-    BorrarPreset,
+    BorrarPreset(String),
+    RestaurarPreset,
     /// Un campo del preset. El id y el campo son la clave del borrador.
     EditarPreset(String, CampoPreset, String),
     Timeline(timeline::Mensaje),
@@ -390,6 +391,10 @@ pub struct EditorApp {
     pub preset_seleccionado: Option<String>,
     /// Previews rasterizados de los presets, claveados por contenido.
     pub texturas_preset: std::collections::HashMap<String, egui::TextureHandle>,
+    pub busqueda_fuente_preset: String,
+    pub preset_renombrando: Option<String>,
+    /// Preset borrado y su posición, para restaurarlo desde el toast.
+    pub ultimo_preset_borrado: Option<(rod_core::PresetAss, usize)>,
     /// Texto a medias de los campos numéricos, por id de preset y campo. Sin
     /// esto, escribir `72.5` se quedaría en `72` al llegar al punto.
     pub(crate) borradores_preset: HashMap<(String, CampoPreset), String>,
@@ -547,6 +552,9 @@ impl EditorApp {
             ruta_presets,
             preset_seleccionado,
             texturas_preset: std::collections::HashMap::new(),
+            busqueda_fuente_preset: String::new(),
+            preset_renombrando: None,
+            ultimo_preset_borrado: None,
             borradores_preset: HashMap::new(),
             mensaje: None,
             miniatura_pendiente,
@@ -1211,6 +1219,52 @@ pub fn ciclar_bajo_playhead(state: &mut EditorApp, paso: i32) {
     sincronizar_borrador(state);
 }
 
+/// Devuelve al mismo sitio el último preset borrado. Lo usan el toast y
+/// `Deshacer`, para que restaurar desde uno y desde el otro sea idéntico.
+fn restaurar_ultimo_preset(state: &mut EditorApp) -> Tarea {
+    if let Some((preset, posicion)) = state.ultimo_preset_borrado.take() {
+        let posicion = posicion.min(state.presets.len());
+        state.presets.insert(posicion, preset.clone());
+        state.preset_seleccionado = Some(preset.id);
+        return guardar_presets(state);
+    }
+    Tarea::Ninguna
+}
+
+/// Asigna el preset a todos los hablantes de los captions seleccionados en
+/// un solo paso de historial (el patrón de `asignar_a_seleccion`).
+pub fn aplicar_a_seleccion_agrupado(state: &mut EditorApp, preset_id: &str) {
+    let ids: Vec<String> = {
+        let proyecto = state.editor.proyecto();
+        let mut vistos = Vec::new();
+        for caption_id in &state.editor.seleccion {
+            if let Some(hablante_id) = proyecto
+                .captions
+                .iter()
+                .find(|caption| &caption.id == caption_id)
+                .and_then(|caption| caption.hablante_id.clone())
+                && !vistos.contains(&hablante_id)
+            {
+                vistos.push(hablante_id);
+            }
+        }
+        vistos
+    };
+    if ids.is_empty() {
+        return;
+    }
+    state.editor.registrar_historial();
+    {
+        let hablantes = &mut state.editor.proyecto_mut().hablantes;
+        for hablante in hablantes.iter_mut() {
+            if ids.contains(&hablante.id) {
+                hablante.preset_id = Some(preset_id.to_owned());
+            }
+        }
+    }
+    refrescar_preview(state);
+}
+
 /// `[` fija la entrada y `]` la salida en el playhead, sobre la selección.
 fn marcar_tiempo(state: &mut EditorApp, entrada: bool) {
     let Some(id) = state.editor.seleccion.first().cloned() else {
@@ -1802,6 +1856,11 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
         }
         MensajeEditor::Deshacer => {
             state.editando_hablante = None;
+            // El toast de «estilo eliminado» usa este mismo mensaje: restaurar
+            // el preset tiene prioridad sobre deshacer una edición del texto.
+            if state.ultimo_preset_borrado.is_some() {
+                return restaurar_ultimo_preset(state);
+            }
             if state.editor.deshacer() {
                 sincronizar_borrador(state);
                 refrescar_preview(state);
@@ -1897,24 +1956,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             }
         }
         MensajeEditor::AplicarPresetSeleccion(preset) => {
-            let ids: Vec<String> = state
-                .editor
-                .seleccion
-                .iter()
-                .filter_map(|caption_id| {
-                    state
-                        .editor
-                        .proyecto()
-                        .captions
-                        .iter()
-                        .find(|caption| caption.id == *caption_id)
-                        .and_then(|caption| caption.hablante_id.clone())
-                })
-                .collect();
-            for id in ids {
-                state.editor.asignar_preset(&id, Some(preset.clone()));
-            }
-            refrescar_preview(state);
+            aplicar_a_seleccion_agrupado(state, &preset);
         }
         MensajeEditor::AsignarPreset(hablante_id, preset_id) => {
             state.editando_hablante = None;
@@ -1952,13 +1994,16 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             state.presets.push(nuevo);
             return guardar_presets(state);
         }
-        MensajeEditor::BorrarPreset => {
+        MensajeEditor::BorrarPreset(id) => {
             if state.presets.len() <= 1 {
                 return Tarea::Ninguna;
             }
-            let Some(id) = state.preset_seleccionado.clone() else {
+            let posicion = state.presets.iter().position(|preset| preset.id == id);
+            let Some(posicion) = posicion else {
                 return Tarea::Ninguna;
             };
+            let borrado = state.presets[posicion].clone();
+            state.ultimo_preset_borrado = Some((borrado, posicion));
             state.presets.retain(|preset| preset.id != id);
             state
                 .borradores_preset
@@ -1967,6 +2012,9 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             // No se toca `preset_id` de los hablantes: el oráculo tampoco lo
             // limpia, y `ass_del_proyecto` ya cae al Default si el id no existe.
             return guardar_presets(state);
+        }
+        MensajeEditor::RestaurarPreset => {
+            return restaurar_ultimo_preset(state);
         }
         MensajeEditor::EditarPreset(id, campo, texto) => {
             let aplicado = state

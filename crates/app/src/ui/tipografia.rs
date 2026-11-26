@@ -121,6 +121,18 @@ pub fn variante_disponible(nombre: &str, negrita: bool) -> bool {
     base_del_sistema().query(&consulta).is_some()
 }
 
+/// Nombres de familia instalados en el sistema, ordenados y sin duplicados.
+pub fn fuentes_del_sistema() -> Vec<String> {
+    let base = base_del_sistema();
+    let mut nombres: Vec<String> = base
+        .faces()
+        .flat_map(|face| face.families.iter().map(|(nombre, _)| nombre.clone()))
+        .collect();
+    nombres.sort();
+    nombres.dedup();
+    nombres
+}
+
 /// Registra en egui las familias visibles del panel, una sola vez por lote.
 pub fn registrar_fuentes(ctx: &egui::Context, nombres: &[String]) {
     static REGISTRADAS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =

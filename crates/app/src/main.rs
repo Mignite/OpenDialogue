@@ -444,6 +444,9 @@ impl eframe::App for RustyDialogue {
                 MensajeEditor::BorrarSeleccion | MensajeEditor::Comando(Comando::Eliminar)
             )
         });
+        let borro_preset = mensajes_editor
+            .iter()
+            .any(|mensaje| matches!(mensaje, MensajeEditor::BorrarPreset(_)));
         for mensaje in mensajes_editor {
             if let Pantalla::Editor(editor) = &mut self.pantalla {
                 let tarea = editor_app::update(editor, mensaje);
@@ -452,6 +455,9 @@ impl eframe::App for RustyDialogue {
         }
         if borro {
             self.toasts.push(textos.linea_eliminada.to_owned(), true);
+        }
+        if borro_preset {
+            self.toasts.push(textos.preset_eliminado.to_owned(), true);
         }
         ui::atajos::mostrar(
             ctx,

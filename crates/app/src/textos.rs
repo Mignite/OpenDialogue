@@ -118,6 +118,7 @@ pub struct Textos {
     pub fuente_no_encontrada: &'static str,
     pub margen_v: &'static str,
     pub buscar_fuente: &'static str,
+    pub preset_eliminado: &'static str,
     pub sin_subtitulos: &'static str,
     pub importar_archivo: &'static str,
 }
@@ -209,6 +210,7 @@ pub const ES: Textos = Textos {
     fuente_no_encontrada: "Fuente no encontrada",
     margen_v: "Margen V",
     buscar_fuente: "Buscar fuente…",
+    preset_eliminado: "Estilo eliminado",
     sin_subtitulos: "Aún no hay subtítulos",
     importar_archivo: "Importar archivo",
 };
@@ -300,6 +302,7 @@ pub const EN: Textos = Textos {
     fuente_no_encontrada: "Font not found",
     margen_v: "Margin V",
     buscar_fuente: "Search font…",
+    preset_eliminado: "Style deleted",
     sin_subtitulos: "No subtitles yet",
     importar_archivo: "Import file",
 };
