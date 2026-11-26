@@ -60,8 +60,13 @@ Fuentes: **fuentes del sistema con `fontdb`** (elegido); descartado usar solo
   del preset. Sin tocar `ass.rs`: se reutiliza el mismo `build_ass` del export.
 - Escala: `preset.fontsize * (alto_preview / CANVAS.1)`, con mínimo 20 px
   legibles. `alto_preview = tema::ALTO_PREVIEW_STYLES = 64`.
-- El overlay del video pasa a llamar al mismo envoltorio cuando dibuje la
-  línea activa; `refrescar_preview` sigue siendo el dueño del `.ass` real.
+- El overlay **no se dibuja dos veces**: `refrescar_preview`/`state.layers`
+  sigue siendo el único camino del video y el mismo `build_ass` del export.
+  `render_subtitle` es el envoltorio que usa la tarjeta para rasterizar su
+  muestra; ambas comparten la conversión de preset a estilo ASS. No se toca
+  `rod-subs::ffi`: `fontdb` decide la disponibilidad que muestra la UI y el
+  proveedor de fuentes de libass sigue rasterizando (nota de riesgo: el chip
+  puede diferir del proveedor del sistema).
 - Tests: un preset con fuente del sistema y otro con fuente ausente producen
   bitmaps no vacíos; el bitmap del preview y el de una línea equivalente del
   overlay son byte-idénticos.
@@ -96,8 +101,8 @@ Fuentes: **fuentes del sistema con `fontdb`** (elegido); descartado usar solo
 - OUTLINE: `DragValue` 80 px `" px"` + swatch + hex. Es el segundo «Color»
   actual, renombrado.
 - SHADOW: `DragValue " px"`.
-- BOTTOM MARGIN: `DragValue " px"` sobre `margin_v`; con `alignment = 2`
-  (abajo-centro) corresponde al margen inferior. Sin cuadrícula.
+- BOTTOM MARGIN: `DragValue " px"` sobre `margin_v`. El rótulo definitivo
+  depende de la decisión pendiente sobre `alignment` (ver §8). Sin cuadrícula.
 - Sin campo Name: renombrar con doble clic sobre el título de la tarjeta.
 - Sin `true`/`false`: los toggles los reemplazan.
 - Pie: botón secundario «Apply to N selected lines» a todo el ancho y 32 px,
@@ -108,7 +113,11 @@ Fuentes: **fuentes del sistema con `fontdb`** (elegido); descartado usar solo
 ### 5.4 Comportamiento e historial
 
 - Cada cambio actualiza en vivo preview y overlay (llamada a
-  `refrescar_preview` ya existente).
+  `refrescar_preview` ya existente). Las familias nuevas se registran en egui
+  con `set_fonts` **una vez por lote** al abrir Styles, nunca por frame.
+- Delete de preset: toast con restauración dedicada en su posición original;
+  los `preset_id` de hablantes no se tocan (comportamiento actual).
+- `BOTTOM MARGIN` y Apply a selección: ver decisiones pendientes en §8.
 - `EditarPreset` se escribe en JSON con debounce de ~1 s por control, para no
   escribir cada tecla. Los presets no entran en `Historial` (restricción
   documentada en `slice-7d-estilos.md`); lo que sí es un solo paso de historial
@@ -125,7 +134,23 @@ Fuentes: **fuentes del sistema con `fontdb`** (elegido); descartado usar solo
 - Verificación estándar: `cargo fmt --check`, `cargo clippy -D warnings`,
   `cargo test --workspace`.
 
-## 7. Lo que queda al implementador
+## 8. Decisiones pendientes del autor
+
+1. `alignment` del preset: `PresetAss` sí tiene `alignment: i32` (no hay
+   cuadrícula 3×3 en la UI). ¿Se fuerza 2 para que «BOTTOM MARGIN» sea literal
+   (cambia el `.ass` exportado), se conserva y se rotula `Margin V` genérico, o
+   se conserva con un Control de alineación mínimo?
+2. Contenido del preview: ¿muestra solo una muestra centrada del texto (el
+   margen no es observable en la tarjeta) o un frame completo a escala con la
+   posición real? La segunda opción contradice el mínimo de 20 px legibles.
+3. `Apply to N selected lines`: ¿N cuenta captions seleccionados y se asigna
+   el preset a todos los hablantes de esas líneas (afectando también sus
+   otras líneas), o N cuenta hablantes distintos?
+4. Toggles B/I: el modelo tiene `bold`/`italic` booleanos, sin variantes.
+   ¿Se deshabilita el toggle solo cuando la familia instalada no tiene esa
+   cara y se deja que libass sintetice, o los toggles siempre están activos?
+
+## 9. Lo que queda al implementador
 
 Nombres concretos de funciones internas y reparto de archivos; el orden de las
 fases del plan; si el picker de color se reutiliza de otro panel o se implementa
