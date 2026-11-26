@@ -1,8 +1,11 @@
-﻿//! Barra de menú dibujada por iced, construida desde el registro de comandos.
+//! Barra de menú dibujada por egui, construida desde el registro de comandos.
 //! El menú no decide nada: solo publica el `Comando` que el usuario eligió.
 
 use crate::comandos::{self, Comando, MapaAtajos, Seccion};
 use crate::textos::Textos;
+
+use crate::ui::kit;
+use crate::ui::tema::{self, Estilo};
 
 /// Solo cuatro menús: lo demás está en atajos, pestañas y Ajustes.
 const SECCIONES: [Seccion; 4] = [
@@ -50,6 +53,14 @@ fn nombre_seccion(seccion: Seccion, textos: &Textos) -> &'static str {
     }
 }
 
+/// Ancho de una cadena con la fuente dada, para alinear columnas sin estimar.
+fn ancho_texto(ui: &egui::Ui, texto: &str, fuente: egui::FontId) -> f32 {
+    ui.painter()
+        .layout_no_wrap(texto.to_owned(), fuente, tema::TEXTO)
+        .size()
+        .x
+}
+
 /// Barra de menú dibujada con egui. Cuatro secciones con lo esencial.
 pub fn mostrar(
     ui: &mut egui::Ui,
@@ -57,16 +68,13 @@ pub fn mostrar(
     textos: &Textos,
     atajos: &MapaAtajos,
 ) -> Option<Comando> {
-    let _ = atajos;
-    use crate::ui::tema;
-
     let mut elegido = None;
     ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
         ui.spacing_mut().item_spacing.x = tema::ESP_12;
         for seccion in SECCIONES {
             let nombre = nombre_seccion(seccion, textos);
-            let fuente = tema::fuente(tema::Estilo::Base);
-            let ancho_texto = ui
+            let fuente = tema::fuente(Estilo::Base);
+            let ancho_nombre = ui
                 .painter()
                 .layout_no_wrap(nombre.to_owned(), fuente.clone(), tema::TEXTO_MENU)
                 .size()
@@ -85,29 +93,84 @@ pub fn mostrar(
                 let _ = egui::containers::menu::MenuButton::from_button(
                     egui::Button::new(etiqueta)
                         .corner_radius(tema::radio_superficie())
-                        .min_size(egui::vec2(ancho_texto + 20.0, 24.0)),
+                        .min_size(egui::vec2(ancho_nombre + tema::ESP_20, tema::ALTO_CHIP)),
                 )
                 .ui(ui, |ui| {
-                    // Sin columna de atajos: el panel de Ajustes los muestra con
-                    // el valor configurado. Menú compacto, ~160 px.
-                    ui.set_min_width(160.0);
-                    ui.set_max_width(160.0);
-                    for comando in comandos_de(seccion) {
-                        let habilitado = !en_inicio || comandos::disponible_en_inicio(comando);
-                        let etiqueta = textos.comando(comando);
-                        let boton = ui.add_enabled(
-                            habilitado,
-                            egui::Button::new(
-                                egui::RichText::new(tema::acortar(etiqueta, 22))
-                                    .font(tema::fuente(tema::Estilo::Base)),
+                    let comandos = comandos_de(seccion);
+                    let fuente_base = tema::fuente(Estilo::Base);
+                    let fuente_mono = tema::fuente(Estilo::Mono);
+                    let ancho_etiqueta = comandos
+                        .iter()
+                        .map(|comando| {
+                            ancho_texto(
+                                ui,
+                                &tema::acortar(textos.comando(*comando), 22),
+                                fuente_base.clone(),
                             )
-                            .frame(false),
-                        );
-                        if boton.clicked() {
-                            elegido = Some(comando);
-                            ui.close();
-                        }
-                    }
+                        })
+                        .fold(0.0, f32::max)
+                        + tema::ESP_20;
+                    let ancho_atajo = comandos
+                        .iter()
+                        .filter_map(|comando| atajos.atajo(*comando))
+                        .map(|atajo| ancho_texto(ui, &atajo.to_string(), fuente_mono.clone()))
+                        .fold(0.0, f32::max);
+                    let ancho_menu = (ancho_etiqueta
+                        + ancho_atajo
+                        + tema::ESP_12
+                        + tema::ESP_20
+                        + tema::ESP_8)
+                        .max(tema::ANCHO_FILTRO);
+                    ui.set_min_width(ancho_menu);
+                    ui.set_max_width(ancho_menu);
+
+                    // Hover y active de cada entrada, con el atajo en una
+                    // segunda columna alineada a la derecha.
+                    ui.scope(|ui| {
+                        ui.visuals_mut().widgets.hovered.bg_fill = tema::CONTROL;
+                        ui.visuals_mut().widgets.active.bg_fill = tema::ELEVADO;
+                        egui::Grid::new(nombre)
+                            .num_columns(2)
+                            .spacing(egui::vec2(tema::ESP_12, tema::ESP_2))
+                            .show(ui, |ui| {
+                                for comando in comandos {
+                                    let habilitado =
+                                        !en_inicio || comandos::disponible_en_inicio(comando);
+                                    let etiqueta = egui::RichText::new(tema::acortar(
+                                        textos.comando(comando),
+                                        22,
+                                    ))
+                                    .font(tema::fuente(Estilo::Base));
+                                    let respuesta = ui.add_enabled(
+                                        habilitado,
+                                        egui::Button::new(etiqueta).min_size(egui::vec2(
+                                            ancho_etiqueta,
+                                            tema::ALTO_CONTROL,
+                                        )),
+                                    );
+                                    if respuesta.has_focus() {
+                                        kit::anillo_foco(ui, &respuesta);
+                                    }
+                                    if respuesta.clicked() {
+                                        elegido = Some(comando);
+                                        ui.close();
+                                    }
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            if let Some(atajo) = atajos.atajo(comando) {
+                                                ui.label(
+                                                    egui::RichText::new(atajo.to_string())
+                                                        .font(tema::fuente(Estilo::Mono))
+                                                        .color(tema::TEXTO_2),
+                                                );
+                                            }
+                                        },
+                                    );
+                                    ui.end_row();
+                                }
+                            });
+                    });
                 });
             });
         }

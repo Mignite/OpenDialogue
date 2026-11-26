@@ -4,12 +4,12 @@ use std::time::{Duration, Instant};
 
 use egui::RichText;
 
+use crate::comandos::{self, Comando};
 use crate::editor_app::MensajeEditor;
 use crate::textos::Textos;
 
+use super::kit;
 use super::tema::{self, Estilo};
-
-const VIDA: Duration = Duration::from_secs(6);
 
 #[derive(Default)]
 pub struct Toasts {
@@ -33,8 +33,9 @@ impl Toasts {
     /// Dibuja los avisos. Devuelve el mensaje de «Deshacer» pulsado.
     pub fn mostrar(&mut self, ctx: &egui::Context, textos: &Textos) -> Option<MensajeEditor> {
         let ahora = Instant::now();
+        let vida = Duration::from_secs_f64(tema::VIDA_TOAST_S);
         self.avisos
-            .retain(|(_, _, instante)| ahora.duration_since(*instante) < VIDA);
+            .retain(|(_, _, instante)| ahora.duration_since(*instante) < vida);
         if self.avisos.is_empty() {
             return None;
         }
@@ -42,12 +43,12 @@ impl Toasts {
         let marco = egui::Frame {
             inner_margin: egui::Margin::symmetric(tema::ESP_12 as i8, tema::ESP_8 as i8),
             fill: tema::PANEL,
-            stroke: egui::Stroke::new(1.0_f32, tema::BORDE_CONTROL),
+            stroke: egui::Stroke::new(tema::GROSOR_BORDE, tema::BORDE_CONTROL),
             corner_radius: egui::CornerRadius::same(tema::RADIO_SUPERFICIE as u8),
             ..egui::Frame::NONE
         };
         egui::Area::new(egui::Id::new("toasts"))
-            .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -16.0))
+            .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -tema::ESP_16))
             .show(ctx, |ui| {
                 marco.show(ui, |ui| {
                     for (texto, mensaje, _) in &self.avisos {
@@ -57,20 +58,27 @@ impl Toasts {
                                     .font(tema::fuente(Estilo::Base))
                                     .color(tema::TEXTO),
                             );
-                            if mensaje.is_some()
-                                && ui
-                                    .add(
-                                        egui::Button::new(
-                                            RichText::new(
-                                                textos.comando(crate::comandos::Comando::Deshacer),
-                                            )
+                            if mensaje.is_some() {
+                                let r = ui.add(
+                                    egui::Button::new(
+                                        RichText::new(textos.comando(Comando::Deshacer))
                                             .font(tema::fuente(Estilo::Base)),
-                                        )
-                                        .frame(false),
                                     )
-                                    .clicked()
-                            {
-                                self.deshacer = mensaje.clone();
+                                    .frame(false),
+                                );
+                                if r.has_focus() {
+                                    kit::anillo_foco(ui, &r);
+                                }
+                                let r = r.on_hover_ui(|ui| {
+                                    ui.label(
+                                        RichText::new(textos.comando(Comando::Deshacer))
+                                            .font(tema::fuente(Estilo::Base)),
+                                    );
+                                    kit::keycap(ui, &comandos::atajo(Comando::Deshacer));
+                                });
+                                if r.clicked() {
+                                    self.deshacer = mensaje.clone();
+                                }
                             }
                         });
                     }

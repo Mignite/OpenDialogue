@@ -1,11 +1,12 @@
-﻿//! Capa modal de Ajustes: idioma y atajos reasignables.
+//! Capa modal de Ajustes: idioma y atajos reasignables.
 
-use egui::{Color32, Event, Key, RichText, Vec2};
+use egui::{Event, Key, RichText, Vec2};
 
 use crate::comandos::{Atajo, Comando, Conflicto};
 use crate::preferencias::Preferencias;
 use crate::textos::Idioma;
 
+use super::kit::{self, Icono};
 use super::tema::{self, Estilo};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -49,6 +50,14 @@ fn cerrar(estado: &mut EstadoAjustes) {
     estado.conflicto = None;
 }
 
+/// Ancho de una cadena con la fuente dada, para alinear columnas sin estimar.
+fn ancho_texto(ui: &egui::Ui, texto: &str, fuente: egui::FontId) -> f32 {
+    ui.painter()
+        .layout_no_wrap(texto.to_owned(), fuente, tema::TEXTO)
+        .size()
+        .x
+}
+
 pub fn mostrar(ctx: &egui::Context, prefs: &mut Preferencias, estado: &mut EstadoAjustes) -> bool {
     if !estado.abierto {
         return false;
@@ -64,7 +73,7 @@ pub fn mostrar(ctx: &egui::Context, prefs: &mut Preferencias, estado: &mut Estad
     ctx.layer_painter(egui::LayerId::background()).rect_filled(
         ctx.content_rect(),
         0.0,
-        Color32::from_black_alpha(115),
+        egui::Color32::from_black_alpha(115),
     );
 
     // Captura de teclado antes de pintar: una pulsación async no se pierde.
@@ -120,19 +129,24 @@ pub fn mostrar(ctx: &egui::Context, prefs: &mut Preferencias, estado: &mut Estad
         cerrar(estado);
     }
 
+    // El modal escala con la ventana: nunca más ancho que la pantalla ni más
+    // estrecho que un panel cómodo, con los topes tomados de `tema`.
+    let pantalla = ctx.content_rect().size();
+    let ancho = (pantalla.x * 0.45).clamp(tema::ANCHO_PANEL_DEFECTO * 2.0, tema::ANCHO_CONTENEDOR);
+    let alto = (pantalla.y * 0.62).clamp(tema::ALTO_VIDEO_MIN * 4.0, tema::ESP_72 * 10.0);
     let marco = egui::Frame {
         inner_margin: egui::Margin::same(tema::ESP_16 as i8),
         outer_margin: egui::Margin::ZERO,
         corner_radius: egui::CornerRadius::same(tema::RADIO_SUPERFICIE as u8),
         shadow: egui::Shadow::NONE,
         fill: tema::PANEL,
-        stroke: egui::Stroke::new(1.0_f32, tema::BORDE_CONTROL),
+        stroke: egui::Stroke::new(tema::GROSOR_BORDE, tema::BORDE_CONTROL),
     };
     let respuesta = egui::Window::new(textos.ajustes)
         .collapsible(false)
         .resizable(false)
         .movable(false)
-        .fixed_size(Vec2::new(720.0, 560.0))
+        .fixed_size(Vec2::new(ancho, alto))
         .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
         .frame(marco)
         .show(ctx, |ui| {
@@ -149,24 +163,47 @@ pub fn mostrar(ctx: &egui::Context, prefs: &mut Preferencias, estado: &mut Estad
                     if activo {
                         ui.painter().rect_filled(
                             egui::Rect::from_min_max(
-                                egui::pos2(r.rect.min.x, r.rect.max.y - 2.0),
+                                egui::pos2(r.rect.min.x, r.rect.max.y - tema::ESP_2),
                                 r.rect.max,
                             ),
                             0.0,
                             tema::ACENTO,
                         );
                     }
+                    if r.has_focus() {
+                        kit::anillo_foco(ui, &r);
+                    }
                     if r.clicked() {
                         estado.pestana = pestana;
                     }
                 }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if kit::icon_button(ui, Icono::Cerrar, false, textos.cerrar_ventana, None)
+                        .clicked()
+                    {
+                        cerrar(estado);
+                    }
+                });
             });
             ui.separator();
 
             match estado.pestana {
                 Pestana::Idioma => {
-                    ui.radio_value(&mut prefs.idioma, Idioma::Es, "Español");
-                    ui.radio_value(&mut prefs.idioma, Idioma::En, "English");
+                    // `radio_value` usa el estilo Body de egui, distinto del
+                    // Base del resto de la capa: se dibuja el widget con
+                    // RichText para que comparta tipografía.
+                    for (idioma, etiqueta) in [(Idioma::Es, "Español"), (Idioma::En, "English")] {
+                        let r = ui.add(egui::RadioButton::new(
+                            prefs.idioma == idioma,
+                            RichText::new(etiqueta).font(tema::fuente(Estilo::Base)),
+                        ));
+                        if r.has_focus() {
+                            kit::anillo_foco(ui, &r);
+                        }
+                        if r.clicked() {
+                            prefs.idioma = idioma;
+                        }
+                    }
                     if prefs.idioma != idioma_inicial {
                         cambiado = true;
                     }
@@ -183,18 +220,18 @@ pub fn mostrar(ctx: &egui::Context, prefs: &mut Preferencias, estado: &mut Estad
                         ui.label(
                             RichText::new(format!("{} {otro:?} · {atajo}", textos.intercambiar))
                                 .font(tema::fuente(Estilo::Pequeno))
-                                .color(tema::PELIGRO),
+                                .color(tema::ERROR_TEXTO),
                         );
-                        if ui
-                            .add(
-                                egui::Button::new(
-                                    RichText::new(textos.intercambiar)
-                                        .font(tema::fuente(Estilo::Base)),
-                                )
-                                .frame(false),
+                        let r = ui.add(
+                            egui::Button::new(
+                                RichText::new(textos.intercambiar).font(tema::fuente(Estilo::Base)),
                             )
-                            .clicked()
-                        {
+                            .frame(false),
+                        );
+                        if r.has_focus() {
+                            kit::anillo_foco(ui, &r);
+                        }
+                        if r.clicked() {
                             if let Some(comando) = estado.capturando {
                                 prefs.atajos.intercambiar(comando, otro);
                                 cambiado = true;
@@ -202,64 +239,117 @@ pub fn mostrar(ctx: &egui::Context, prefs: &mut Preferencias, estado: &mut Estad
                             estado.conflicto = None;
                             estado.capturando = None;
                         }
-                        if ui
-                            .add(
-                                egui::Button::new(
-                                    RichText::new(textos.cancelar).font(tema::fuente(Estilo::Base)),
-                                )
-                                .frame(false),
+                        let r = ui.add(
+                            egui::Button::new(
+                                RichText::new(textos.cancelar).font(tema::fuente(Estilo::Base)),
                             )
-                            .clicked()
-                        {
+                            .frame(false),
+                        );
+                        if r.has_focus() {
+                            kit::anillo_foco(ui, &r);
+                        }
+                        if r.clicked() {
                             estado.conflicto = None;
                             estado.capturando = None;
                         }
                     }
+                    let fuente_base = tema::fuente(Estilo::Base);
+                    let fuente_mono = tema::fuente(Estilo::Mono);
+                    let busqueda = estado.busqueda.to_lowercase();
+                    let visibles: Vec<_> = Comando::todas()
+                        .iter()
+                        .copied()
+                        .filter(|comando| {
+                            textos.comando(*comando).to_lowercase().contains(&busqueda)
+                        })
+                        .collect();
+                    // Columnas medidas sobre la fuente real: la etiqueta no se
+                    // repite en el botón y el atajo queda a la derecha.
+                    let ancho_etiqueta = visibles
+                        .iter()
+                        .map(|comando| {
+                            ancho_texto(ui, textos.comando(*comando), fuente_base.clone())
+                        })
+                        .fold(0.0, f32::max)
+                        + tema::ESP_12;
+                    let ancho_atajo = visibles
+                        .iter()
+                        .filter_map(|comando| prefs.atajos.atajo(*comando))
+                        .map(|atajo| ancho_texto(ui, &atajo.to_string(), fuente_mono.clone()))
+                        .fold(0.0, f32::max)
+                        .max(tema::ANCHO_KEYCAP_MIN);
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        for comando in Comando::todas() {
-                            let etiqueta = textos.comando(*comando);
-                            if !etiqueta
-                                .to_lowercase()
-                                .contains(&estado.busqueda.to_lowercase())
-                            {
-                                continue;
-                            }
-                            ui.horizontal(|ui| {
-                                ui.label(RichText::new(etiqueta).font(tema::fuente(Estilo::Base)));
-                                let atajo = prefs
-                                    .atajos
-                                    .atajo(*comando)
-                                    .map(|a| a.to_string())
-                                    .unwrap_or_default();
-                                ui.label(RichText::new(&atajo).font(tema::fuente(Estilo::Mono)));
-                                if ui
-                                    .add(
+                        egui::Grid::new("atajos-ajustes")
+                            .num_columns(4)
+                            .spacing(egui::vec2(tema::ESP_12, tema::ESP_4))
+                            .show(ui, |ui| {
+                                for comando in visibles {
+                                    let etiqueta = textos.comando(comando);
+                                    ui.allocate_ui_with_layout(
+                                        egui::vec2(ancho_etiqueta, tema::ALTO_CONTROL),
+                                        egui::Layout::left_to_right(egui::Align::Center),
+                                        |ui| {
+                                            ui.label(
+                                                RichText::new(etiqueta).font(fuente_base.clone()),
+                                            );
+                                        },
+                                    );
+                                    let atajo = prefs
+                                        .atajos
+                                        .atajo(comando)
+                                        .map(|atajo| atajo.to_string())
+                                        .unwrap_or_default();
+                                    ui.allocate_ui_with_layout(
+                                        egui::vec2(ancho_atajo, tema::ALTO_CONTROL),
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            ui.label(
+                                                RichText::new(atajo)
+                                                    .font(fuente_mono.clone())
+                                                    .color(tema::TEXTO_2),
+                                            );
+                                        },
+                                    );
+                                    let r = ui.add(
                                         egui::Button::new(
-                                            RichText::new(format!("{} {etiqueta}", textos.cambiar))
-                                                .font(tema::fuente(Estilo::Pequeno)),
+                                            RichText::new(textos.cambiar).font(fuente_base.clone()),
                                         )
-                                        .frame(false),
-                                    )
-                                    .clicked()
-                                {
-                                    estado.capturando = Some(*comando);
-                                    estado.conflicto = None;
-                                }
-                                if ui
-                                    .add(
+                                        .min_size(
+                                            egui::vec2(
+                                                tema::ANCHO_BOTON_MIN / 2.0,
+                                                tema::ALTO_CONTROL,
+                                            ),
+                                        ),
+                                    );
+                                    if r.has_focus() {
+                                        kit::anillo_foco(ui, &r);
+                                    }
+                                    if r.clicked() {
+                                        estado.capturando = Some(comando);
+                                        estado.conflicto = None;
+                                    }
+                                    let r = ui.add(
                                         egui::Button::new(
                                             RichText::new(textos.restablecer)
-                                                .font(tema::fuente(Estilo::Pequeno)),
+                                                .font(fuente_base.clone()),
                                         )
-                                        .frame(false),
-                                    )
-                                    .clicked()
-                                {
-                                    prefs.atajos.restablecer(*comando);
-                                    cambiado = true;
+                                        .min_size(
+                                            egui::vec2(
+                                                tema::ANCHO_BOTON_MIN / 2.0,
+                                                tema::ALTO_CONTROL,
+                                            ),
+                                        ),
+                                    );
+                                    if r.has_focus() {
+                                        kit::anillo_foco(ui, &r);
+                                    }
+                                    if r.clicked() {
+                                        prefs.atajos.restablecer(comando);
+                                        cambiado = true;
+                                    }
+                                    ui.end_row();
                                 }
                             });
-                        }
                     });
                 }
             }
