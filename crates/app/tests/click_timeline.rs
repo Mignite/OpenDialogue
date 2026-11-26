@@ -29,7 +29,7 @@ fn app() -> EditorApp {
     EditorApp::desde_proyecto_en(proyecto, None, 0.0, &std::env::temp_dir()).unwrap()
 }
 
-fn clic_sin_arrastre(x: f32, y: f32) -> (f64, Vec<String>) {
+fn clic_sin_arrastre(x: f32, y: f32) -> (f64, Vec<String>, bool) {
     let mut h = egui_kittest::Harness::builder()
         .with_size(egui::vec2(1000.0, 700.0))
         .build_ui_state(
@@ -60,17 +60,22 @@ fn clic_sin_arrastre(x: f32, y: f32) -> (f64, Vec<String>) {
         modifiers: egui::Modifiers::default(),
     });
     h.step();
-    (h.state().tiempo_ui(), h.state().seleccion().to_vec())
+    (
+        h.state().tiempo_ui(),
+        h.state().seleccion().to_vec(),
+        h.state().frame_pendiente,
+    )
 }
 
 #[test]
 fn clic_sin_arrastre_busca_el_tiempo_bajo_el_cursor() {
-    let (tiempo, _) = clic_sin_arrastre(400.0, 110.0);
+    let (tiempo, _, pendiente) = clic_sin_arrastre(400.0, 110.0);
     assert!(tiempo > 1.0, "el clic no movió el playhead: {tiempo}");
+    assert!(pendiente, "el seek en pausa debe pedir otro frame");
 }
 
 #[test]
 fn clic_sobre_un_clip_lo_selecciona() {
-    let (_, seleccion) = clic_sin_arrastre(125.0, 110.0);
+    let (_, seleccion, _) = clic_sin_arrastre(125.0, 110.0);
     assert_eq!(seleccion, vec!["c0".to_owned()]);
 }

@@ -1,5 +1,15 @@
 # Bitácora
 
+## 2026-11-26 — Frame tras seek en pausa
+
+- Al buscar con la app pausada, mpv podía entregar el frame del seek en un
+  frame posterior y la política de repintado ya no pedía más frames: la imagen
+  quedaba en la anterior. Añadido `EditorApp::frame_pendiente`, activado por
+  `buscar`, `Step`, `Soltar` y `ScrubFin`, y limpiado cuando `frame_changed`
+  renderiza; `main.rs` pide repaints de 100 ms mientras siga activo.
+- Descartado repintar siempre en pausa: despertaba la app en reposo sin necesidad.
+
+
 ## 2026-11-26 — Clic simple en la timeline
 
 - El timeline solo reaccionaba a `drag_started()`: un clic sin mover el ratón

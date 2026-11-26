@@ -337,7 +337,15 @@ impl eframe::App for RustyDialogue {
 
         // mpv entrega frames por eventos: se sondea una vez por frame y se pide
         // repintado mientras haya video abierto.
+        if let Pantalla::Editor(editor) = &mut self.pantalla {
+            let tarea = editor_app::update(editor, MensajeEditor::Tick);
+            self.ejecutar_tarea(tarea);
+        }
         let repintado = match &self.pantalla {
+            // En pausa, mpv puede entregar el frame del seek en un frame
+            // posterior: seguimos sondeando hasta que `frame_pendiente` se
+            // limpia al renderizar.
+            Pantalla::Editor(editor) if editor.frame_pendiente => Some(Duration::from_millis(100)),
             Pantalla::Editor(editor) => ui::repintado::politica(
                 !editor_app::pausado(editor),
                 editor_app::sucio(editor),
@@ -346,10 +354,6 @@ impl eframe::App for RustyDialogue {
             ),
             Pantalla::Inicio(_) => None,
         };
-        if let Pantalla::Editor(editor) = &mut self.pantalla {
-            let tarea = editor_app::update(editor, MensajeEditor::Tick);
-            self.ejecutar_tarea(tarea);
-        }
         match repintado {
             Some(Duration::ZERO) => ctx.request_repaint(),
             Some(delay) => ctx.request_repaint_after(delay),

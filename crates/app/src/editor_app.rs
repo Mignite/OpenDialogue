@@ -295,6 +295,8 @@ pub struct EditorApp {
     /// El usuario tiene el slider tomado: `time-pos` no debe pisar el thumb.
     pub(crate) arrastrando: bool,
     pub(crate) paused: bool,
+    /// Un seek en pausa necesita otro frame para que mpv entregue la imagen.
+    pub frame_pendiente: bool,
     pub(crate) video_path: String,
     pub(crate) audio_tracks: Vec<AudioTrack>,
     pub(crate) selected_audio: Option<AudioTrack>,
@@ -492,6 +494,7 @@ impl EditorApp {
             position: posicion,
             arrastrando: false,
             paused,
+            frame_pendiente: false,
             video_path,
             audio_tracks,
             selected_audio,
@@ -767,6 +770,7 @@ fn snap_a_frame(tiempo: f64, duracion: f64) -> f64 {
 
 fn buscar(state: &mut EditorApp, tiempo: f64) {
     state.position = tiempo.clamp(0.0, state.duration);
+    state.frame_pendiente = true;
     if let Err(error) = state.player.seek(state.position) {
         eprintln!("no se pudo hacer seek desde el timeline: {error}");
     }
@@ -1470,6 +1474,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
                     .render(&mut state.pixels, WIDTH, HEIGHT)
                     .is_ok()
             {
+                state.frame_pendiente = false;
                 let position = state.position;
                 state.layers = Arc::new(
                     state
@@ -1617,6 +1622,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             if let Err(error) = state.player.seek(state.position) {
                 eprintln!("no se pudo hacer seek: {error}");
             }
+            state.frame_pendiente = true;
         }
         MensajeEditor::Step(delta) => {
             state.texto.manual = false;
@@ -1625,6 +1631,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             if let Err(error) = state.player.seek(state.position) {
                 eprintln!("no se pudo hacer seek: {error}");
             }
+            state.frame_pendiente = true;
         }
         MensajeEditor::SeleccionarConModificador { id, ctrl, shift } => {
             state.texto.manual = true;
@@ -2094,6 +2101,7 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             state.scrub_ui_time = None;
             state.texto.manual = false;
             autoseleccionar_bajo_playhead(state);
+            state.frame_pendiente = true;
             let _ = state.player.seek(objetivo);
         }
         MensajeEditor::Seguir => {
