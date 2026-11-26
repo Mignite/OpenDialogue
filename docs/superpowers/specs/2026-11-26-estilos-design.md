@@ -59,7 +59,9 @@ Fuentes: **fuentes del sistema con `fontdb`** (elegido); descartado usar solo
   en memoria; devuelve el bitmap ya compuesto con relleno, contorno y sombra
   del preset. Sin tocar `ass.rs`: se reutiliza el mismo `build_ass` del export.
 - Escala: `preset.fontsize * (alto_preview / CANVAS.1)`, con mínimo 20 px
-  legibles. `alto_preview = tema::ALTO_PREVIEW_STYLES = 64`.
+  legibles. `alto_preview = tema::ALTO_PREVIEW_STYLES = 64`. La tarjeta muestra
+  una muestra centrada del texto: `margin_v`/`alignment` no son observables en
+  ella (decisión del autor); el cambio de margen se ve en el overlay.
 - El overlay **no se dibuja dos veces**: `refrescar_preview`/`state.layers`
   sigue siendo el único camino del video y el mismo `build_ass` del export.
   `render_subtitle` es el envoltorio que usa la tarjeta para rasterizar su
@@ -101,8 +103,9 @@ Fuentes: **fuentes del sistema con `fontdb`** (elegido); descartado usar solo
 - OUTLINE: `DragValue` 80 px `" px"` + swatch + hex. Es el segundo «Color»
   actual, renombrado.
 - SHADOW: `DragValue " px"`.
-- BOTTOM MARGIN: `DragValue " px"` sobre `margin_v`. El rótulo definitivo
-  depende de la decisión pendiente sobre `alignment` (ver §8). Sin cuadrícula.
+- MARGIN V: `DragValue " px"` sobre `margin_v`. Se conserva `alignment` del
+  preset (puede ser 8, margen superior) y se rotula de forma genérica; no se
+  fuerza 2 porque eso cambiaría el `.ass` exportado. Sin cuadrícula.
 - Sin campo Name: renombrar con doble clic sobre el título de la tarjeta.
 - Sin `true`/`false`: los toggles los reemplazan.
 - Pie: botón secundario «Apply to N selected lines» a todo el ancho y 32 px,
@@ -118,6 +121,11 @@ Fuentes: **fuentes del sistema con `fontdb`** (elegido); descartado usar solo
 - Delete de preset: toast con restauración dedicada en su posición original;
   los `preset_id` de hablantes no se tocan (comportamiento actual).
 - `BOTTOM MARGIN` y Apply a selección: ver decisiones pendientes en §8.
+- «Apply to N selected lines»: N cuenta **captions seleccionados** y se asigna
+  el preset a todos sus hablantes (decisión del autor); afecta también a las
+  otras líneas de esos hablantes.
+- Los toggles B/I se deshabilitan cuando la familia instalada no tiene esa
+  cara (decisión del autor); no se aplica síntesis adicional.
 - `EditarPreset` se escribe en JSON con debounce de ~1 s por control, para no
   escribir cada tecla. Los presets no entran en `Historial` (restricción
   documentada en `slice-7d-estilos.md`); lo que sí es un solo paso de historial
@@ -134,21 +142,14 @@ Fuentes: **fuentes del sistema con `fontdb`** (elegido); descartado usar solo
 - Verificación estándar: `cargo fmt --check`, `cargo clippy -D warnings`,
   `cargo test --workspace`.
 
-## 8. Decisiones pendientes del autor
+## 8. Decisiones cerradas con el autor
 
-1. `alignment` del preset: `PresetAss` sí tiene `alignment: i32` (no hay
-   cuadrícula 3×3 en la UI). ¿Se fuerza 2 para que «BOTTOM MARGIN» sea literal
-   (cambia el `.ass` exportado), se conserva y se rotula `Margin V` genérico, o
-   se conserva con un Control de alineación mínimo?
-2. Contenido del preview: ¿muestra solo una muestra centrada del texto (el
-   margen no es observable en la tarjeta) o un frame completo a escala con la
-   posición real? La segunda opción contradice el mínimo de 20 px legibles.
-3. `Apply to N selected lines`: ¿N cuenta captions seleccionados y se asigna
-   el preset a todos los hablantes de esas líneas (afectando también sus
-   otras líneas), o N cuenta hablantes distintos?
-4. Toggles B/I: el modelo tiene `bold`/`italic` booleanos, sin variantes.
-   ¿Se deshabilita el toggle solo cuando la familia instalada no tiene esa
-   cara y se deja que libass sintetice, o los toggles siempre están activos?
+- Se conserva `alignment`; la etiqueta es `Margin V`, no «Bottom margin», para
+  no mentir cuando el preset alinea arriba. Tampoco se añade cuadrícula.
+- La tarjeta muestra una muestra centrada del texto; el margen no se observa
+  en ella.
+- «Apply to N selected lines» cuenta captions y asigna a sus hablantes.
+- B/I se deshabilitan si la familia instalada no tiene esa cara.
 
 ## 9. Lo que queda al implementador
 
