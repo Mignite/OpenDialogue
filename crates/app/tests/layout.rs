@@ -114,6 +114,73 @@ fn alto_extra_no_guarda_altura_hinchada() {
 }
 
 #[test]
+fn arrastrar_el_divisor_encoge_el_timeline() {
+    use rod_app::editor_app::EditorApp;
+    use rod_app::ui::editor::MedidasEditor;
+    use rod_app::video::Gpu;
+    use std::sync::{Arc, Mutex};
+
+    let video = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../testdata/clip-15s-2audio.mp4"
+    );
+    let editor = EditorApp::desde_video(video).expect("abre el clip de prueba");
+    let estado = (
+        editor,
+        MedidasEditor {
+            alto_timeline: 490.0,
+            ..Default::default()
+        },
+        Arc::new(Mutex::new(None)),
+    );
+    let mut h = egui_kittest::Harness::builder()
+        .with_size(egui::vec2(1200.0, 700.0))
+        .build_state(
+            |ctx, (e, m, gpu): &mut (EditorApp, MedidasEditor, Arc<Mutex<Option<Gpu>>>)| {
+                let _ = rod_app::ui::editor::show(
+                    ctx,
+                    e,
+                    wgpu::TextureFormat::Rgba8Unorm,
+                    gpu.clone(),
+                    &rod_app::textos::EN,
+                    &rod_app::comandos::MapaAtajos::por_defecto(),
+                    m,
+                );
+            },
+            estado,
+        );
+    h.run();
+    // El borde del panel cae en 219 (210 del alto más 9 px de margen del frame).
+    h.input_mut()
+        .events
+        .push(egui::Event::PointerMoved(egui::pos2(600.0, 219.0)));
+    h.step();
+    h.input_mut().events.push(egui::Event::PointerButton {
+        pos: egui::pos2(600.0, 219.0),
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.step();
+    h.input_mut()
+        .events
+        .push(egui::Event::PointerMoved(egui::pos2(600.0, 500.0)));
+    h.step();
+    h.input_mut().events.push(egui::Event::PointerButton {
+        pos: egui::pos2(600.0, 500.0),
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.step();
+    assert!(
+        h.state().1.alto_timeline < 300.0,
+        "el divisor no encogió: {}",
+        h.state().1.alto_timeline
+    );
+}
+
+#[test]
 fn tope_respeta_la_ventana_y_el_suelo() {
     assert_eq!(rod_app::ui::editor::alto_maximo_timeline(900.0), 630.0);
     assert_eq!(rod_app::ui::editor::alto_maximo_timeline(200.0), 160.0);

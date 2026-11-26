@@ -118,18 +118,42 @@ pub fn show(
     let tope = alto_maximo_timeline(ctx.content_rect().height());
     medidas.alto_timeline = medidas.alto_timeline.clamp(160.0, tope);
     let alto_abajo = alto_timeline(state, medidas, tema::ANIMACION, ctx.content_rect().width());
-    let abajo = egui::TopBottomPanel::bottom("timeline")
-        .resizable(true)
-        .default_height(alto_abajo)
-        .min_height(160.0)
-        .max_height(tope)
+    let mut arrastre_divisor: Option<f32> = None;
+    egui::TopBottomPanel::bottom("timeline")
+        .resizable(false)
+        .exact_height(alto_abajo)
         .frame(tema::panel(tema::FONDO))
         .show(ctx, |ui| {
+            // La franja se registra dentro del Ui del panel, que sí tiene
+            // clip rect y capa: un `Ui::new` externo nunca recibía el puntero.
+            let borde = ui.max_rect().min.y;
+            let franja = egui::Rect::from_x_y_ranges(
+                ui.max_rect().x_range(),
+                (borde - tema::ESP_4)..=(borde + tema::ESP_4),
+            );
+            let divisor = ui.interact(
+                franja,
+                egui::Id::new("divisor-timeline"),
+                egui::Sense::drag(),
+            );
+            if divisor.dragged()
+                && let Some(pointer) = divisor.interact_pointer_pos()
+            {
+                arrastre_divisor = Some(pointer.y);
+            }
+            if divisor.hovered() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
+            }
             mensajes.extend(crate::ui::timeline::toolbar(ui, state, textos));
             mensajes.extend(crate::ui::timeline::mostrar(ui, state, textos));
         });
-    if crate::ui::texto::alto_extra(state, ctx.content_rect().width()) == 0.0 {
-        medidas.alto_timeline = abajo.response.rect.height();
+
+    // El `TopBottomPanel` resizable guarda un `PanelState` cuyo rect se
+    // acumula entre frames (en una ventana de 700 px llegó a 930 px), así que
+    // leer `response.rect.height()` devolvía el panel al tope al arrastrar.
+    // Aquí la altura es siempre la de `medidas` y el arrastre escribe en ella.
+    if let Some(y) = arrastre_divisor {
+        medidas.alto_timeline = (ctx.content_rect().max.y - y).clamp(160.0, tope);
     }
 
     egui::CentralPanel::default()

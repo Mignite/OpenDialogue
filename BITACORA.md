@@ -18,6 +18,14 @@
 - Rueda: antes simple = pan horizontal, Ctrl/Shift = zoom. Ahora simple =
   pistas, Ctrl = zoom, Shift = pan. Es la única regresión de gesto aceptada y
   fue decisión del autor. El slider de zoom sigue disponible.
+- El divisor saltaba de vuelta al 70 % al arrastrarlo: `abajo.response.rect.height()`
+  no es la altura del panel, sino un rect que egui acumula entre frames (en una
+  ventana de 700 px llegó a medir 930 px), así que el clamp la devolvía al tope.
+  Medido con `arrastrar_el_divisor_encoge_el_timeline`: antes 490 → 930 → 490.
+  Ahora el panel usa `exact_height` con `medidas.alto_timeline` y un `interact`
+  propio en su borde superior escribe directamente esa altura. El vector de
+  arrastre se registra dentro del `Ui` del panel; un `Ui::new` externo nunca
+  recibía el puntero.
 - Revisión final: Shift+rueda no hacía pan porque egui 0.33 mueve la muesca a
   `raw_scroll_delta.x` y deja `.y = 0`; el handler además trataba Shift como
   zoom. Y la rueda simple iba al revés de la scrollbar: `.y` negativo es girar
