@@ -1,5 +1,16 @@
 # Bitácora
 
+## 2026-11-26 — Clic simple en la timeline
+
+- El timeline solo reaccionaba a `drag_started()`: un clic sin mover el ratón
+  no emitía `Pulsar`, así que no buscaba el tiempo ni seleccionaba el clip.
+  Medido con kittest: con movimiento de 30 px el playhead pasaba a 5.44 s; sin
+  movimiento se quedaba en 0. Añadido el camino de `respuesta.clicked()` que
+  despacha `Pulsar` + `Soltar`, sin duplicar el de arrastre.
+- Tests nuevos `tests/click_timeline.rs`: clic simple en vacío mueve el
+  playhead y clic sobre un clip lo selecciona.
+
+
 ## 2026-11-26 — Selección y campo de texto
 
 - El clic en un clip de la timeline no seleccionaba: el `ui.interact` que se

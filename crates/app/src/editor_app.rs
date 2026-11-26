@@ -398,6 +398,11 @@ impl EditorApp {
         &mut self.editor
     }
 
+    /// Ids seleccionados, compartidos por lista, timeline y barra de texto.
+    pub fn seleccion(&self) -> &[String] {
+        &self.editor.seleccion
+    }
+
     /// Espejo de los modificadores del teclado, para la marquesina con Shift.
     pub fn set_modificadores(&mut self, modificadores: egui::Modifiers) {
         self.modificadores = modificadores;

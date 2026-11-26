@@ -444,6 +444,19 @@ pub fn mostrar(ui: &mut Ui, state: &mut EditorApp, textos: &Textos) -> Vec<Mensa
 
     // Los eventos llegan en coordenadas locales del rect del timeline: el
     // margen de nombres ya está descontado por la geometría del eje.
+    // Clic sin arrastre: egui no marca `drag_started`, así que hay que
+    // despachar la pulsación y la suelta para que `pulsar` seleccione el clip
+    // tocado o busque el tiempo bajo el cursor.
+    if respuesta.clicked()
+        && let Some(pos) = respuesta.interact_pointer_pos()
+    {
+        mensajes.push(MensajeEditor::Timeline(Mensaje::Pulsar(punto(
+            pos - rect.min,
+        ))));
+        mensajes.push(MensajeEditor::Timeline(Mensaje::Soltar(punto(
+            pos - rect.min,
+        ))));
+    }
     if respuesta.drag_started()
         && let Some(pos) = respuesta.interact_pointer_pos()
     {
