@@ -67,7 +67,7 @@ fn el_pintado_del_editor_con_543_lineas_baja_de_ocho_ms() {
     let ctx = egui::Context::default();
     let inicio = Instant::now();
     for _ in 0..30 {
-        ctx.run(Default::default(), |ctx| {
+        let _ = ctx.run(Default::default(), |ctx| {
             rod_app::ui::editor::show(
                 ctx,
                 &mut app,

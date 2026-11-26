@@ -1,3 +1,5 @@
+#![cfg(feature = "test-video")]
+
 //! Arnés de capturas de la auditoría visual.
 //!
 //! No es un test: lo usa `examples/ui_audit.rs` para renderizar la matriz de
@@ -36,6 +38,9 @@ pub fn etiqueta_tamano(ancho: f32, alto: f32) -> String {
 }
 
 pub fn carpeta(fase: &str) -> PathBuf {
+    // Cada área renderiza sus capturas en una carpeta propia durante la Fase 3
+    // para que dos subagentes no escriban el mismo PNG a la vez.
+    let fase = std::env::var("UI_AUDIT_FASE").unwrap_or_else(|_| fase.to_owned());
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .join("ui-audit")
@@ -705,6 +710,11 @@ pub fn capturar_toast(
 
 // ── Guardado ───────────────────────────────────────────────────────────────
 pub fn guardar<S>(harness: &mut Harness<'_, S>, fase: &str, nombre: &str) {
+    if let Ok(solo) = std::env::var("UI_AUDIT_SOLO")
+        && !solo.split(',').any(|token| nombre.contains(token.trim()))
+    {
+        return;
+    }
     let imagen = harness.render().expect("renderiza con wgpu");
     let raiz = carpeta(fase);
     std::fs::create_dir_all(&raiz).expect("crea la carpeta de capturas");

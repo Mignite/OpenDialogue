@@ -19,7 +19,7 @@ fn el_panel_lista_el_atajo_vigente_y_escape_lo_cierra() {
             },
         )
         .unwrap();
-    let mut estado = EstadoAtajos {
+    let estado = EstadoAtajos {
         abierto: true,
         ..Default::default()
     };

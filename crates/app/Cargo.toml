@@ -8,6 +8,10 @@ rust-version.workspace = true
 # fijar el reloj sin pedirle nada a mpv. No se activa en builds normales.
 test-video = []
 
+[[example]]
+name = "ui_audit"
+required-features = ["test-video"]
+
 [dependencies]
 rod-core.workspace = true
 rod-player.workspace = true
