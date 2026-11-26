@@ -1,4 +1,4 @@
-use rod_app::editor_app::{EditorApp, MensajeEditor};
+use rod_app::editor_app::{EditorApp, EstadoTexto, MensajeEditor};
 use rod_app::textos::ES;
 use rod_app::ui::tema;
 
@@ -57,6 +57,20 @@ fn el_playhead_autoselecciona_la_linea_bajo_el_cursor() {
     let _ = rod_app::editor_app::update(&mut app, MensajeEditor::Step(2.2));
     rod_app::editor_app::autoseleccionar_bajo_playhead(&mut app);
     assert_eq!(app.editor_mut().seleccion, vec!["c2".to_owned()]);
+}
+
+#[test]
+fn tras_enter_el_campo_sigue_mostrando_el_texto_editado() {
+    let mut app = editor();
+    app.editor_mut().seleccionar_uno("c1");
+    app.texto.objetivo = Some("c1".into());
+    app.texto.original = "c1".into();
+    app.texto.borrador = "c1 editado".into();
+    app.texto.foco = true;
+    EstadoTexto::cerrar_sesion(&mut app);
+    rod_app::ui::texto::sincronizar_objetivo(&mut app);
+    assert_eq!(app.proyecto().captions[0].texto, "c1 editado");
+    assert_eq!(app.texto.borrador, "c1 editado");
 }
 
 #[test]

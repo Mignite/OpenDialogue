@@ -237,25 +237,38 @@ impl EstadoTexto {
         let objetivo = Self::objetivo(state);
         state.texto.foco = false;
         state.texto.ultimo_tipeo = None;
+        let mut texto_final = borrador.clone();
         if let Some(id) = objetivo {
             if borrador != original {
-                update(state, MensajeEditor::EditarEnVivo(id, borrador));
+                update(
+                    state,
+                    MensajeEditor::EditarEnVivo(id.clone(), borrador.clone()),
+                );
             }
             update(state, MensajeEditor::TerminarEdicionTexto);
+            state.texto.objetivo = Some(id);
         } else if !borrador.is_empty() {
+            let id = id_nuevo();
             let caption = rod_core::Caption {
-                id: id_nuevo(),
+                id: id.clone(),
                 inicio: state.position,
                 fin: (state.position + 2.0).min(state.duration),
-                texto: borrador,
+                texto: borrador.clone(),
                 hablante_id: None,
             };
             state.editor.agregar(caption);
             state.editor.registrar_historial();
+            state.editor.seleccionar_uno(&id);
+            state.texto.objetivo = Some(id);
             refrescar_preview(state);
+        } else {
+            state.texto.objetivo = None;
+            texto_final.clear();
         }
-        state.texto.borrador.clear();
-        state.texto.original.clear();
+        // El campo sigue mostrando lo editado hasta que la selección cambie:
+        // limpiarlo aquí obligaba a salir y volver a entrar en la línea.
+        state.texto.borrador = texto_final.clone();
+        state.texto.original = texto_final;
         state.texto.nueva_linea = false;
         state.texto.lineas = 1;
     }

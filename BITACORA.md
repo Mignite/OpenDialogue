@@ -1,5 +1,15 @@
 # Bitácora
 
+## 2026-11-26 — Texto tras confirmar con Enter
+
+- `cerrar_sesion` limpiaba `borrador` y `original` al aplicar el texto; como
+  `objetivo` no cambiaba, `sincronizar_objetivo` no volvía a cargarlo y el campo
+  quedaba vacío hasta salir y reentrar en la línea. Ahora conserva el texto
+  aplicado como borrador/original y mantiene `objetivo` apuntando a la línea;
+  si Enter crea una línea nueva, se selecciona para que el campo siga
+  mostrándola. Test: `tras_enter_el_campo_sigue_mostrando_el_texto_editado`.
+
+
 ## 2026-11-26 — Frame tras seek en pausa
 
 - Al buscar con la app pausada, mpv podía entregar el frame del seek en un
