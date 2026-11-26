@@ -1,5 +1,22 @@
 # Bitácora
 
+## 2026-11-26 — Muestra de Styles recortada
+
+- La tarjeta de Estilos pedía `render_subtitle` con un canvas de 64 px pero
+  pasaba el `fontsize` y los márgenes del preset sin escalar: con 48 px de tipo
+  y `margin_v = 40` sobre 64 px de alto, libass dibujaba solo la parte baja de
+  las letras («mundo» cortado arriba de la banda). Lo detectó la captura
+  `revision-estilos-1440.png`, no los tests: la prueba de byte-identidad usa
+  `escala = 1.0` y no ejercita la miniatura.
+- `render_subtitle` escala ahora fontsize, contorno, sombra y márgenes con el
+  factor efectivo y frena el tipo en 20 px para que se lea. Con `escala = 1.0`
+  no toca ningún valor, así que la imagen sigue siendo byte-idéntica a la del
+  overlay y el invariante del proyecto queda intacto.
+- Alternativa descartada: dibujar el texto con egui. Rompía el invariante
+  porque el preview dejaría de ser un render del `.ass` que se exporta.
+- Coste si falla: el usuario ajusta un estilo viendo algo distinto del video.
+
+
 ## 2026-11-26 — Texto tras confirmar con Enter
 
 - `cerrar_sesion` limpiaba `borrador` y `original` al aplicar el texto; como
