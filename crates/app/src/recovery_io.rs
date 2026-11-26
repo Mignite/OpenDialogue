@@ -11,6 +11,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rod_core::Recovery;
 
+use crate::textos::Textos;
+
 /// Reloj de pared en epoch ms, que es la unidad del `escrito` del recovery
 /// (la misma que `Date.now()` en el oráculo).
 ///
@@ -46,7 +48,58 @@ pub fn leer(ruta: &Path, corte: f64, ahora: f64) -> Option<Recovery> {
 #[derive(Debug, Clone)]
 pub struct AvisoRecovery {
     pub recovery: Recovery,
+    /// Texto del core, siempre en español; se conserva por compatibilidad con
+    /// quien construye el aviso. La vista usa [`Self::texto`], localizado.
     pub texto: String,
+}
+
+impl AvisoRecovery {
+    /// Antigüedad del autosave en el idioma de la interfaz. El core imprime la
+    /// fecha en español fijo y su formateador es privado, así que aquí se
+    /// calcula de `escrito` con los mismos umbrales (minuto, hora, día).
+    pub fn fecha(&self, textos: &Textos) -> String {
+        let minutos = ((ms_ahora() - self.recovery.escrito) / 60_000.0)
+            .floor()
+            .max(0.0) as u64;
+        let horas = minutos / 60;
+        if textos.es {
+            match minutos {
+                0 => "hace un momento".into(),
+                m if m < 60 => format!("hace {m} min"),
+                _ if horas < 24 => format!("hace {horas} h"),
+                _ => format!("hace {} días", horas / 24),
+            }
+        } else {
+            match minutos {
+                0 => "just now".into(),
+                m if m < 60 => format!("{m} min ago"),
+                _ if horas < 24 => format!("{horas} h ago"),
+                _ => format!("{} days ago", horas / 24),
+            }
+        }
+    }
+
+    /// Aviso completo en el idioma de la UI: fecha localizada + número de
+    /// subtítulos, con el nombre del proyecto cuando se conoce.
+    pub fn texto(&self, textos: &Textos) -> String {
+        let aviso =
+            textos.fecha_recuperacion(&self.fecha(textos), self.recovery.proyecto.captions.len());
+        let nombre = nombre_proyecto(&self.recovery);
+        if nombre.is_empty() {
+            aviso
+        } else {
+            format!("{aviso} ({nombre})")
+        }
+    }
+}
+
+/// Nombre con el que se reconoce la copia: el del archivo si hay ruta guardada.
+fn nombre_proyecto(recovery: &Recovery) -> String {
+    Path::new(&recovery.ruta_proyecto)
+        .file_name()
+        .and_then(|nombre| nombre.to_str())
+        .unwrap_or_default()
+        .to_owned()
 }
 
 /// Copia automática que quedó de la sesión anterior, si la hay y sirve.
@@ -57,11 +110,7 @@ pub fn pendiente(ruta: &Path, ahora: f64) -> Option<AvisoRecovery> {
     let recovery = leer(ruta, 0.0, ahora)?;
     // El nombre es el del archivo (`mi-video.cdp`), como en el oráculo: con la
     // ruta entera el aviso no cabe en una barra.
-    let nombre = Path::new(&recovery.ruta_proyecto)
-        .file_name()
-        .and_then(|nombre| nombre.to_str())
-        .unwrap_or_default()
-        .to_owned();
+    let nombre = nombre_proyecto(&recovery);
     let texto = rod_core::formatear_recovery(&recovery, &nombre, ahora);
     Some(AvisoRecovery { recovery, texto })
 }
@@ -90,7 +139,8 @@ pub fn escribir(ruta: &Path, contenido: Option<&str>) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{escribir, leer, ruta};
+    use super::{AvisoRecovery, escribir, leer, ms_ahora, ruta};
+    use crate::textos::{EN, ES};
     use rod_core::recovery::{a_json, construir};
     use rod_core::{Caption, Proyecto};
 
@@ -110,6 +160,24 @@ mod tests {
     /// directorio temporal es compartido.
     fn ruta_temporal(nombre: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!("rod-recovery-{}-{nombre}.json", std::process::id()))
+    }
+
+    #[test]
+    fn el_aviso_se_formatea_en_el_idioma_de_la_ui() {
+        let aviso = AvisoRecovery {
+            recovery: construir(
+                Proyecto::nuevo("clip.mp4"),
+                "C:/proyectos/mi.cdp",
+                ms_ahora() - 180_000.0,
+            ),
+            texto: "Recuperado hace 3 min (mi.cdp) — 0 subtítulos".into(),
+        };
+        let es = aviso.texto(&ES);
+        let en = aviso.texto(&EN);
+        assert!(es.starts_with("Copia automática de hace 3 min"), "{es}");
+        assert!(en.starts_with("Autosaved 3 min ago"), "{en}");
+        assert!(en.contains("mi.cdp"), "{en}");
+        assert!(!en.contains("hace"), "{en}");
     }
 
     #[test]

@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use egui::{Color32, RichText, Sense, Stroke, Vec2};
+use egui::{Align2, Color32, RichText, Sense, Stroke, Vec2};
 
 use crate::inicio::{EstadoInicio, MensajeInicio, OrdenRecientes, cantidad_visible};
 use crate::preferencias::Preferencias;
@@ -52,25 +52,16 @@ pub fn mostrar(
                     kit::logo(ui, 48.0);
                     ui.add_space(tema::ESP_24);
 
-                    let titulo = ui.add(
+                    ui.add(
                         egui::Label::new(
                             RichText::new(textos.inicio_titulo)
                                 .font(egui::FontId::proportional(tema::TAMANO_TITULO))
-                                .color(Color32::WHITE),
+                                .color(tema::TEXTO),
                         )
                         .selectable(false),
                     );
-                    ui.painter().rect_filled(
-                        egui::Rect::from_min_max(
-                            egui::pos2(titulo.rect.min.x, titulo.rect.max.y + 6.0),
-                            egui::pos2(
-                                titulo.rect.min.x + tema::ANCHO_SUBRAYADO,
-                                titulo.rect.max.y + 8.0,
-                            ),
-                        ),
-                        0.0,
-                        tema::ACENTO,
-                    );
+                    // A5: el subrayado suelto bajo el wordmark no era un estado
+                    // ni un foco: solo ruido. Se retira en vez de recolorearlo.
                     ui.add_space(tema::ESP_24);
                     ui.label(
                         RichText::new(textos.inicio_subtitulo)
@@ -89,11 +80,7 @@ pub fn mostrar(
                         {
                             intencion = Some(MensajeInicio::AbrirProyecto);
                         }
-                        ui.label(
-                            RichText::new("Ctrl+O")
-                                .font(tema::fuente(Estilo::Mono))
-                                .color(tema::TEXTO_3),
-                        );
+                        kit::keycap(ui, textos.atajo_abrir_proyecto);
                     });
 
                     ui.add_space(tema::ESP_24);
@@ -102,27 +89,56 @@ pub fn mostrar(
                     }
 
                     if let Some(aviso) = &estado.aviso {
+                        // A3: separación real de 16 px y ancho de contenedor.
+                        // `kit::banner_informativo` ajusta su Frame al texto y
+                        // no admite hijos; aquí hacen falta los botones dentro
+                        // del mismo marco, así que se usa el mismo estilo del
+                        // helper con valores de `tema` y `set_width`.
                         ui.add_space(tema::ESP_16);
-                        let aviso_color = Color32::from_rgba_premultiplied(
-                            tema::PELIGRO.r(),
-                            tema::PELIGRO.g(),
-                            tema::PELIGRO.b(),
-                            30,
+                        let ancho = ui.available_width();
+                        let fondo = Color32::from_rgba_unmultiplied(
+                            tema::BANNER_INFO.r(),
+                            tema::BANNER_INFO.g(),
+                            tema::BANNER_INFO.b(),
+                            tema::ALFA_BANNER,
                         );
-                        let marco = egui::Frame {
+                        egui::Frame {
                             inner_margin: egui::Margin::symmetric(
                                 tema::ESP_12 as i8,
                                 tema::ESP_8 as i8,
                             ),
-                            fill: aviso_color,
+                            fill: fondo,
+                            stroke: Stroke::new(tema::GROSOR_BORDE, tema::BANNER_INFO),
+                            corner_radius: tema::radio_superficie(),
                             ..egui::Frame::NONE
-                        };
-                        marco.show(ui, |ui| {
-                            ui.label(
-                                RichText::new(&aviso.texto)
-                                    .font(tema::fuente(Estilo::Base))
-                                    .color(tema::TEXTO),
-                            );
+                        }
+                        .show(ui, |ui| {
+                            ui.set_width(ancho - tema::ESP_24 - tema::GROSOR_BORDE * 2.0);
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = tema::ESP_8;
+                                ui.label(
+                                    RichText::new(aviso.texto(textos))
+                                        .font(tema::fuente(Estilo::Base))
+                                        .color(tema::BANNER_INFO),
+                                );
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        ui.spacing_mut().item_spacing.x = tema::ESP_8;
+                                        // A2: los mensajes ya existen en el modelo.
+                                        if kit::pill(ui, textos.discard, tema::ERROR_TEXTO)
+                                            .clicked()
+                                        {
+                                            intencion = Some(MensajeInicio::DescartarRecovery);
+                                        }
+                                        if kit::pill(ui, textos.restore, tema::BANNER_INFO)
+                                            .clicked()
+                                        {
+                                            intencion = Some(MensajeInicio::Recuperar);
+                                        }
+                                    },
+                                );
+                            });
                         });
                     }
                     if let Some(mensaje) = &estado.mensaje {
@@ -130,7 +146,7 @@ pub fn mostrar(
                         ui.label(
                             RichText::new(mensaje)
                                 .font(tema::fuente(Estilo::Base))
-                                .color(tema::PELIGRO),
+                                .color(tema::ERROR_TEXTO),
                         );
                     }
 
@@ -152,7 +168,11 @@ pub fn mostrar(
                         }
                     }
                     if recientes.is_empty() {
-                        kit::recuadro_punteado(ui, 104.0, textos.texto_vacio_recientes);
+                        kit::recuadro_punteado(
+                            ui,
+                            tema::ALTO_ZONA + tema::ESP_8,
+                            textos.texto_vacio_recientes,
+                        );
                     } else {
                         let gap = tema::ESP_20;
                         let columnas = if contenido.width() >= 780.0 {
@@ -203,17 +223,6 @@ pub fn mostrar(
     (intencion, false)
 }
 
-/// Etiqueta de sección con letter-spacing de 0.04 em.
-fn etiqueta_espaciada(ui: &mut egui::Ui, texto: &str, color: Color32) {
-    let fuente = tema::fuente(Estilo::Pequeno);
-    let mut trabajo =
-        egui::text::LayoutJob::simple_singleline(texto.to_owned(), fuente.clone(), color);
-    if let Some(seccion) = trabajo.sections.first_mut() {
-        seccion.format.extra_letter_spacing = fuente.size * tema::LETRA_ESPACIADO;
-    }
-    ui.add(egui::Label::new(trabajo).selectable(false));
-}
-
 /// Fila «Recientes / filtro / See all», con todo alineado al centro vertical.
 fn fila_recientes(
     ui: &mut egui::Ui,
@@ -226,30 +235,29 @@ fn fila_recientes(
         Vec2::new(ui.available_width(), tema::ALTO_NAV),
         egui::Layout::left_to_right(egui::Align::Center),
         |ui| {
-            etiqueta_espaciada(ui, &textos.recientes.to_uppercase(), tema::TEXTO_2);
+            // `tema::etiqueta` usa la familia Proportional: el arnés aplica
+            // las fuentes nombradas después del primer frame y `kit::etiqueta_seccion`
+            // (Estilo::Etiqueta) haría pánico en esa primera pasada.
+            tema::etiqueta(ui, textos.recientes.to_uppercase());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if estado.recientes.len() > 3 {
+                    // A6: enlace del tema (acento + subrayado), no botón gris.
                     let respuesta = ui.add(
                         egui::Button::new(
                             RichText::new(textos.ver_todos)
                                 .font(tema::fuente(Estilo::Base))
-                                .color(tema::TEXTO_2),
+                                .color(tema::ACENTO)
+                                .underline(),
                         )
                         .frame(false),
                     );
-                    if respuesta.hovered() {
-                        ui.painter().rect_filled(
-                            egui::Rect::from_min_max(
-                                egui::pos2(respuesta.rect.min.x, respuesta.rect.max.y - 1.0),
-                                respuesta.rect.max,
-                            ),
-                            0.0,
-                            tema::ACENTO,
-                        );
+                    if respuesta.has_focus() {
+                        kit::anillo_foco(ui, &respuesta);
                     }
                     if respuesta.clicked() {
                         *intencion = Some(MensajeInicio::VerTodos);
                     }
+                    ui.add_space(tema::ESP_16);
                 }
 
                 let actual = match estado.orden {
@@ -367,72 +375,93 @@ fn tarjeta_reciente(
     // una celda de altura fija dejaba el borde y el clic por encima de la
     // burbuja real (210 px reservados frente a ~273 px pintados).
     let mut miniatura = egui::Rect::NOTHING;
-    let (marco, _) = kit::tarjeta(ui, |ui| {
+    // A7: sin margen lateral ni superior, la miniatura va a sangre; los 8 px
+    // quedan solo para el texto. No se usa `kit::tarjeta` porque su Frame
+    // impone `Margin::same(8)` y dejaría el borde visible alrededor de la imagen.
+    let marco = egui::Frame {
+        inner_margin: egui::Margin {
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: tema::ESP_8 as i8,
+        },
+        fill: tema::PANEL,
+        stroke: Stroke::new(tema::GROSOR_BORDE, tema::BORDE),
+        corner_radius: tema::radio_superficie(),
+        ..egui::Frame::NONE
+    }
+    .show(ui, |ui| {
         ui.vertical(|ui| {
-            let ancho_util = (ancho - tema::ESP_16 * 2.0).max(120.0);
-            let (rect_miniatura, _) = ui.allocate_exact_size(
-                Vec2::new(ancho_util, ancho_util * 9.0 / 16.0),
-                Sense::hover(),
-            );
+            // A9: el espaciado automático se anula; cada separación es explícita.
+            ui.spacing_mut().item_spacing.y = 0.0;
+            let (rect_miniatura, _) =
+                ui.allocate_exact_size(Vec2::new(ancho, ancho * 9.0 / 16.0), Sense::hover());
             miniatura = rect_miniatura;
-            pintar_miniatura(ui, reciente, rect_miniatura, miniaturas);
+            pintar_miniatura(ui, reciente, rect_miniatura, miniaturas, textos);
             pintar_barra_hablantes(ui, reciente, rect_miniatura);
 
-            ui.set_width(ancho_util);
-            ui.label(
-                RichText::new(tema::acortar(
-                    &reciente
-                        .ruta
-                        .file_name()
-                        .map(|nombre| nombre.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| reciente.ruta.display().to_string()),
-                    28,
-                ))
-                .font(tema::fuente_segura(Estilo::CuerpoFuerte))
-                .color(tema::TEXTO),
-            );
-            ui.add_space(tema::ESP_4);
+            ui.add_space(tema::ESP_8);
             ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(format!(
-                        "{} · {}",
-                        textos.lineas(reciente.lineas),
-                        textos.hablantes(reciente.hablantes)
-                    ))
-                    .font(tema::fuente(Estilo::Base))
-                    .color(tema::TEXTO_2),
-                );
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.add_space(tema::ESP_8);
+                ui.vertical(|ui| {
+                    ui.set_width(ancho - tema::ESP_16);
+                    ui.spacing_mut().item_spacing.y = 0.0;
                     ui.label(
-                        RichText::new(textos.fecha(&reciente.fecha))
-                            .font(tema::fuente(Estilo::Pequeno))
-                            .color(tema::TEXTO_3),
+                        RichText::new(tema::acortar(
+                            &reciente
+                                .ruta
+                                .file_name()
+                                .map(|nombre| nombre.to_string_lossy().into_owned())
+                                .unwrap_or_else(|| reciente.ruta.display().to_string()),
+                            28,
+                        ))
+                        .font(tema::fuente_segura(Estilo::CuerpoFuerte))
+                        .color(tema::TEXTO),
                     );
+                    ui.add_space(tema::ESP_4);
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            RichText::new(format!(
+                                "{} · {}",
+                                textos.lineas(reciente.lineas),
+                                textos.hablantes(reciente.hablantes)
+                            ))
+                            .font(tema::fuente(Estilo::Base))
+                            .color(tema::TEXTO_2),
+                        );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(
+                                RichText::new(textos.fecha(&reciente.fecha))
+                                    .font(tema::fuente(Estilo::Pequeno))
+                                    .color(tema::TEXTO_3),
+                            );
+                        });
+                    });
+
+                    ui.add_space(tema::ESP_4);
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = tema::ESP_4;
+                        for (color, _) in reciente.tira.iter().take(7) {
+                            kit::punto(ui, tema::color(color), tema::TAMANO_PUNTO);
+                        }
+                        if reciente.tira.len() > 7 {
+                            ui.label(
+                                RichText::new(format!("+{}", reciente.tira.len() - 7))
+                                    .font(tema::fuente(Estilo::Pequeno))
+                                    .color(tema::TEXTO_3),
+                            );
+                        }
+                    });
+                    // A9: sin `ESP_12` final; el Frame ya cierra con 8 px.
                 });
             });
-
-            ui.add_space(tema::ESP_4);
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = tema::ESP_4;
-                for (color, _) in reciente.tira.iter().take(7) {
-                    kit::punto(ui, tema::color(color), tema::TAMANO_PUNTO);
-                }
-                if reciente.tira.len() > 7 {
-                    ui.label(
-                        RichText::new(format!("+{}", reciente.tira.len() - 7))
-                            .font(tema::fuente(Estilo::Pequeno))
-                            .color(tema::TEXTO_3),
-                    );
-                }
-            });
-            ui.add_space(tema::ESP_12);
         });
     });
 
     // Un solo rect para borde, hover y clic: el del Frame pintado. Antes se
     // usaba la celda de altura fija y la zona interactiva no coincidía con la
     // burbuja.
-    let rect = marco.rect;
+    let rect = marco.response.rect;
     let borde = if ui.rect_contains_pointer(rect) {
         tema::BORDE_HOVER
     } else {
@@ -441,14 +470,14 @@ fn tarjeta_reciente(
     ui.painter().rect_stroke(
         rect,
         egui::CornerRadius::same(tema::RADIO_SUPERFICIE as u8),
-        Stroke::new(1.0_f32, borde),
+        Stroke::new(tema::GROSOR_BORDE, borde),
         egui::StrokeKind::Inside,
     );
     if destacada {
         ui.painter().rect_stroke(
             rect,
             egui::CornerRadius::same(tema::RADIO_SUPERFICIE as u8),
-            Stroke::new(2.0_f32, tema::ACENTO),
+            Stroke::new(tema::GROSOR_FOCO, tema::ACENTO),
             egui::StrokeKind::Outside,
         );
     }
@@ -476,33 +505,50 @@ fn tarjeta_reciente(
             ),
             Vec2::splat(tema::ESP_24),
         );
-        ui.scope_builder(egui::UiBuilder::new().max_rect(zona), |ui| {
-            ui.painter()
-                .rect_filled(zona, tema::radio_control(), Color32::from_black_alpha(150));
-            let _ = egui::containers::menu::MenuButton::from_button(
-                egui::Button::new(
-                    RichText::new("···")
-                        .font(tema::fuente(Estilo::Base))
-                        .color(tema::TEXTO),
-                )
+        let mut menu_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(zona)
+                .layout(egui::Layout::right_to_left(egui::Align::Center))
+                .id_salt(("puntos", &reciente.ruta)),
+        );
+        let respuesta = egui::containers::menu::MenuButton::from_button(
+            egui::Button::new("")
                 .frame(false)
+                .fill(Color32::TRANSPARENT)
+                .stroke(Stroke::NONE)
                 .min_size(zona.size()),
-            )
-            .ui(ui, |ui| {
-                if ui.button(textos.abrir).clicked() {
-                    *intencion = Some(MensajeInicio::AbrirReciente(reciente.ruta.clone()));
-                    ui.close();
-                }
-                if ui.button(textos.mostrar_en_carpeta).clicked() {
-                    *intencion = Some(MensajeInicio::MostrarEnCarpeta(reciente.ruta.clone()));
-                    ui.close();
-                }
-                if ui.button(textos.quitar_de_recientes).clicked() {
-                    *intencion = Some(MensajeInicio::QuitarDeRecientes(reciente.ruta.clone()));
-                    ui.close();
-                }
-            });
-        });
+        )
+        .ui(&mut menu_ui, |ui| {
+            if ui.button(textos.abrir).clicked() {
+                *intencion = Some(MensajeInicio::AbrirReciente(reciente.ruta.clone()));
+                ui.close();
+            }
+            if ui.button(textos.mostrar_en_carpeta).clicked() {
+                *intencion = Some(MensajeInicio::MostrarEnCarpeta(reciente.ruta.clone()));
+                ui.close();
+            }
+            if ui.button(textos.quitar_de_recientes).clicked() {
+                *intencion = Some(MensajeInicio::QuitarDeRecientes(reciente.ruta.clone()));
+                ui.close();
+            }
+        })
+        .0;
+        // A10: el glifo (Icono::Puntos, no el literal "···") y su fondo solo
+        // aparecen con hover de tarjeta o con foco de teclado.
+        if ui.rect_contains_pointer(rect) || respuesta.has_focus() {
+            ui.painter()
+                .rect_filled(zona, tema::radio_control(), tema::CONTROL);
+            ui.painter().text(
+                zona.center(),
+                Align2::CENTER_CENTER,
+                kit::glifo(Icono::Puntos),
+                tema::fuente(Estilo::Base),
+                tema::TEXTO,
+            );
+        }
+        if respuesta.has_focus() {
+            kit::anillo_foco(&mut menu_ui, &respuesta);
+        }
     }
 }
 
@@ -511,9 +557,11 @@ fn pintar_miniatura(
     reciente: &Reciente,
     miniatura: egui::Rect,
     miniaturas: &mut HashMap<PathBuf, egui::TextureHandle>,
+    textos: &Textos,
 ) {
     let ruta = crate::thumbnail::ruta_cache(&reciente.ruta);
     if !ruta.is_file() {
+        // A11: sin miniatura no hay video localizado. Placeholder + chip ámbar.
         let color = reciente
             .tira
             .first()
@@ -528,6 +576,20 @@ fn pintar_miniatura(
             0.0,
             color,
         );
+        let chip = egui::Rect::from_min_max(
+            egui::pos2(miniatura.min.x + tema::ESP_8, miniatura.min.y + tema::ESP_8),
+            egui::pos2(
+                miniatura.max.x - tema::ESP_8,
+                miniatura.min.y + tema::ESP_8 + tema::ALTO_CHIP,
+            ),
+        );
+        let mut chip_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(chip)
+                .layout(egui::Layout::left_to_right(egui::Align::Center))
+                .id_salt("chip-sin-video"),
+        );
+        kit::pill(&mut chip_ui, textos.video_not_found, tema::AMBAR);
         return;
     }
     let textura = miniaturas.entry(reciente.ruta.clone()).or_insert_with(|| {
@@ -546,7 +608,8 @@ fn pintar_miniatura(
             egui::TextureOptions::default(),
         )
     });
-    ui.painter().rect_filled(miniatura, 0.0, Color32::BLACK);
+    ui.painter()
+        .rect_filled(miniatura, 0.0, tema::COLOR_FONDO_VIDEO);
     let tamaño = textura.size();
     let aspecto = tamaño[0] as f32 / tamaño[1].max(1) as f32;
     let (ancho_img, alto_img) = if aspecto > miniatura.width() / miniatura.height() {
@@ -558,7 +621,7 @@ fn pintar_miniatura(
         textura.id(),
         egui::Rect::from_center_size(miniatura.center(), Vec2::new(ancho_img, alto_img)),
         egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-        Color32::WHITE,
+        tema::TEXTO,
     );
 }
 
