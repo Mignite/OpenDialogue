@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  checks:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Dependencias de sistema (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxkbcommon-dev libwayland-dev libx11-dev libxcb1-dev \
+            libxrandr-dev libxi-dev libxcursor-dev \
+            libmpv-dev ffmpeg
+
+      - name: Clip de pruebas (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          # 3 s, 25 fps y dos pistas de audio: tests/controles.rs necesita poder
+          # buscar un instante exacto y cambiar de pista. El clip no se versiona.
+          mkdir -p testdata
+          ffmpeg -y -f lavfi -i testsrc=size=320x240:rate=25:duration=3 \
+            -f lavfi -i sine=frequency=440:duration=3 \
+            -f lavfi -i sine=frequency=880:duration=3 \
+            -map 0:v -map 1:a -map 2:a \
+            -c:v libx264 -pix_fmt yuv420p -c:a aac \
+            testdata/clip-3s-2audio.mp4
+
+      - name: Cache vcpkg (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_INSTALLATION_ROOT }}/installed
+          key: vcpkg-libass-x64-windows-v1
+
+      - name: Dependencias de sistema (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib\ass.lib")) {
+            vcpkg install libass:x64-windows
+          }
+          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+          # Cargo 1.100 deja los binarios de test de un paquete con build script
+          # en target/debug/build/<paquete>/<hash>/out, donde el build.rs no
+          # puede copiar las DLLs de libass (su OUT_DIR tiene otro hash). La
+          # búsqueda de DLLs de Windows termina en el PATH.
+          "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin" >> $env:GITHUB_PATH
+
+      - name: fmt
+        run: cargo fmt --all -- --check
+
+      - name: clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: test
+        run: cargo test --workspace
