@@ -54,8 +54,11 @@ implementa aquí.
 - Rust 1.88+ con toolchain MSVC y *Visual Studio Build Tools* (carga de C++).
 - libass de vcpkg: `vcpkg install libass:x64-windows` y añadir
   `%VCPKG_ROOT%\installed\x64-windows\bin` al `PATH`.
-- `third_party/mpv/libmpv-2.dll` y `mpv.lib` se incluyen en el repo; el
-  build script los enlaza y copia la DLL junto al ejecutable.
+- `third_party/mpv/mpv.lib` y `mpv.def` están versionados. La DLL
+  (`libmpv-2.dll`, ~116 MB) **no** está en el repo: el CI la descarga del
+  release de [shinchiro/mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake/releases).
+  Para trabajar en local, coloca `libmpv-2.dll` en `third_party/mpv/`
+  (paquete `mpv-dev-x86_64-*.7z` del mismo release).
 
 ### Linux (probado en CI Ubuntu)
 
