@@ -2420,6 +2420,12 @@ mod tests {
         };
         let editor = super::EditorApp::desde_proyecto(proyecto, None, 3.25)
             .expect("abre el video de prueba");
+        // `seek` es asíncrono: en equipos lentos `time-pos` sigue en 0 justo
+        // después de abrir. Se espera hasta 3 s a que mpv informe del instante.
+        let limite = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while editor.player.position() < 3.0 && std::time::Instant::now() < limite {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
         assert!(
             (editor.player.position() - 3.25).abs() < 0.5,
             "el player quedó en {}",
