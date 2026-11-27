@@ -63,8 +63,9 @@ jobs:
           }
           # La DLL de mpv no se versiona (116 MB, SourceForge bloquea agentes).
           # El release de shinchiro en GitHub sí es descargable desde el CI.
-          $urls = gh api repos/shinchiro/mpv-winbuild-cmake/releases/latest --jq '.assets[].browser_download_url'
-          $url = $urls | Where-Object { $_ -match 'mpv-dev-x86_64-' -and $_ -match '\.7z$' } | Select-Object -First 1
+          $headers = @{ Authorization = "Bearer ${{ github.token }}"; 'User-Agent' = 'rod-ci' }
+          $release = Invoke-RestMethod -Headers $headers -Uri 'https://api.github.com/repos/shinchiro/mpv-winbuild-cmake/releases/latest'
+          $url = $release.assets | Where-Object { $_.name -match '^mpv-dev-x86_64-.*\.7z$' } | Select-Object -First 1 -ExpandProperty browser_download_url
           if (-not $url) { throw 'no encuentro el paquete mpv-dev en GitHub' }
           Invoke-WebRequest -Uri $url -OutFile mpv-dev.7z
           $7z = (Get-Command 7z -ErrorAction SilentlyContinue).Source
