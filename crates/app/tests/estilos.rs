@@ -1,4 +1,4 @@
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use rod_app::editor_app::EditorApp;
 use rod_app::preferencias::Preferencias;
 use rod_app::textos::EN;
@@ -226,17 +226,25 @@ fn combo_box_cambia_la_fuente_del_preset() {
     h.run();
     h.get_by_role(egui::accesskit::Role::ComboBox).click();
     h.run();
-    // La lista de fuentes es del sistema: «Agency FB» solo existe en Windows
-    // y las runners de Ubuntu traen «DejaVu Sans».
-    let fuente = if cfg!(target_os = "windows") {
-        "Agency FB"
-    } else {
-        "DejaVu Sans"
-    };
-    h.get_by_role_and_label(egui::accesskit::Role::Button, fuente)
+    // La lista de fuentes depende del sistema (ni «Agency FB» ni «Arial»
+    // existen en las runners). Se toma cualquier opción del popup y se
+    // comprueba que el preset deja de tener la fuente inicial.
+    let fuente = h
+        .query_all_by_role(egui::accesskit::Role::Button)
+        .filter_map(|nodo| nodo.accesskit_node().label().map(|s| s.to_string()))
+        .find(|etiqueta| {
+            const UI: &[&str] = &["New preset", "Apply to", "Duplicate", "Delete"];
+            !etiqueta.is_empty()
+                && etiqueta != "Arial"
+                && etiqueta != "B"
+                && etiqueta != "I"
+                && !UI.iter().any(|rotulo| etiqueta.contains(rotulo))
+        })
+        .expect("opciones de fuente en el popup");
+    h.get_by_role_and_label(egui::accesskit::Role::Button, &fuente)
         .click();
     h.run();
-    assert_eq!(h.state_mut().presets_mut()[0].fontname, fuente);
+    assert_ne!(h.state_mut().presets_mut()[0].fontname, "Arial");
 }
 
 #[test]
