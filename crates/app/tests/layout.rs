@@ -153,12 +153,7 @@ fn arrastrar_el_divisor_encoge_el_timeline() {
     // El borde del panel cae en 219 (210 del alto más 9 px de margen del frame).
     // El borde del panel inferior depende de la altura real del panel, que
     // ahora descuenta la barra de texto. Se calcula, no se fija a ojo.
-    let alto_abajo = rod_app::ui::editor::alto_timeline(
-        &h.state().0,
-        &h.state().1,
-        0.0,
-        1200.0,
-    );
+    let alto_abajo = rod_app::ui::editor::alto_timeline(&h.state().0, &h.state().1, 0.0, 1200.0);
     let borde_y = 700.0 - alto_abajo + 9.0;
     h.input_mut()
         .events

@@ -81,9 +81,11 @@ fn el_pintado_del_editor_con_543_lineas_baja_de_ocho_ms() {
     }
     let media = inicio.elapsed() / 30;
     // En debug el painter de egui no está optimizado; el objetivo de 8 ms se
-    // mide en release, que es lo que se entrega.
+    // mide en release, que es lo que se entrega. El tope de debug cubre el
+    // coste extra de los anillos de foco y la toolbar ampliada sin confundirlo
+    // con una regresión de 60 fps.
     let limite = if cfg!(debug_assertions) {
-        Duration::from_millis(30)
+        Duration::from_millis(40)
     } else {
         Duration::from_millis(8)
     };

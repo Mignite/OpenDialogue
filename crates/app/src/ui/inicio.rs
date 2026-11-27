@@ -514,10 +514,8 @@ fn tarjeta_reciente(
         let respuesta = egui::containers::menu::MenuButton::from_button(
             // Etiqueta accesible (el glifo se pinta abajo solo en hover), con
             // el texto transparente para no dibujarlo dos veces.
-            egui::Button::new(
-                RichText::new(kit::glifo(Icono::Puntos)).color(Color32::TRANSPARENT),
-            )
-            .frame(false)
+            egui::Button::new(RichText::new(kit::glifo(Icono::Puntos)).color(Color32::TRANSPARENT))
+                .frame(false)
                 .fill(Color32::TRANSPARENT)
                 .stroke(Stroke::NONE)
                 .min_size(zona.size()),

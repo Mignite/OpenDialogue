@@ -97,7 +97,7 @@ fn clic_en_la_barra_selecciona_la_linea_que_edita() {
     let mensaje = rod_app::ui::texto::mensaje_al_enfocar(&app);
     assert!(matches!(
         mensaje,
-        Some(MensajeEditor::Seleccionar(ref id)) if id == "c1"
+        Some(MensajeEditor::SeleccionarSinSeek(ref id)) if id == "c1"
     ));
     let _ = &ES;
 }
