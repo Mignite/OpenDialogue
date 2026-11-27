@@ -252,7 +252,12 @@ impl std::fmt::Display for Atajo {
         if self.alt {
             write!(f, "Alt+")?;
         }
-        write!(f, "{}", self.tecla.name())
+        let tecla = if self.tecla == Key::Questionmark {
+            "?"
+        } else {
+            self.tecla.name()
+        };
+        write!(f, "{tecla}")
     }
 }
 

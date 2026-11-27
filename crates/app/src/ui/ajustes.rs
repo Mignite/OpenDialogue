@@ -133,7 +133,9 @@ pub fn mostrar(ctx: &egui::Context, prefs: &mut Preferencias, estado: &mut Estad
     // estrecho que un panel cómodo, con los topes tomados de `tema`.
     let pantalla = ctx.content_rect().size();
     let ancho = (pantalla.x * 0.45).clamp(tema::ANCHO_PANEL_DEFECTO * 2.0, tema::ANCHO_CONTENEDOR);
-    let alto = (pantalla.y * 0.62).clamp(tema::ALTO_VIDEO_MIN * 4.0, tema::ESP_72 * 10.0);
+    let alto = (pantalla.y * 0.62)
+        .clamp(tema::ALTO_VIDEO_MIN * 4.0, tema::ESP_72 * 10.0)
+        .min(pantalla.y - tema::ESP_32);
     let marco = egui::Frame {
         inner_margin: egui::Margin::same(tema::ESP_16 as i8),
         outer_margin: egui::Margin::ZERO,
@@ -278,79 +280,88 @@ pub fn mostrar(ctx: &egui::Context, prefs: &mut Preferencias, estado: &mut Estad
                         .map(|atajo| ancho_texto(ui, &atajo.to_string(), fuente_mono.clone()))
                         .fold(0.0, f32::max)
                         .max(tema::ANCHO_KEYCAP_MIN);
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        egui::Grid::new("atajos-ajustes")
-                            .num_columns(4)
-                            .spacing(egui::vec2(tema::ESP_12, tema::ESP_4))
-                            .show(ui, |ui| {
-                                for comando in visibles {
-                                    let etiqueta = textos.comando(comando);
-                                    ui.allocate_ui_with_layout(
-                                        egui::vec2(ancho_etiqueta, tema::ALTO_CONTROL),
-                                        egui::Layout::left_to_right(egui::Align::Center),
-                                        |ui| {
-                                            ui.label(
-                                                RichText::new(etiqueta).font(fuente_base.clone()),
+                    // El tirador de la barra usa `inactive.bg_fill`: sin este
+                    // valor el scroll existe pero no se ve en el modal.
+                    ui.visuals_mut().widgets.inactive.bg_fill = tema::CONTROL;
+                    egui::ScrollArea::vertical()
+                        .auto_shrink(false)
+                        .max_height(alto - tema::ESP_72 * 3.0)
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                        )
+                        .show(ui, |ui| {
+                            egui::Grid::new("atajos-ajustes")
+                                .num_columns(4)
+                                .spacing(egui::vec2(tema::ESP_12, tema::ESP_4))
+                                .show(ui, |ui| {
+                                    for comando in visibles {
+                                        let etiqueta = textos.comando(comando);
+                                        ui.allocate_ui_with_layout(
+                                            egui::vec2(ancho_etiqueta, tema::ALTO_CONTROL),
+                                            egui::Layout::left_to_right(egui::Align::Center),
+                                            |ui| {
+                                                ui.label(
+                                                    RichText::new(etiqueta)
+                                                        .font(fuente_base.clone()),
+                                                );
+                                            },
+                                        );
+                                        let atajo = prefs
+                                            .atajos
+                                            .atajo(comando)
+                                            .map(|atajo| atajo.to_string())
+                                            .unwrap_or_default();
+                                        ui.allocate_ui_with_layout(
+                                            egui::vec2(ancho_atajo, tema::ALTO_CONTROL),
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                ui.label(
+                                                    RichText::new(atajo)
+                                                        .font(fuente_mono.clone())
+                                                        .color(tema::TEXTO_2),
+                                                );
+                                            },
+                                        );
+                                        let r =
+                                            ui.add(
+                                                egui::Button::new(
+                                                    RichText::new(textos.cambiar)
+                                                        .font(fuente_base.clone()),
+                                                )
+                                                .min_size(egui::vec2(
+                                                    tema::ANCHO_BOTON_MIN / 2.0,
+                                                    tema::ALTO_CONTROL,
+                                                )),
                                             );
-                                        },
-                                    );
-                                    let atajo = prefs
-                                        .atajos
-                                        .atajo(comando)
-                                        .map(|atajo| atajo.to_string())
-                                        .unwrap_or_default();
-                                    ui.allocate_ui_with_layout(
-                                        egui::vec2(ancho_atajo, tema::ALTO_CONTROL),
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| {
-                                            ui.label(
-                                                RichText::new(atajo)
-                                                    .font(fuente_mono.clone())
-                                                    .color(tema::TEXTO_2),
+                                        if r.has_focus() {
+                                            kit::anillo_foco(ui, &r);
+                                        }
+                                        if r.clicked() {
+                                            estado.capturando = Some(comando);
+                                            estado.conflicto = None;
+                                        }
+                                        let r =
+                                            ui.add(
+                                                egui::Button::new(
+                                                    RichText::new(textos.restablecer)
+                                                        .font(fuente_base.clone()),
+                                                )
+                                                .min_size(egui::vec2(
+                                                    tema::ANCHO_BOTON_MIN / 2.0,
+                                                    tema::ALTO_CONTROL,
+                                                )),
                                             );
-                                        },
-                                    );
-                                    let r = ui.add(
-                                        egui::Button::new(
-                                            RichText::new(textos.cambiar).font(fuente_base.clone()),
-                                        )
-                                        .min_size(
-                                            egui::vec2(
-                                                tema::ANCHO_BOTON_MIN / 2.0,
-                                                tema::ALTO_CONTROL,
-                                            ),
-                                        ),
-                                    );
-                                    if r.has_focus() {
-                                        kit::anillo_foco(ui, &r);
+                                        if r.has_focus() {
+                                            kit::anillo_foco(ui, &r);
+                                        }
+                                        if r.clicked() {
+                                            prefs.atajos.restablecer(comando);
+                                            cambiado = true;
+                                        }
+                                        ui.end_row();
                                     }
-                                    if r.clicked() {
-                                        estado.capturando = Some(comando);
-                                        estado.conflicto = None;
-                                    }
-                                    let r = ui.add(
-                                        egui::Button::new(
-                                            RichText::new(textos.restablecer)
-                                                .font(fuente_base.clone()),
-                                        )
-                                        .min_size(
-                                            egui::vec2(
-                                                tema::ANCHO_BOTON_MIN / 2.0,
-                                                tema::ALTO_CONTROL,
-                                            ),
-                                        ),
-                                    );
-                                    if r.has_focus() {
-                                        kit::anillo_foco(ui, &r);
-                                    }
-                                    if r.clicked() {
-                                        prefs.atajos.restablecer(comando);
-                                        cambiado = true;
-                                    }
-                                    ui.end_row();
-                                }
-                            });
-                    });
+                                });
+                        });
                 }
             }
 
