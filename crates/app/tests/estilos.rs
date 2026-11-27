@@ -226,10 +226,17 @@ fn combo_box_cambia_la_fuente_del_preset() {
     h.run();
     h.get_by_role(egui::accesskit::Role::ComboBox).click();
     h.run();
-    h.get_by_role_and_label(egui::accesskit::Role::Button, "Agency FB")
+    // La lista de fuentes es del sistema: «Agency FB» solo existe en Windows
+    // y las runners de Ubuntu traen «DejaVu Sans».
+    let fuente = if cfg!(target_os = "windows") {
+        "Agency FB"
+    } else {
+        "DejaVu Sans"
+    };
+    h.get_by_role_and_label(egui::accesskit::Role::Button, fuente)
         .click();
     h.run();
-    assert_eq!(h.state_mut().presets_mut()[0].fontname, "Agency FB");
+    assert_eq!(h.state_mut().presets_mut()[0].fontname, fuente);
 }
 
 #[test]
