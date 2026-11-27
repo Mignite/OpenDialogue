@@ -69,6 +69,10 @@ jobs:
           # target/debug/build/<paquete>/<hash>/out, donde la copia del
           # build.rs no llega. La DLL de mpv del repo debe estar en el PATH.
           "$env:GITHUB_WORKSPACE\third_party\mpv" >> $env:GITHUB_PATH
+          # Y donde el build.rs deja las DLLs que sí copia (target/debug y
+          # target/debug/deps), porque el exe de test vive en otro directorio.
+          "$env:GITHUB_WORKSPACE\target\debug" >> $env:GITHUB_PATH
+          "$env:GITHUB_WORKSPACE\target\debug\deps" >> $env:GITHUB_PATH
 
       - name: fmt
         run: cargo fmt --all -- --check
@@ -76,5 +80,16 @@ jobs:
       - name: clippy
         run: cargo clippy --all-targets -- -D warnings
 
-      - name: test
-        run: cargo test --workspace
+      # En Linux headless mpv no abre salida de audio y algunos tests de
+      # editor_app se cuelgan esperando `time-pos`; se omiten ahí y corren en
+      # Windows, donde el reproductor sí informa del instante.
+      - name: test (Linux)
+        if: runner.os == 'Linux'
+        run: cargo test --workspace -- --skip editor_app::tests
+
+      - name: test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:GITHUB_WORKSPACE\target\debug;$env:GITHUB_WORKSPACE\target\debug\deps;$env:PATH"
+          cargo test --workspace
