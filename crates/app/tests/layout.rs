@@ -213,10 +213,15 @@ fn buscar_fuente_no_cierra_el_desplegable() {
         .find(|nodo| nodo.value().unwrap_or_default().is_empty())
         .expect("campo de búsqueda visible");
     busqueda.click();
-    busqueda.type_text("Ari");
+    let (buscar, fuente) = if cfg!(target_os = "windows") {
+        ("Ari", "Arial")
+    } else {
+        ("Dej", "DejaVu Sans")
+    };
+    busqueda.type_text(buscar);
     h.run();
     assert!(
-        h.query_by_role_and_label(egui::accesskit::Role::Button, "Arial")
+        h.query_by_role_and_label(egui::accesskit::Role::Button, fuente)
             .is_some(),
         "el popup se cerró al buscar"
     );
