@@ -1,36 +1,19 @@
-node_modules/
-dist/
-src-tauri/target/
-src-tauri/gen/
-*.log
-log.txt
-buildlog.txt
-TESTING_PLAN.md
-.DS_Store
-Thumbs.db
-.env
-.env.local
-SRTPruebas/
-subtitles.srt
-clear
-src-tauri/2
-rain-glass.html
-snow.html
-typing.html
-design/muse-spark-reinterpretacion.html
-AGENTS.md
-.opencode/
-.claude/
-.vscode/
-*.tmp
-*.part
+/target
 
-.superpowers/
+# libmpv: binarios locales, no van al repo (ver third_party/mpv/README.md)
+# excepción: mpv.lib (13 KB) sí se versiona, porque el CI lo necesita para
+# enlazar en Windows y no puede descargar la DLL (SourceForge bloquea agentes).
+/third_party/mpv/*.dll
+/third_party/mpv/*.exp
+!/third_party/mpv/mpv.lib
 
-.openchamber/
+# videos de prueba: se regeneran con ffmpeg (ver docs/checklists/slice-0a-mpv.md)
+/testdata/
+!/testdata/clip-15s-2audio.mp4
 
-# Benchmarks de diarizacion: codigo, pesos de modelo (.onnx), ejecutables y
-# material de prueba. Son GB y NO van al repo. Un `git add -A` los metio en el
-# historial (commit 044f3b1, 2026-09-26) y el push subio ~1 GB de LFS; se purgo
-# con filter-branch el 2026-09-29. La carpeta ya no esta en disco.
-diarization-benchmark/
+
+# mensajes de commit temporales
+commit-msg.txt
+
+# andamiaje de las skills de superpowers (ledger y briefs por plan)
+/.superpowers/

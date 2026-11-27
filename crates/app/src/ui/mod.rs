@@ -1,0 +1,21 @@
+//! Front-end de egui. Los módulos de aquí solo dibujan y traducen eventos:
+//! la lógica del proyecto vive en los módulos de `rod_app` de siempre.
+
+pub mod ajustes;
+pub mod atajos;
+pub mod borde;
+pub mod chrome;
+pub mod editor;
+pub mod estilos_render;
+pub mod iconos;
+pub mod inicio;
+pub mod kit;
+pub mod paneles;
+pub mod repintado;
+pub mod tema;
+pub mod texto;
+pub mod timeline;
+pub mod tipografia;
+pub mod toast;
+pub mod transporte;
+pub mod video;

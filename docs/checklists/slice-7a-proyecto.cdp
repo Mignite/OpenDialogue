@@ -1,0 +1,29 @@
+{
+  "ruta_video": "testdata/clip-15s-2audio.mp4",
+  "hablantes": [
+    {
+      "id": "sp-1",
+      "nombre": "Ana",
+      "tecla": "1",
+      "color": "#3B82F6",
+      "presetId": null
+    }
+  ],
+  "captions": [
+    {
+      "id": "cap-1",
+      "inicio": 1.0,
+      "fin": 3.0,
+      "texto": "Primer caption",
+      "hablante_id": "sp-1"
+    },
+    {
+      "id": "cap-2",
+      "inicio": 4.0,
+      "fin": 6.5,
+      "texto": "Segundo caption",
+      "hablante_id": null
+    }
+  ],
+  "playhead": 2.75
+}

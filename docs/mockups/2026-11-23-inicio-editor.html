@@ -1,0 +1,889 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rusty Open Dialogue — inicio y editor</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; }
+  body { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: var(--foreground); }
+
+  .page { max-width: 1600px; margin: 0 auto; padding: 8px 0 24px; }
+  .page-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 6px 0 14px; }
+  .page-title { font-size: .76rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted-foreground); }
+  .page-title b { color: var(--foreground); font-weight: 600; }
+  .page-head .oc-segmented { margin-left: auto; }
+  .page-head .oc-segmented button { font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; }
+
+  .stage { position: relative; overflow: hidden; width: 100%; }
+
+  /* ---------- app frame ---------- */
+  .rod {
+    --ink: #0C0C0D; --panel: #141416; --raised: #1A1A1D; --sunk: #101012;
+    --line: rgba(255,255,255,.15); --line2: rgba(255,255,255,.32);
+    --text: #F3F3F3; --mute: #9A9A9A; --dim: #6B6B6D;
+    --mustard: #D9A441; --mustard-hi: #F2C15F; --mustard-line: rgba(217,164,65,.55); --mustard-wash: #171207;
+    --sp1: #4C8DFF; --sp1-soft: rgba(76,141,255,.16); --sp2: #D9553F; --sp2-soft: rgba(217,85,63,.18); --sp3: #3FA57A; --sp3-soft: rgba(63,165,122,.18);
+    --font: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --display: "Segoe UI Black", "Segoe UI", "Arial Black", Arial, sans-serif;
+    --mono: "Cascadia Mono", Consolas, "SFMono-Regular", "Courier New", monospace;
+  }
+  .screen { position: absolute; top: 0; left: 0; width: 1600px; height: 900px; box-sizing: border-box; transform-origin: top left; overflow: hidden; background: var(--ink); color: var(--text); font: 14px/1.45 var(--font); border: 1px solid rgba(255,255,255,.22); }
+  .screen[hidden] { display: none; }
+  .screen * { box-sizing: border-box; }
+  :where(.screen button) { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+  .screen button:focus-visible, .screen input:focus-visible, .screen textarea:focus-visible { outline: 2px solid var(--mustard); outline-offset: 2px; }
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .lbl { font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
+  .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* ---------- menubar ---------- */
+  .mb { height: 46px; display: flex; align-items: center; border-bottom: 1px solid var(--line); padding: 0 16px; background: var(--ink); }
+  .mb-brand { display: flex; align-items: center; gap: 10px; padding-right: 16px; margin-right: 14px; border-right: 1px solid var(--line); height: 100%; }
+  .mark { width: 18px; height: 18px; background: var(--mustard); color: var(--ink); display: grid; place-items: center; font: 900 11px/1 var(--display); }
+  .mb-name { font: 600 10.5px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+  .mb-name em { display: block; font-style: normal; color: var(--dim); font-size: 8.5px; letter-spacing: .16em; }
+  .mb-menu { display: flex; gap: 1px; }
+  .mb-item { font-size: 12.5px; padding: 7px 9px; color: var(--text); }
+  .mb-item:hover { background: var(--mustard); color: var(--ink); }
+  .mb-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .mb-right .state { display: flex; align-items: center; gap: 6px; font: 9.5px var(--mono); letter-spacing: .12em; color: var(--mute); text-transform: uppercase; }
+  .mb-right .state i { width: 5px; height: 5px; border-radius: 50%; background: var(--mustard); }
+  .mb-right .ver { font: 9.5px var(--mono); letter-spacing: .1em; color: var(--dim); }
+
+  /* ---------- inicio ---------- */
+  .start { display: flex; flex-direction: column; height: 100%; }
+  .start-body { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 460px; min-height: 0; }
+  .start-main { display: flex; flex-direction: column; min-width: 0; padding: 26px 32px 20px; }
+  .eyebrow { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
+  .eyebrow .num { font: 700 10px var(--mono); letter-spacing: .18em; color: var(--mustard); }
+  .eyebrow .rule { flex: 1; height: 1px; background: var(--line); }
+  .eyebrow .tail { font: 9.5px var(--mono); letter-spacing: .14em; color: var(--dim); }
+  .head { display: flex; align-items: flex-end; gap: 48px; margin-top: 14px; }
+  h1.display { margin: 0; font: 900 58px/.86 var(--display); letter-spacing: -.035em; text-transform: uppercase; }
+  h1.display .outline { color: transparent; -webkit-text-stroke: 1px rgba(243,243,243,.62); }
+  .head p { margin: 0 0 5px; max-width: 290px; font-size: 12.5px; line-height: 1.5; color: var(--mute); }
+  .head p b { color: var(--text); font-weight: 600; }
+
+  .dropzone { position: relative; flex: 1; min-height: 0; margin-top: 22px; border: 1px solid var(--line2); background: var(--sunk); display: grid; place-items: center; overflow: hidden; }
+  .dropzone::before { content: ""; position: absolute; inset: 0; background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.028) 0 1px, transparent 1px 9px); }
+  .dropzone::after { content: ""; position: absolute; inset: 20px; border: 1px solid rgba(255,255,255,.06); pointer-events: none; }
+  .reg { position: absolute; width: 18px; height: 18px; border-color: var(--mustard-line); border-style: solid; border-width: 0; }
+  .reg.tl { top: 16px; left: 16px; border-top-width: 1px; border-left-width: 1px; }
+  .reg.tr { top: 16px; right: 16px; border-top-width: 1px; border-right-width: 1px; }
+  .reg.bl { bottom: 16px; left: 16px; border-bottom-width: 1px; border-left-width: 1px; }
+  .reg.br { bottom: 16px; right: 16px; border-bottom-width: 1px; border-right-width: 1px; }
+  .dz-meta { position: absolute; font: 9px var(--mono); letter-spacing: .1em; color: var(--dim); text-transform: uppercase; }
+  .dz-meta.tl { top: 20px; left: 44px; } .dz-meta.tr { top: 20px; right: 44px; color: var(--mustard); }
+  .dz-meta.bl { bottom: 20px; left: 44px; } .dz-meta.br { bottom: 20px; right: 44px; }
+  .dz-center { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+  .cross { position: relative; width: 46px; height: 46px; margin-bottom: 4px; }
+  .cross::before, .cross::after { content: ""; position: absolute; background: var(--mustard); opacity: .85; }
+  .cross::before { left: 22px; top: 0; width: 1px; height: 46px; }
+  .cross::after { top: 22px; left: 0; height: 1px; width: 46px; }
+  .dz-title { font: 800 24px/1.1 var(--display); letter-spacing: .06em; text-transform: uppercase; }
+  .dz-help { font: 10px var(--mono); letter-spacing: .18em; color: var(--mustard); text-transform: uppercase; }
+  .dz-sub { font-size: 11.5px; color: var(--mute); }
+  .dz-sub b { color: var(--text); font-weight: 600; }
+
+  .actions { display: flex; align-items: stretch; gap: 10px; margin-top: 14px; flex: 0 0 auto; }
+  .btn-primary { display: flex; align-items: center; gap: 16px; height: 50px; padding: 0 18px; background: var(--mustard); color: var(--ink); font: 700 11.5px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+  .btn-primary:hover { background: var(--mustard-hi); }
+  .btn-primary .arrow { border-left: 1px solid rgba(12,12,13,.28); padding-left: 14px; font-family: var(--font); font-size: 15px; }
+  .btn-ghost { display: flex; align-items: center; gap: 12px; height: 50px; padding: 0 16px; border: 1px solid var(--line2); font: 600 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+  .btn-ghost:hover { border-color: var(--text); }
+  .kbd { border: 1px solid var(--line); padding: 2px 5px; font: 600 9px var(--mono); letter-spacing: .06em; color: var(--mute); }
+  .actions .note { margin-left: auto; align-self: center; display: flex; align-items: center; gap: 10px; font: 9px var(--mono); letter-spacing: .08em; color: var(--dim); text-transform: uppercase; text-align: right; }
+  .actions .note .bar { width: 1px; height: 28px; background: var(--line); }
+
+  .start-side { display: flex; flex-direction: column; gap: 16px; min-height: 0; border-left: 1px solid var(--line); padding: 20px 24px 16px; }
+  .recovery { border: 1px solid var(--mustard-line); background: var(--mustard-wash); padding: 12px 13px 11px; flex: 0 0 auto; }
+  .recovery .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .recovery .top .lbl { color: var(--mustard); display: flex; align-items: center; gap: 6px; }
+  .recovery time { font: 9px var(--mono); color: var(--dim); letter-spacing: .06em; text-transform: uppercase; }
+  .recovery h3 { margin: 9px 0 2px; font: 600 15px/1.2 var(--display); letter-spacing: -.01em; }
+  .recovery .meta { font: 9.5px var(--mono); color: var(--mute); letter-spacing: .04em; text-transform: uppercase; }
+  .recovery p { margin: 8px 0 10px; font-size: 12px; line-height: 1.45; color: #D9CDB4; }
+  .rec-actions { display: flex; gap: 7px; }
+  .btn-sm { height: 30px; display: inline-flex; align-items: center; gap: 8px; padding: 0 11px; font: 700 9.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+  .btn-sm.solid { background: var(--mustard); color: var(--ink); }
+  .btn-sm.solid:hover { background: var(--mustard-hi); }
+  .btn-sm.line { border: 1px solid var(--line2); }
+  .btn-sm.line:hover { border-color: var(--text); }
+  .recovery .hint { margin-top: 8px; font: 9px var(--mono); color: var(--dim); letter-spacing: .03em; }
+
+  .recents { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .rec-head { display: flex; align-items: baseline; gap: 9px; padding-bottom: 9px; border-bottom: 1px solid var(--line); flex: 0 0 auto; }
+  .rec-head h2 { margin: 0; font: 700 11.5px var(--mono); letter-spacing: .18em; text-transform: uppercase; }
+  .rec-head .count { font: 700 9.5px var(--mono); color: var(--mustard); }
+  .rec-all { margin-left: auto; font: 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--mute); border-bottom: 1px solid var(--line2); padding-bottom: 2px; }
+  .rec-all:hover { color: var(--mustard); border-color: var(--mustard); }
+  .rec-list { margin-top: 4px; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
+  .rec { display: grid; grid-template-columns: 96px minmax(0,1fr) 14px; gap: 11px; align-items: center; padding: 8px 8px 8px 0; border-bottom: 1px solid rgba(255,255,255,.07); }
+  .rec[hidden] { display: none; }
+  .rec:hover { background: var(--raised); box-shadow: inset 2px 0 0 var(--mustard); padding-left: 8px; }
+  .thumb { position: relative; width: 96px; aspect-ratio: 16 / 9; border: 1px solid var(--line); background: #0E0E10; display: grid; place-items: center; overflow: hidden; }
+  .thumb::before { content: ""; position: absolute; inset: 0; background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.05) 0 1px, transparent 1px 7px); }
+  .thumb .tri { width: 0; height: 0; border-left: 8px solid rgba(243,243,243,.32); border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+  .thumb .tc { position: absolute; right: 3px; bottom: 3px; font: 8px var(--mono); color: var(--mute); background: rgba(12,12,13,.8); padding: 1px 3px; letter-spacing: .02em; }
+  .rec .name { display: block; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rec .meta2 { display: block; margin-top: 3px; font: 9px var(--mono); color: var(--mute); letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rec .go { font: 12px var(--mono); color: var(--dim); }
+  .rec:hover .go { color: var(--mustard); }
+  .rec-foot { margin-top: 6px; padding-top: 9px; font: 8.5px var(--mono); letter-spacing: .08em; color: var(--dim); text-transform: uppercase; border-top: 1px solid var(--line); }
+
+  .flow { margin-top: auto; border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .flow .lbl { margin-bottom: 2px; color: var(--dim); }
+  .flow-row { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: baseline; }
+  .flow-row .n { font: 700 9px var(--mono); color: var(--mustard); letter-spacing: .08em; }
+  .flow-row .t { font-size: 11.5px; font-weight: 600; }
+  .flow-row .d { display: block; font: 9px var(--mono); color: var(--mute); letter-spacing: .03em; margin-top: 1px; }
+
+  .rail { flex: 0 0 60px; position: relative; display: flex; align-items: center; gap: 26px; border-top: 1px solid var(--line); padding: 8px 18px 0; }
+  .rail .ticks { position: absolute; top: 0; left: 0; right: 0; height: 10px; background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.22) 0 1px, transparent 1px 12px); opacity: .5; }
+  .rail .state { display: flex; align-items: center; gap: 7px; font: 9.5px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--text); }
+  .rail .state .dot { color: var(--mustard); }
+  .rail .state span { color: var(--dim); }
+  .rail .mid { font: 9px var(--mono); letter-spacing: .12em; color: var(--dim); text-transform: uppercase; }
+  .rail .right { margin-left: auto; font: 9px var(--mono); letter-spacing: .1em; color: var(--dim); text-transform: uppercase; }
+
+  /* ---------- editor ---------- */
+  .editor { display: flex; flex-direction: column; height: 100%; }
+  .ed-body { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 620px; min-height: 0; }
+  .ed-left { display: flex; flex-direction: column; min-width: 0; border-right: 1px solid var(--line); }
+  .preview-wrap { position: relative; flex: 1; min-height: 0; background: #060607; overflow: hidden; }
+  .still { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .grain { position: absolute; inset: 0; pointer-events: none; opacity: .5; background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.022) 0 1px, transparent 1px 3px); }
+  .vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(120% 90% at 50% 45%, transparent 55%, rgba(0,0,0,.55) 100%); }
+  .ov { position: absolute; font: 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: rgba(243,243,243,.66); }
+  .ov.tl { top: 14px; left: 16px; display: flex; align-items: center; gap: 10px; }
+  .ov.tl b { color: var(--text); font-weight: 600; letter-spacing: .04em; }
+  .ov.tr { top: 14px; right: 16px; }
+  .ov.bl { bottom: 14px; left: 16px; }
+  .ov.br { bottom: 14px; right: 16px; color: var(--mustard); }
+  .subtitle { position: absolute; left: 50%; bottom: 52px; transform: translateX(-50%); width: 76%; text-align: center; font: 600 29px/1.25 var(--font); letter-spacing: -.005em; color: #fff; text-shadow: 0 2px 2px #000, 0 0 16px rgba(0,0,0,.8); -webkit-text-stroke: .6px #000; paint-order: stroke fill; }
+
+  .transport { flex: 0 0 82px; display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 8px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+  .tr-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .btn-play { width: 36px; height: 36px; flex: 0 0 36px; display: grid; place-items: center; background: var(--mustard); color: var(--ink); font-size: 12px; }
+  .btn-play:hover { background: var(--mustard-hi); }
+  .btn-tool { height: 30px; display: inline-flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--line2); font: 600 10px var(--mono); letter-spacing: .06em; color: var(--text); white-space: nowrap; }
+  .btn-tool:hover { border-color: var(--text); }
+  .btn-tool .cap { color: var(--dim); font-size: 8px; letter-spacing: .1em; text-transform: uppercase; }
+  .btn-tool .caret { color: var(--mute); font-size: 8px; }
+  .tc-big { margin-left: auto; display: flex; align-items: baseline; gap: 6px; font: 600 18px var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .tc-big small { font-size: 10.5px; color: var(--mute); font-weight: 500; }
+  .scrub { position: relative; height: 14px; display: flex; align-items: center; cursor: pointer; }
+  .scrub .track { position: absolute; left: 0; right: 0; height: 2px; background: rgba(255,255,255,.16); }
+  .scrub .buff { position: absolute; left: 0; height: 2px; width: 61%; background: rgba(255,255,255,.1); }
+  .scrub .done { position: absolute; left: 0; height: 2px; width: 52%; background: var(--mustard); }
+  .scrub .knob { position: absolute; left: 52%; width: 2px; height: 14px; background: var(--mustard); transform: translateX(-1px); }
+  .scrub .knob::after { content: ""; position: absolute; left: -4px; top: 0; width: 10px; height: 4px; background: var(--mustard); }
+
+  .inspector { display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
+  .tabs { flex: 0 0 44px; display: flex; border-bottom: 1px solid var(--line); }
+  .tab { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; border-right: 1px solid var(--line); font: 700 9.5px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--mute); }
+  .tab:last-child { border-right: 0; }
+  .tab:hover { color: var(--text); }
+  .tab[aria-selected="true"] { background: var(--mustard); color: var(--ink); }
+  .tab .n { font-weight: 600; opacity: .62; }
+  .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 13px 16px 14px; overflow: hidden; }
+  .panel[hidden] { display: none; }
+  .row-tool { display: flex; align-items: center; gap: 8px; min-height: 26px; }
+  .row-tool .lbl { color: var(--text); }
+  .row-tool .lbl b { color: var(--mustard); font-weight: 700; }
+  .row-tool .grow { flex: 1; }
+  .icon-btn { width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid var(--line2); color: var(--mute); font-size: 12px; }
+  .icon-btn:hover { color: var(--text); border-color: var(--text); }
+  .icon-btn.is-off { opacity: .35; cursor: not-allowed; }
+  .icon-btn.danger:hover { border-color: var(--sp2); color: var(--sp2); }
+
+  .fields { display: grid; grid-template-columns: 1fr 1fr 76px; gap: 6px; flex: 0 0 auto; }
+  .field { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--line2); background: var(--ink); padding: 5px 8px 6px; }
+  .field .k { font: 8.5px var(--mono); letter-spacing: .14em; color: var(--dim); text-transform: uppercase; }
+  .field input { width: 100%; border: 0; background: none; padding: 0; color: var(--text); font: 600 12px var(--mono); font-variant-numeric: tabular-nums; outline: none; }
+  .field.is-focus { border-color: var(--mustard); box-shadow: inset 0 0 0 1px var(--mustard); }
+  .field.is-focus .k { color: var(--mustard); }
+
+  .who-row { display: flex; align-items: center; gap: 8px; min-height: 26px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border: 1px solid var(--line2); font: 9.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+  .chip .dot { color: var(--sp1); }
+  .who-row .sep { flex: 1; }
+  .who-row .hint { font: 8.5px var(--mono); color: var(--dim); letter-spacing: .06em; text-transform: uppercase; }
+
+  .sub-text { position: relative; flex: 0 0 88px; border: 1px solid var(--line2); background: var(--ink); }
+  .sub-text textarea { width: 100%; height: 100%; resize: none; border: 0; outline: none; background: none; color: var(--text); font: 13.5px/1.45 var(--font); padding: 9px 10px 20px; }
+  .sub-text .counter { position: absolute; right: 8px; bottom: 5px; font: 8.5px var(--mono); color: var(--dim); letter-spacing: .04em; }
+
+  .cap-actions { display: flex; gap: 7px; flex: 0 0 auto; }
+  .btn-main { height: 30px; display: inline-flex; align-items: center; gap: 10px; padding: 0 13px; background: var(--mustard); color: var(--ink); font: 700 9.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+  .btn-main:hover { background: var(--mustard-hi); }
+  .btn-main .k { border-left: 1px solid rgba(12,12,13,.28); padding-left: 9px; font-size: 8px; opacity: .7; }
+  .cap-actions .btn-sm.line { height: 30px; }
+
+  .list-head { display: flex; align-items: baseline; justify-content: space-between; padding-top: 3px; border-top: 1px solid var(--line); margin-top: 1px; }
+  .list-head .lbl { color: var(--mute); }
+  .list-head .order { font: 8.5px var(--mono); color: var(--dim); letter-spacing: .08em; text-transform: uppercase; }
+  .caps { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 3px; overflow: hidden; }
+  .cap { display: grid; grid-template-columns: 22px minmax(0,1fr); gap: 7px; padding: 6px 8px; border: 1px solid transparent; border-left: 2px solid transparent; }
+  .cap:hover { background: var(--raised); }
+  .cap[aria-selected="true"] { background: #1C1913; border-color: rgba(255,255,255,.09); border-left-color: var(--mustard); }
+  .cap .idx { font: 9.5px var(--mono); color: var(--dim); padding-top: 2px; }
+  .cap[aria-selected="true"] .idx { color: var(--mustard); }
+  .cap .t { display: block; font: 9px var(--mono); color: var(--mute); letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+  .cap .txt { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.25; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cap .who { margin-top: 3px; display: inline-flex; align-items: center; gap: 5px; font: 8.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+  .sp1 { color: var(--sp1); } .sp2 { color: var(--sp2); } .sp3 { color: var(--sp3); } .spn { color: #8A8A8E; }
+
+  /* hablantes */
+  .sp-list { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .sp-row { display: grid; grid-template-columns: 8px minmax(0,1fr) 40px minmax(0,132px) 68px 26px; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.07); }
+  .swatch { width: 8px; height: 22px; }
+  .inp { height: 28px; display: flex; align-items: center; padding: 0 7px; border: 1px solid var(--line2); background: var(--ink); font-size: 12px; white-space: nowrap; overflow: hidden; }
+  .inp.key { justify-content: center; font: 600 11px var(--mono); }
+  .inp.sel { justify-content: space-between; font-size: 10.5px; color: var(--mute); }
+  .inp.sel .caret { font-size: 8px; color: var(--dim); }
+  .sp-row .btn-sm { height: 28px; font-size: 8.5px; padding: 0 8px; justify-content: center; }
+  .sp-row .x { color: var(--dim); font-size: 13px; }
+  .sp-row .x:hover { color: var(--sp2); }
+  .sp-add { display: flex; align-items: center; gap: 10px; padding-top: 8px; }
+  .sp-note { margin-top: auto; border-top: 1px solid var(--line); padding-top: 9px; font: 9px var(--mono); color: var(--dim); letter-spacing: .03em; line-height: 1.5; }
+  .sp-note b { color: var(--mute); font-weight: 600; }
+
+  /* estilos */
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; }
+  .preset { height: 26px; display: inline-flex; align-items: center; gap: 7px; padding: 0 9px; border: 1px solid var(--line2); font: 9.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--mute); }
+  .preset[aria-pressed="true"] { background: var(--mustard); color: var(--ink); border-color: var(--mustard); }
+  .preset .sw { width: 6px; height: 6px; background: currentColor; }
+  .st-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+  .st-f { display: flex; align-items: center; gap: 8px; }
+  .st-f .k { width: 64px; font: 8.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); flex: 0 0 64px; }
+  .st-f .inp { flex: 1; }
+  .align-wrap { display: flex; align-items: center; gap: 10px; }
+  .align { display: grid; grid-template-columns: repeat(3, 30px); gap: 3px; }
+  .align button { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--line2); font-size: 12px; color: var(--mute); }
+  .align button[aria-pressed="true"] { background: var(--mustard); color: var(--ink); border-color: var(--mustard); }
+  .align-meta { font: 8.5px var(--mono); color: var(--dim); letter-spacing: .05em; line-height: 1.6; }
+  .style-preview { margin-top: auto; border: 1px solid var(--line); background: #0A0A0B; padding: 12px; text-align: center; font: 600 19px var(--font); color: #fff; text-shadow: 0 2px 2px #000; -webkit-text-stroke: .5px #000; paint-order: stroke fill; }
+
+  /* timeline */
+  .timeline { flex: 0 0 196px; display: grid; grid-template-columns: 118px minmax(0,1fr); grid-template-rows: 32px 26px minmax(0,1fr); border-top: 1px solid var(--line); background: var(--panel); position: relative; }
+  .tl-corner { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 10px; font: 8.5px var(--mono); letter-spacing: .12em; color: var(--mute); text-transform: uppercase; }
+  .tl-tools { border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 5px; padding: 0 8px; justify-content: flex-end; }
+  .tl-tools .btn-tool { height: 24px; font-size: 9px; padding: 0 8px; }
+  .tl-tools .btn-tool.on { background: var(--mustard); border-color: var(--mustard); color: var(--ink); }
+  .tl-gutter-head { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 10px; font: 8px var(--mono); letter-spacing: .14em; color: var(--dim); text-transform: uppercase; }
+  .ruler { position: relative; border-bottom: 1px solid var(--line); overflow: hidden; }
+  .ruler .tick { position: absolute; bottom: 0; width: 1px; height: 5px; background: rgba(255,255,255,.3); }
+  .ruler .tick.major { height: 9px; background: rgba(255,255,255,.45); }
+  .ruler .t { position: absolute; top: 3px; font: 9px var(--mono); color: var(--mute); letter-spacing: .02em; transform: translateX(3px); font-variant-numeric: tabular-nums; }
+  .ruler .t.first { transform: none; }
+  .ruler .t.last { transform: translateX(-100%); }
+  .ruler .playhead { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: var(--mustard); }
+  .ruler .ph-chip { position: absolute; left: 50%; top: 1px; transform: translateX(-50%); background: var(--mustard); color: var(--ink); font: 700 8.5px var(--mono); letter-spacing: .02em; padding: 1px 4px; white-space: nowrap; z-index: 3; }
+  .lanes-labels { border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+  .lane-label { flex: 1; display: flex; align-items: center; gap: 7px; padding: 0 9px; border-bottom: 1px solid rgba(255,255,255,.06); font: 9px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--mute); }
+  .lane-label:last-child { border-bottom: 0; }
+  .lane-label .key { margin-left: auto; border: 1px solid var(--line); padding: 0 4px; font-size: 8px; color: var(--dim); }
+  .lane-label .dot { width: 5px; height: 5px; }
+  .lanes { position: relative; display: flex; flex-direction: column; }
+  .lane { position: relative; flex: 1; border-bottom: 1px solid rgba(255,255,255,.06); background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 1px, transparent 1px 112px); }
+  .lane:last-child { border-bottom: 0; }
+  .clip { position: absolute; top: 50%; transform: translateY(-50%); height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 7px; border: 1px solid; font: 9.5px var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); cursor: pointer; }
+  .clip.a { background: var(--sp1-soft); border-color: rgba(76,141,255,.55); }
+  .clip.b { background: var(--sp2-soft); border-color: rgba(217,85,63,.55); }
+  .clip.c { background: var(--sp3-soft); border-color: rgba(63,165,122,.55); }
+  .clip .tc { font: 8px var(--mono); color: rgba(243,243,243,.55); }
+  .clip[aria-selected="true"] { outline: 1px solid var(--mustard); outline-offset: -1px; }
+  .clip[aria-selected="true"]::before, .clip[aria-selected="true"]::after { content: ""; position: absolute; top: -1px; bottom: -1px; width: 3px; background: var(--mustard); }
+  .clip[aria-selected="true"]::before { left: -1px; } .clip[aria-selected="true"]::after { right: -1px; }
+  .lanes .playhead { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: var(--mustard); z-index: 2; pointer-events: none; }
+
+  .status { flex: 0 0 30px; display: flex; align-items: center; gap: 14px; padding: 0 12px; border-top: 1px solid var(--line); background: var(--panel); font: 8.5px var(--mono); letter-spacing: .08em; color: var(--mute); text-transform: uppercase; white-space: nowrap; overflow: hidden; }
+  .status .brand { display: flex; align-items: center; gap: 6px; color: var(--text); }
+  .status .brand i { width: 5px; height: 5px; border-radius: 50%; background: var(--mustard); }
+  .status .path { color: var(--dim); }
+  .status .msg { color: var(--mustard); }
+  .status .right { margin-left: auto; color: var(--dim); }
+  .status .right b { color: var(--mute); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-head">
+    <div class="page-title"><b>Rusty Open Dialogue</b> · propuesta visual definitiva · inicio + editor</div>
+    <div class="oc-segmented" role="tablist" aria-label="Pantalla">
+      <button type="button" data-screen="inicio" aria-pressed="true">01 Inicio</button>
+      <button type="button" data-screen="editor" aria-pressed="false">02 Editor</button>
+    </div>
+  </div>
+  <div class="stage" id="stage">
+    <div class="screen rod" data-frame="inicio" role="group" aria-label="Pantalla de inicio">
+      <div class="start">
+        <div class="mb">
+          <div class="mb-brand">
+            <div class="mark">R</div>
+            <div class="mb-name">Rusty Open Dialogue<em>subtítulos .ass</em></div>
+          </div>
+          <nav class="mb-menu" aria-label="Menú principal">
+            <button class="mb-item" type="button">Archivo</button>
+            <button class="mb-item" type="button">Edición</button>
+            <button class="mb-item" type="button">Ver</button>
+            <button class="mb-item" type="button">Exportar</button>
+            <button class="mb-item" type="button">Estilos</button>
+            <button class="mb-item" type="button">Ayuda</button>
+          </nav>
+          <div class="mb-right">
+            <span class="state"><i></i>Sin proyecto</span>
+            <span class="ver">v0.9 · 1600×900</span>
+          </div>
+        </div>
+
+        <div class="start-body">
+          <main class="start-main">
+            <div class="eyebrow">
+              <span class="num">01 / ABRIR</span>
+              <span class="rule"></span>
+              <span class="tail">Proyecto nuevo en memoria</span>
+            </div>
+            <div class="head">
+              <h1 class="display">Empezar<br><span class="outline">con un video</span></h1>
+              <p>Suelta el archivo o ábrelo desde el disco. Nada se escribe hasta el primer <b>Ctrl+S</b>, así que puedes probar sin miedo.</p>
+            </div>
+
+            <div class="dropzone">
+              <span class="reg tl"></span><span class="reg tr"></span><span class="reg bl"></span><span class="reg br"></span>
+              <span class="dz-meta tl">Toma 001 / sin proyecto</span>
+              <span class="dz-meta tr">00:00:00:00</span>
+              <span class="dz-meta bl">1920 × 1080 · 25 fps</span>
+              <span class="dz-meta br">Preview = .ass exportado</span>
+              <div class="dz-center">
+                <div class="cross"></div>
+                <div class="dz-title">Arrastra un video aquí</div>
+                <div class="dz-help">MP4 · MKV · MOV · WEBM</div>
+                <div class="dz-sub">o abre un proyecto <b>.cdp</b> guardado</div>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button class="btn-primary" type="button">Abrir video <span class="arrow">→</span></button>
+              <button class="btn-ghost" type="button">Abrir proyecto <span class="kbd">Ctrl+O</span></button>
+              <div class="note"><span>El primer Ctrl+S<br>pide dónde guardar</span><span class="bar"></span><span>o suelta<br>un .cdp</span></div>
+            </div>
+          </main>
+
+          <aside class="start-side">
+            <section class="recovery" aria-label="Copia sin guardar">
+              <div class="top">
+                <span class="lbl"><span class="dot"></span>Quedó sin guardar</span>
+                <time>hace 12 min</time>
+              </div>
+              <h3>entrevista.cdp</h3>
+              <div class="meta">38 captions · 3 hablantes</div>
+              <p>Recupera para seguir donde lo dejaste, con el playhead en el mismo segundo.</p>
+              <div class="rec-actions">
+                <button class="btn-sm solid" type="button">Recuperar</button>
+                <button class="btn-sm line" type="button">Descartar</button>
+              </div>
+              <div class="hint">Descartar borra la copia de recuperación.</div>
+            </section>
+
+            <section class="recents" aria-label="Proyectos recientes">
+              <div class="rec-head">
+                <h2>Recientes</h2>
+                <span class="count">07</span>
+                <button class="rec-all" type="button" data-more>Ver todos</button>
+              </div>
+              <div class="rec-list">
+                <button class="rec" type="button">
+                  <span class="thumb"><span class="tri"></span><span class="tc">01:12</span></span>
+                  <span><span class="name">taller-sonido.cdp</span><span class="meta2">52 captions · 2 hablantes · hace 2 h</span></span>
+                  <span class="go">›</span>
+                </button>
+                <button class="rec" type="button">
+                  <span class="thumb"><span class="tri"></span><span class="tc">04:50</span></span>
+                  <span><span class="name">documental-cafe.cdp</span><span class="meta2">118 captions · 4 hablantes · ayer</span></span>
+                  <span class="go">›</span>
+                </button>
+                <button class="rec" type="button">
+                  <span class="thumb"><span class="tri"></span><span class="tc">00:12</span></span>
+                  <span><span class="name">spot-museo.cdp</span><span class="meta2">24 captions · 1 hablante · 18 nov</span></span>
+                  <span class="go">›</span>
+                </button>
+                <button class="rec" type="button">
+                  <span class="thumb"><span class="tri"></span><span class="tc">12:05</span></span>
+                  <span><span class="name">podcast-ep04.cdp</span><span class="meta2">203 captions · 3 hablantes · 16 nov</span></span>
+                  <span class="go">›</span>
+                </button>
+                <button class="rec is-extra" type="button" hidden>
+                  <span class="thumb"><span class="tri"></span><span class="tc">02:34</span></span>
+                  <span><span class="name">charla-ia.cdp</span><span class="meta2">76 captions · 2 hablantes · 14 nov</span></span>
+                  <span class="go">›</span>
+                </button>
+                <button class="rec is-extra" type="button" hidden>
+                  <span class="thumb"><span class="tri"></span><span class="tc">00:40</span></span>
+                  <span><span class="name">clase-04.cdp</span><span class="meta2">61 captions · 1 hablante · 11 nov</span></span>
+                  <span class="go">›</span>
+                </button>
+                <button class="rec is-extra" type="button" hidden>
+                  <span class="thumb"><span class="tri"></span><span class="tc">07:31</span></span>
+                  <span><span class="name">cortometraje-sal.cdp</span><span class="meta2">149 captions · 5 hablantes · 08 nov</span></span>
+                  <span class="go">›</span>
+                </button>
+              </div>
+              <div class="rec-foot">La miniatura es el frame del playhead al guardar</div>
+            </section>
+
+            <section class="flow" aria-label="Cómo funciona">
+              <span class="lbl">Flujo</span>
+              <div class="flow-row"><span class="n">01</span><span><span class="t">Suelta el video</span><span class="d">MP4 · MKV · MOV · WEBM</span></span></div>
+              <div class="flow-row"><span class="n">02</span><span><span class="t">Marca y sincroniza</span><span class="d">una línea por caption en el timeline</span></span></div>
+              <div class="flow-row"><span class="n">03</span><span><span class="t">Exporta el .ass</span><span class="d">el preview es el archivo, no una aproximación</span></span></div>
+            </section>
+          </aside>
+        </div>
+
+        <div class="rail">
+          <span class="ticks"></span>
+          <div class="state"><span class="dot"></span>Listo <span>· ningún proyecto abierto</span></div>
+          <div class="mid">Suelta un video en cualquier punto de la ventana</div>
+          <div class="right">MPV · LIBASS · ICED 0.14</div>
+        </div>
+      </div>
+    </div>
+    <div class="screen rod" data-frame="editor" role="group" aria-label="Editor" hidden>
+      <div class="editor">
+        <div class="mb">
+          <div class="mb-brand">
+            <div class="mark">R</div>
+            <div class="mb-name">Rusty Open Dialogue<em>subtítulos .ass</em></div>
+          </div>
+          <nav class="mb-menu" aria-label="Menú principal">
+            <button class="mb-item" type="button">Archivo</button>
+            <button class="mb-item" type="button">Edición</button>
+            <button class="mb-item" type="button">Ver</button>
+            <button class="mb-item" type="button">Exportar</button>
+            <button class="mb-item" type="button">Estilos</button>
+            <button class="mb-item" type="button">Ayuda</button>
+          </nav>
+          <div class="mb-right">
+            <span class="state"><i></i>Guardado 18:04</span>
+            <span class="ver">entrevista.cdp</span>
+          </div>
+        </div>
+
+        <div class="ed-body">
+          <div class="ed-left">
+            <div class="preview-wrap">
+              <svg class="still" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                <defs>
+                  <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#1A1611"/><stop offset=".6" stop-color="#12100D"/><stop offset="1" stop-color="#0A0908"/>
+                  </linearGradient>
+                  <radialGradient id="key" cx=".66" cy=".3" r=".62">
+                    <stop offset="0" stop-color="#4A3818" stop-opacity=".85"/><stop offset="1" stop-color="#0A0908" stop-opacity="0"/>
+                  </radialGradient>
+                </defs>
+                <rect width="1600" height="900" fill="url(#bg)"/>
+                <rect width="1600" height="900" fill="url(#key)"/>
+                <g fill="#0D0B09" opacity=".85">
+                  <rect x="1010" y="0" width="86" height="900"/><rect x="1230" y="0" width="44" height="900"/><rect x="1400" y="0" width="120" height="900"/>
+                </g>
+                <ellipse cx="1186" cy="220" rx="210" ry="210" fill="#D9A441" opacity=".10"/>
+                <ellipse cx="1310" cy="160" rx="74" ry="74" fill="#D9A441" opacity=".08"/>
+                <ellipse cx="1120" cy="330" rx="40" ry="40" fill="#D9A441" opacity=".06"/>
+                <g fill="#070708">
+                  <circle cx="600" cy="404" r="132"/>
+                  <path d="M310 900 C330 690 440 606 600 606 C760 606 870 690 890 900 Z"/>
+                </g>
+                <g fill="#09090B">
+                  <circle cx="1196" cy="462" r="104"/>
+                  <path d="M1016 900 C1031 752 1098 690 1196 690 C1294 690 1361 752 1376 900 Z"/>
+                </g>
+                <path d="M690 316 C742 352 758 416 740 486" fill="none" stroke="#D9A441" stroke-width="9" stroke-linecap="round" opacity=".34"/>
+                <path d="M806 664 C866 704 888 790 896 900" fill="none" stroke="#D9A441" stroke-width="7" stroke-linecap="round" opacity=".18"/>
+                <path d="M1278 390 C1316 424 1328 478 1312 528" fill="none" stroke="#D9A441" stroke-width="7" stroke-linecap="round" opacity=".22"/>
+                <path d="M1296 742 C1344 782 1364 850 1370 900" fill="none" stroke="#D9A441" stroke-width="6" stroke-linecap="round" opacity=".12"/>
+                <rect x="0" y="812" width="1600" height="88" fill="#0B0A08"/>
+                <line x1="0" y1="812" x2="1600" y2="812" stroke="#D9A441" stroke-opacity=".14"/>
+                <g fill="#090909">
+                  <rect x="956" y="650" width="54" height="88" rx="27"/>
+                  <rect x="979" y="736" width="8" height="80"/>
+                  <rect x="942" y="812" width="82" height="6"/>
+                </g>
+                <circle cx="983" cy="654" r="26" fill="#D9A441" opacity=".10"/>
+              </svg>
+              <div class="grain"></div>
+              <div class="vignette"></div>
+              <div class="ov tl"><b>Preview</b><span>00:01:12.480</span></div>
+              <div class="ov tr">1920 × 1080 · 25 fps · capa 06</div>
+              <div class="ov bl">Línea 07 / 42</div>
+              <div class="ov br">Libass · est. Mozilla Head</div>
+              <div class="subtitle js-subtitle">No, eso es lo que cambia todo.</div>
+            </div>
+
+            <div class="transport">
+              <div class="tr-row">
+                <button class="btn-play" type="button" aria-label="Pausar">❚❚</button>
+                <button class="btn-tool" type="button">−5 s</button>
+                <button class="btn-tool" type="button">+5 s</button>
+                <button class="btn-tool" type="button"><span class="cap">Audio</span> Español 5.1 <span class="caret">▾</span></button>
+                <button class="btn-tool" type="button">1.00× <span class="caret">▾</span></button>
+                <div class="tc-big">00:01:12.480 <small>/ 00:12:40.000</small></div>
+              </div>
+              <div class="scrub" role="slider" aria-label="Posición" aria-valuemin="0" aria-valuemax="760" aria-valuenow="72" tabindex="0">
+                <span class="track"></span><span class="buff"></span><span class="done"></span><span class="knob"></span>
+              </div>
+            </div>
+          </div>
+
+          <section class="inspector" aria-label="Inspector">
+            <div class="tabs" role="tablist">
+              <button class="tab" type="button" role="tab" aria-selected="true" data-tab="subs">Subtítulos <span class="n">42</span></button>
+              <button class="tab" type="button" role="tab" aria-selected="false" data-tab="spk">Hablantes <span class="n">3</span></button>
+              <button class="tab" type="button" role="tab" aria-selected="false" data-tab="sty">Estilos <span class="n">4</span></button>
+            </div>
+
+            <div class="panel" data-panel="subs" role="tabpanel">
+              <div class="row-tool">
+                <span class="lbl">Caption <b id="cap-idx">07</b> / 42</span>
+                <span class="grow"></span>
+                <button class="icon-btn" type="button" title="Deshacer" aria-label="Deshacer">↶</button>
+                <button class="icon-btn" type="button" title="Rehacer" aria-label="Rehacer">↷</button>
+                <button class="icon-btn" type="button" title="Duplicar" aria-label="Duplicar">⧉</button>
+                <button class="icon-btn danger" type="button" title="Eliminar" aria-label="Eliminar">×</button>
+              </div>
+
+              <div class="fields">
+                <label class="field is-focus"><span class="k">Entrada</span><input id="cap-in" value="00:01:12.48" spellcheck="false"></label>
+                <label class="field"><span class="k">Salida</span><input id="cap-out" value="00:01:15.96" spellcheck="false"></label>
+                <label class="field"><span class="k">Duración</span><input id="cap-dur" value="3.48 s" spellcheck="false"></label>
+              </div>
+
+              <div class="who-row">
+                <span class="lbl">Hablante</span>
+                <span class="chip" id="who-chip"><span class="dot"></span> Miguel · 1</span>
+                <span class="sep"></span>
+                <span class="hint">1–9 sobre el timeline</span>
+              </div>
+
+              <div class="sub-text">
+                <textarea id="cap-text" spellcheck="false">No, eso es lo que cambia todo.</textarea>
+                <span class="counter"><span id="cap-count">32</span>/180</span>
+              </div>
+
+              <div class="cap-actions">
+                <button class="btn-main" type="button">Aplicar <span class="k">Enter</span></button>
+                <button class="btn-sm line" type="button">Dividir <span class="kbd">C</span></button>
+              </div>
+
+              <div class="list-head">
+                <span class="lbl">Todas las líneas</span>
+                <span class="order">Orden · tiempo</span>
+              </div>
+              <div class="caps" id="caps">
+                <button class="cap" type="button" data-cap="04" data-in="00:00:48.20" data-out="00:00:51.70" data-dur="3.50 s" data-text="¿Y quién decide qué se queda?" data-who="Ana" data-sp="sp2" aria-selected="false">
+                  <span class="idx">04</span>
+                  <span><span class="t"><i class="dot sp2"></i> 00:00:48.20 → 00:00:51.70</span><span class="txt">¿Y quién decide qué se queda?</span></span>
+                </button>
+                <button class="cap" type="button" data-cap="05" data-in="00:00:52.00" data-out="00:00:55.40" data-dur="3.40 s" data-text="El audio manda. Siempre." data-who="Miguel" data-sp="sp1" aria-selected="false">
+                  <span class="idx">05</span>
+                  <span><span class="t"><i class="dot sp1"></i> 00:00:52.00 → 00:00:55.40</span><span class="txt">El audio manda. Siempre.</span></span>
+                </button>
+                <button class="cap" type="button" data-cap="06" data-in="00:01:08.30" data-out="00:01:11.90" data-dur="3.60 s" data-text="Hay cortes que no se ven venir." data-who="Miguel" data-sp="sp1" aria-selected="false">
+                  <span class="idx">06</span>
+                  <span><span class="t"><i class="dot sp1"></i> 00:01:08.30 → 00:01:11.90</span><span class="txt">Hay cortes que no se ven venir.</span></span>
+                </button>
+                <button class="cap" type="button" data-cap="07" data-in="00:01:12.48" data-out="00:01:15.96" data-dur="3.48 s" data-text="No, eso es lo que cambia todo." data-who="Miguel" data-sp="sp1" aria-selected="true">
+                  <span class="idx">07</span>
+                  <span><span class="t"><i class="dot sp1"></i> 00:01:12.48 → 00:01:15.96</span><span class="txt">No, eso es lo que cambia todo.</span></span>
+                </button>
+                <button class="cap" type="button" data-cap="08" data-in="00:01:16.20" data-out="00:01:19.80" data-dur="3.60 s" data-text="Si el corte respira, se nota." data-who="Edgar" data-sp="sp3" aria-selected="false">
+                  <span class="idx">08</span>
+                  <span><span class="t"><i class="dot sp3"></i> 00:01:16.20 → 00:01:19.80</span><span class="txt">Si el corte respira, se nota.</span></span>
+                </button>
+              </div>
+            </div>
+
+            <div class="panel" data-panel="spk" role="tabpanel" hidden>
+              <div class="row-tool">
+                <span class="lbl">Hablantes <b>3</b> de 9</span>
+                <span class="grow"></span>
+                <button class="btn-sm line" type="button">＋ Añadir</button>
+              </div>
+              <div class="sp-list">
+                <div class="sp-row">
+                  <span class="swatch sp1" style="background: var(--sp1)"></span>
+                  <span class="inp">Miguel</span>
+                  <span class="inp key">1</span>
+                  <span class="inp sel">Mozilla Head <span class="caret">▾</span></span>
+                  <button class="btn-sm line" type="button">Asignar</button>
+                  <button class="x" type="button" aria-label="Borrar Miguel">×</button>
+                </div>
+                <div class="sp-row">
+                  <span class="swatch sp2" style="background: var(--sp2)"></span>
+                  <span class="inp">Ana</span>
+                  <span class="inp key">2</span>
+                  <span class="inp sel">Cita <span class="caret">▾</span></span>
+                  <button class="btn-sm line" type="button">Asignar</button>
+                  <button class="x" type="button" aria-label="Borrar Ana">×</button>
+                </div>
+                <div class="sp-row">
+                  <span class="swatch sp3" style="background: var(--sp3)"></span>
+                  <span class="inp">Edgar</span>
+                  <span class="inp key">3</span>
+                  <span class="inp sel">Default <span class="caret">▾</span></span>
+                  <button class="btn-sm line" type="button">Asignar</button>
+                  <button class="x" type="button" aria-label="Borrar Edgar">×</button>
+                </div>
+              </div>
+              <div class="sp-add">
+                <span class="lbl">Sin hablante</span>
+                <button class="btn-sm line" type="button">Quitar a la selección</button>
+              </div>
+              <div class="sp-note"><b>El color es semántico.</b> Identifica el carril en el timeline y el color del .ass; la chrome siempre es mostaza.</div>
+            </div>
+
+            <div class="panel" data-panel="sty" role="tabpanel" hidden>
+              <div class="row-tool">
+                <span class="lbl">Estilos <b>4</b> presets</span>
+                <span class="grow"></span>
+                <button class="icon-btn" type="button" title="Nuevo preset" aria-label="Nuevo preset">＋</button>
+                <button class="btn-sm line" type="button">Borrar</button>
+              </div>
+              <div class="presets">
+                <button class="preset" type="button" aria-pressed="true"><span class="sw"></span>Mozilla Head</button>
+                <button class="preset" type="button" aria-pressed="false">Default</button>
+                <button class="preset" type="button" aria-pressed="false">Título</button>
+                <button class="preset" type="button" aria-pressed="false">Cita</button>
+              </div>
+              <div class="st-grid">
+                <div class="st-f"><span class="k">Fuente</span><span class="inp">Mozilla Head</span></div>
+                <div class="st-f"><span class="k">Tamaño</span><span class="inp">54</span></div>
+                <div class="st-f"><span class="k">Contorno</span><span class="inp">2.4</span></div>
+                <div class="st-f"><span class="k">Sombra</span><span class="inp">0.8</span></div>
+                <div class="st-f"><span class="k">Margen V</span><span class="inp">48</span></div>
+                <div class="st-f"><span class="k">Color</span><span class="inp">#FFFFFF</span></div>
+              </div>
+              <div class="align-wrap">
+                <div class="align">
+                  <button type="button" aria-pressed="false" aria-label="Arriba izquierda">↖</button>
+                  <button type="button" aria-pressed="false" aria-label="Arriba">↑</button>
+                  <button type="button" aria-pressed="false" aria-label="Arriba derecha">↗</button>
+                  <button type="button" aria-pressed="false" aria-label="Izquierda">←</button>
+                  <button type="button" aria-pressed="false" aria-label="Centro">•</button>
+                  <button type="button" aria-pressed="false" aria-label="Derecha">→</button>
+                  <button type="button" aria-pressed="true" aria-label="Abajo izquierda">↙</button>
+                  <button type="button" aria-pressed="false" aria-label="Abajo">↓</button>
+                  <button type="button" aria-pressed="false" aria-label="Abajo derecha">↘</button>
+                </div>
+                <div class="align-meta">Alineación 1–3<br>abajo, como libass.</div>
+              </div>
+              <div class="row-tool">
+                <span class="lbl">Peso</span>
+                <button class="icon-btn" type="button" aria-pressed="true" style="background:var(--mustard);color:var(--ink);border-color:var(--mustard)"><b>B</b></button>
+                <button class="icon-btn" type="button" aria-pressed="false"><i>I</i></button>
+                <span class="grow"></span>
+                <span class="hint" style="font:8.5px var(--mono);color:var(--dim)">Se guarda solo</span>
+              </div>
+              <div class="style-preview">No, eso es lo que cambia todo.</div>
+            </div>
+          </section>
+        </div>
+
+        <div class="timeline">
+          <div class="tl-corner">Timeline <span style="color:var(--dim);margin-left:6px">42</span></div>
+          <div class="tl-tools">
+            <button class="btn-tool on" type="button">Sigue el playhead</button>
+            <button class="btn-tool" type="button" aria-label="Alejar">−</button>
+            <button class="btn-tool" type="button" aria-label="Acercar">+</button>
+            <button class="btn-tool" type="button" aria-label="Encajar">⤢</button>
+          </div>
+          <div class="tl-gutter-head">Carril</div>
+          <div class="ruler">
+            <span class="tick major" style="left:0%"></span><span class="t first" style="left:0%">1:00</span>
+            <span class="tick major" style="left:8.333%"></span><span class="t" style="left:8.333%">1:02</span>
+            <span class="tick major" style="left:16.667%"></span><span class="t" style="left:16.667%">1:04</span>
+            <span class="tick major" style="left:25%"></span><span class="t" style="left:25%">1:06</span>
+            <span class="tick major" style="left:33.333%"></span><span class="t" style="left:33.333%">1:08</span>
+            <span class="tick major" style="left:41.667%"></span><span class="t" style="left:41.667%">1:10</span>
+            <span class="tick major" style="left:50%"></span>
+            <span class="tick major" style="left:58.333%"></span><span class="t" style="left:58.333%">1:14</span>
+            <span class="tick major" style="left:66.667%"></span><span class="t" style="left:66.667%">1:16</span>
+            <span class="tick major" style="left:75%"></span><span class="t" style="left:75%">1:18</span>
+            <span class="tick major" style="left:83.333%"></span><span class="t" style="left:83.333%">1:20</span>
+            <span class="tick major" style="left:91.667%"></span><span class="t" style="left:91.667%">1:22</span>
+            <span class="tick major" style="left:100%"></span><span class="t last" style="left:100%">1:24</span>
+            <span class="playhead"></span>
+            <span class="ph-chip">1:12.48</span>
+          </div>
+          <div class="lanes-labels">
+            <div class="lane-label"><span class="dot" style="color:var(--sp1)"></span>Miguel<span class="key">1</span></div>
+            <div class="lane-label"><span class="dot" style="color:var(--sp2)"></span>Ana<span class="key">2</span></div>
+            <div class="lane-label"><span class="dot" style="color:var(--sp3)"></span>Edgar<span class="key">3</span></div>
+          </div>
+          <div class="lanes">
+            <div class="lane">
+              <button class="clip a" type="button" data-clip="06" style="left:34.583%;width:15%" aria-selected="false"><span style="overflow:hidden;text-overflow:ellipsis;min-width:0">Hay cortes que no se ven venir.</span></button>
+              <button class="clip a" type="button" data-clip="07" style="left:50%;width:16.5%" aria-selected="true"><span style="overflow:hidden;text-overflow:ellipsis;min-width:0">No, eso es lo que cambia todo.</span><span class="tc">3.48</span></button>
+            </div>
+            <div class="lane">
+              <button class="clip b" type="button" data-clip="09" style="left:16.667%;width:14.167%" aria-selected="false"><span style="overflow:hidden;text-overflow:ellipsis;min-width:0">Ahí está la trampa.</span></button>
+              <button class="clip b" type="button" data-clip="11" style="left:84.167%;width:13.333%" aria-selected="false"><span style="overflow:hidden;text-overflow:ellipsis;min-width:0">Otra toma, misma idea.</span></button>
+            </div>
+            <div class="lane">
+              <button class="clip c" type="button" data-clip="10" style="left:1.667%;width:10%" aria-selected="false"><span style="overflow:hidden;text-overflow:ellipsis;min-width:0">Arranque en frío.</span></button>
+              <button class="clip c" type="button" data-clip="08" style="left:67.5%;width:15%" aria-selected="false"><span style="overflow:hidden;text-overflow:ellipsis;min-width:0">Si el corte respira, se nota.</span></button>
+            </div>
+            <span class="playhead"></span>
+          </div>
+        </div>
+
+        <div class="status">
+          <span class="brand"><i></i>RustyOpenDialogue</span>
+          <span>entrevista.cdp</span>
+          <span class="path">C:\Dev\entrevista\entrevista.cdp</span>
+          <span class="right"><b>42 captions</b> · 3 hablantes · 6 capas libass</span>
+          <span class="right" style="margin-left:0"><b>Ventana 24.0 s</b> · zoom 1.00×</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="notes">
+    <style>
+      .notes { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px; display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr); gap: 28px; }
+      @media (max-width: 760px) { .notes { grid-template-columns: 1fr; } }
+      .notes .eyebrow2 { font-size: .66rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted-foreground); margin-bottom: 10px; }
+      .tokens { display: flex; flex-wrap: wrap; gap: 6px; }
+      .token { border: 1px solid var(--border); display: flex; align-items: center; gap: 8px; padding: 5px 8px; font-size: .64rem; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: .06em; }
+      .token i { width: 11px; height: 11px; display: block; border: 1px solid rgba(255,255,255,.18); }
+      .token b { color: var(--foreground); font-weight: 500; font-family: ui-monospace, monospace; letter-spacing: 0; font-size: .68rem; }
+      .errline { margin-top: 12px; border-left: 2px solid #D9A441; background: rgba(217,164,65,.07); padding: 8px 10px; font-size: .78rem; line-height: 1.4; color: var(--foreground); display: flex; gap: 10px; }
+      .errline .tag { font-family: ui-monospace, monospace; font-size: .6rem; letter-spacing: .1em; color: #D9A441; padding-top: 2px; white-space: nowrap; }
+      .rules { display: flex; flex-direction: column; gap: 8px; font-size: .79rem; line-height: 1.45; color: var(--muted-foreground); }
+      .rules div { display: grid; grid-template-columns: 7px 1fr; gap: 9px; }
+      .rules i { width: 6px; height: 6px; background: #D9A441; margin-top: 6px; }
+      .rules b { color: var(--foreground); font-weight: 600; }
+    </style>
+    <div>
+      <div class="eyebrow2">Sistema · tokens</div>
+      <div class="tokens">
+        <span class="token"><i style="background:#0C0C0D"></i>Superficie <b>#0C0C0D</b></span>
+        <span class="token"><i style="background:#141416"></i>Panel <b>#141416</b></span>
+        <span class="token"><i style="background:rgba(255,255,255,.15)"></i>Hairline <b>#FFF 26</b></span>
+        <span class="token"><i style="background:#F3F3F3"></i>Texto <b>#F3F3F3</b></span>
+        <span class="token"><i style="background:#9A9A9A"></i>Secundario <b>#9A9A9A</b></span>
+        <span class="token"><i style="background:#D9A441"></i>Mostaza <b>#D9A441</b></span>
+        <span class="token"><i style="background:#4C8DFF"></i>Hablante 1 <b>#4C8DFF</b></span>
+        <span class="token"><i style="background:#D9553F"></i>Hablante 2 <b>#D9553F</b></span>
+        <span class="token"><i style="background:#3FA57A"></i>Hablante 3 <b>#3FA57A</b></span>
+      </div>
+      <div class="errline"><span class="tag">ERROR</span><span>No se pudo abrir <b>notas.txt</b>. Usa un video MP4, MKV, MOV o WebM.</span></div>
+    </div>
+    <div>
+      <div class="eyebrow2">Reglas</div>
+      <div class="rules">
+        <div><i></i><span><b>Un solo mostaza por pantalla:</b> la acción que decide. Todo lo demás es hairline.</span></div>
+        <div><i></i><span><b>Suizo, no decorado:</b> display pesado y apretado, cuerpo neutro, etiquetas mono en mayúsculas.</span></div>
+        <div><i></i><span><b>Sin sombras ni radios de más de 3 px:</b> la jerarquía la dibuja la línea de 1 px.</span></div>
+        <div><i></i><span><b>El color del hablante no se sustituye:</b> identifica carril y .ass; el mostaza solo tiñe la chrome.</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var stage = document.getElementById('stage');
+  var frames = Array.prototype.slice.call(document.querySelectorAll('.screen'));
+
+  function fit() {
+    var scale = Math.min(1, stage.clientWidth / 1600);
+    frames.forEach(function (frame) { frame.style.transform = 'scale(' + scale + ')'; });
+    stage.style.height = Math.round(900 * scale) + 'px';
+  }
+  window.addEventListener('resize', fit);
+  if (document.fonts && document.fonts.ready) { document.fonts.ready.then(fit); }
+  fit();
+
+  document.querySelectorAll('[data-screen]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var target = btn.getAttribute('data-screen');
+      document.querySelectorAll('[data-screen]').forEach(function (other) {
+        other.setAttribute('aria-pressed', String(other === btn));
+      });
+      frames.forEach(function (frame) {
+        frame.hidden = frame.getAttribute('data-frame') !== target;
+      });
+    });
+  });
+
+  document.querySelectorAll('[data-tab]').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      var target = tab.getAttribute('data-tab');
+      document.querySelectorAll('[data-tab]').forEach(function (other) {
+        other.setAttribute('aria-selected', String(other === tab));
+      });
+      document.querySelectorAll('[data-panel]').forEach(function (panel) {
+        panel.hidden = panel.getAttribute('data-panel') !== target;
+      });
+    });
+  });
+
+  var more = document.querySelector('[data-more]');
+  if (more) {
+    more.addEventListener('click', function () {
+      var extras = Array.prototype.slice.call(document.querySelectorAll('.rec.is-extra'));
+      var open = extras[0].hidden;
+      extras.forEach(function (row) { row.hidden = !open; });
+      more.textContent = open ? 'Ver menos' : 'Ver todos';
+    });
+  }
+
+  var rows = Array.prototype.slice.call(document.querySelectorAll('#caps .cap'));
+  var clips = Array.prototype.slice.call(document.querySelectorAll('.clip'));
+  var idx = document.getElementById('cap-idx');
+  var inEl = document.getElementById('cap-in');
+  var outEl = document.getElementById('cap-out');
+  var durEl = document.getElementById('cap-dur');
+  var textEl = document.getElementById('cap-text');
+  var countEl = document.getElementById('cap-count');
+  var whoEl = document.getElementById('who-chip');
+  var subEl = document.querySelector('.js-subtitle');
+  var names = { sp1: ['Miguel', '1'], sp2: ['Ana', '2'], sp3: ['Edgar', '3'] };
+
+  function selectCap(id) {
+    var row = rows.filter(function (candidate) { return candidate.getAttribute('data-cap') === id; })[0];
+    rows.forEach(function (candidate) {
+      candidate.setAttribute('aria-selected', String(candidate === row));
+    });
+    clips.forEach(function (clip) {
+      clip.setAttribute('aria-selected', String(clip.getAttribute('data-clip') === id));
+    });
+    if (!row) { return; }
+    var clave = row.getAttribute('data-sp');
+    var quien = names[clave] || ['Sin hablante', '—'];
+    idx.textContent = row.getAttribute('data-cap');
+    inEl.value = row.getAttribute('data-in');
+    outEl.value = row.getAttribute('data-out');
+    durEl.value = row.getAttribute('data-dur');
+    textEl.value = row.getAttribute('data-text');
+    countEl.textContent = String(textEl.value.length);
+    subEl.textContent = textEl.value;
+    whoEl.innerHTML = '<span class="dot" style="color:var(--' + clave + ')"></span> ' + quien[0] + ' · ' + quien[1];
+  }
+
+  rows.forEach(function (row) {
+    row.addEventListener('click', function () { selectCap(row.getAttribute('data-cap')); });
+  });
+  clips.forEach(function (clip) {
+    clip.addEventListener('click', function () { selectCap(clip.getAttribute('data-clip')); });
+  });
+  textEl.addEventListener('input', function () {
+    countEl.textContent = String(textEl.value.length);
+    subEl.textContent = textEl.value || ' ';
+  });
+})();
+</script>
+</body>
+</html>

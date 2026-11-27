@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rusty Open Dialogue — dirección corporativa</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; }
+  body { font-family: "Segoe UI", Arial, sans-serif; }
+  .page { max-width: 1600px; margin: 0 auto; padding: 8px 0 24px; }
+  .page-head { display: flex; align-items: center; gap: 14px; padding: 6px 0 14px; }
+  .page-title { font-size: .76rem; letter-spacing: .1em; text-transform: uppercase; color: #9A9A9A; }
+  .page-title b { color: #E8E8E8; font-weight: 600; }
+  .oc-segmented { margin-left: auto; display: flex; border: 1px solid rgba(255,255,255,.18); }
+  .oc-segmented button { font: inherit; font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; padding: 6px 12px; background: none; border: 0; color: #B8B8B8; cursor: pointer; }
+  .oc-segmented button[aria-pressed="true"] { background: #1473E6; color: #fff; }
+  .stage { position: relative; overflow: hidden; width: 100%; }
+  .screen { position: absolute; inset: 0 auto auto 0; width: 1600px; height: 900px; box-sizing: border-box; transform-origin: top left; overflow: hidden; background: #343434; color: #E8E8E8; font: 12px/1.4 "Segoe UI", Arial, sans-serif; border: 1px solid rgba(255,255,255,.14); }
+  .screen[hidden] { display: none; }
+  .screen * { box-sizing: border-box; }
+  :where(.screen button, .screen input, .screen textarea) { font: inherit; color: inherit; }
+  .screen button { background: none; border: 0; cursor: pointer; text-align: left; }
+  .screen button:focus-visible, .screen input:focus-visible, .screen textarea:focus-visible { outline: 1px solid #1473E6; outline-offset: 1px; }
+  .mono { font-family: Consolas, "Cascadia Mono", monospace; font-variant-numeric: tabular-nums; }
+  .muted { color: #B8B8B8; } .dim { color: #8C8C8C; }
+  .accent { color: #1473E6; }
+  .hair { height: 1px; background: rgba(255,255,255,.10); border: 0; margin: 0; }
+  .glyph { width: 16px; height: 16px; display: block; stroke: currentColor; fill: none; stroke-width: 1.4; }
+
+  /* ---------- barra de menú corporativa ---------- */
+  .menu { height: 30px; background: #4A4A4A; display: flex; align-items: center; padding: 0 10px; position: relative; border-bottom: 1px solid rgba(0,0,0,.28); }
+  .menu .appmark { width: 16px; height: 16px; background: #1473E6; color: #fff; display: grid; place-items: center; font-size: 10px; font-weight: 700; margin-right: 14px; }
+  .menu nav { display: flex; gap: 2px; }
+  .menu nav button { font-size: 11.5px; color: #E8E8E8; padding: 4px 7px; }
+  .menu nav button:hover { background: rgba(255,255,255,.10); }
+  .menu .appname { position: absolute; left: 50%; transform: translateX(-50%); font-size: 12px; font-weight: 600; color: #F2F2F2; }
+  .menu .right { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 11px; color: #DCDCDC; }
+  .menu .workspace { border: 1px solid rgba(255,255,255,.16); padding: 3px 10px; display: flex; gap: 12px; align-items: center; }
+  .menu .win { display: flex; gap: 14px; font-size: 11px; color: #DCDCDC; }
+
+  /* ---------- inicio ---------- */
+  .start-body { height: calc(100% - 30px); display: grid; grid-template-columns: 216px minmax(0,1fr); }
+  .side { background: #292929; border-right: 1px solid rgba(255,255,255,.10); padding: 20px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .btn-blue { height: 38px; background: #1473E6; color: #fff; font-size: 12px; font-weight: 600; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+  .btn-blue:hover { background: #2B82E8; }
+  .btn-line { height: 34px; background: #333; border: 1px solid rgba(255,255,255,.18); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; }
+  .btn-line:hover { border-color: rgba(255,255,255,.34); }
+  .side .nav { margin-top: 16px; display: flex; flex-direction: column; gap: 2px; }
+  .side .nav button { display: flex; align-items: center; gap: 10px; padding: 8px 10px; font-size: 12px; color: #D0D0D0; }
+  .side .nav button.on { background: #3A3A3A; color: #fff; border-left: 2px solid #1473E6; }
+  .side .nav .glyph { width: 14px; height: 14px; color: #B8B8B8; }
+  .side .links { margin-top: auto; border-top: 1px solid rgba(255,255,255,.10); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .side .links button { font-size: 11px; color: #B8B8B8; display: flex; gap: 9px; align-items: center; }
+
+  .main { background: #343434; padding: 30px 38px; overflow: hidden; }
+  .head { display: flex; align-items: center; gap: 12px; }
+  .head .idx { width: 24px; height: 24px; background: #1473E6; color: #fff; display: grid; place-items: center; font: 11px Consolas, monospace; }
+  .head h1 { font-size: 18px; font-weight: 600; margin: 0; }
+  .head .rule { flex: 1; height: 1px; background: rgba(255,255,255,.15); }
+  .head .ver { font: 10px Consolas, monospace; color: #9A9A9A; }
+  .recovery { margin-top: 22px; background: rgba(20,115,230,.11); border: 1px solid rgba(20,115,230,.42); padding: 12px 14px; display: flex; align-items: center; gap: 16px; }
+  .recovery .dot { width: 7px; height: 7px; background: #1473E6; flex: 0 0 7px; }
+  .recovery .txt strong { font-size: 12px; font-weight: 600; }
+  .recovery .txt span { display: block; font: 10px Consolas, monospace; color: #B8B8B8; margin-top: 2px; }
+  .recovery .btn-blue { height: 28px; font-size: 11px; padding: 0 12px; }
+  .recovery .btn-line { height: 28px; background: transparent; font-size: 11px; padding: 0 12px; }
+  .recovery .spacer { flex: 1; }
+  .sec-head { margin: 28px 0 14px; display: flex; align-items: baseline; gap: 9px; }
+  .sec-head h2 { font-size: 15px; font-weight: 600; margin: 0; }
+  .sec-head .count { font: 10px Consolas, monospace; color: #9A9A9A; }
+  .sec-head .all { margin-left: auto; font-size: 11px; color: #1473E6; }
+  .grid { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 14px; }
+  .card { background: #3E3E3E; border: 1px solid rgba(255,255,255,.08); min-width: 0; }
+  .card:hover { border-color: rgba(20,115,230,.7); }
+  .card .thumb { height: 92px; background: #1F1F21; display: grid; place-items: center; color: #6F6F72; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .card .thumb svg { width: 22px; height: 22px; }
+  .card .body { display: block; padding: 9px 10px 11px; }
+  .card .body > span { display: block; }
+  .card .name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .path { margin-top: 6px; font: 10px Consolas, monospace; color: #9A9A9A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .meta { margin-top: 4px; font: 10px Consolas, monospace; color: #8C8C8C; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card.drop { border: 1px dashed rgba(255,255,255,.26); background: transparent; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 14px; color: #B8B8B8; }
+  .card.drop svg { width: 24px; height: 24px; color: #9A9A9A; }
+  .card.drop span { font-size: 11px; line-height: 1.4; }
+  .empty-note { margin-top: 26px; font: 10px Consolas, monospace; color: #8C8C8C; }
+  /* ---------- editor ---------- */
+  .ed-main { height: calc(100% - 30px); display: flex; flex-direction: column; }
+  .optbar { height: 34px; flex: 0 0 34px; background: #3A3A3A; border-bottom: 1px solid rgba(0,0,0,.3); display: flex; align-items: center; gap: 6px; padding: 0 10px; }
+  .optbar .sep { width: 1px; height: 18px; background: rgba(255,255,255,.16); margin: 0 3px; }
+  .optbar .tool { width: 26px; height: 24px; display: grid; place-items: center; color: #C8C8C8; border: 1px solid transparent; }
+  .optbar .tool.on { background: #1473E6; color: #fff; border-color: #1473E6; }
+  .optbar label { font-size: 11px; color: #B8B8B8; display: flex; align-items: center; gap: 6px; }
+  .optbar .val { height: 23px; min-width: 46px; padding: 0 7px; background: #242424; border: 1px solid rgba(255,255,255,.16); display: inline-flex; align-items: center; font: 11px Consolas; color: #E8E8E8; }
+  .optbar .tc { margin-left: auto; font: 16px Consolas; color: #F2F2F2; }
+  .optbar .tc small { font-size: 10px; color: #9A9A9A; }
+  .docbar { height: 26px; flex: 0 0 26px; background: #2E2E2E; display: flex; align-items: stretch; border-bottom: 1px solid rgba(255,255,255,.1); }
+  .docbar .tab { background: #3A3A3A; height: 26px; padding: 0 12px; display: flex; align-items: center; gap: 16px; font-size: 11px; border-right: 1px solid rgba(255,255,255,.1); }
+  .ed-body { flex: 1; display: grid; grid-template-columns: 44px minmax(0,1fr) 440px; min-height: 0; }
+  .tools { background: #2A2A2A; border-right: 1px solid rgba(255,255,255,.1); display: flex; flex-direction: column; align-items: center; padding-top: 8px; gap: 2px; }
+  .tools button { width: 32px; height: 32px; display: grid; place-items: center; color: #B8B8B8; border-left: 2px solid transparent; }
+  .tools button.on { background: #343434; color: #1473E6; border-left-color: #1473E6; }
+  .tools .glyph { width: 16px; height: 16px; }
+  .leftcol { display: flex; flex-direction: column; min-width: 0; }
+  .preview { flex: 1; min-height: 0; background: #0E0E0F; position: relative; overflow: hidden; }
+  .preview svg.still { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .ov { position: absolute; font: 9px Consolas; letter-spacing: .08em; color: rgba(232,232,232,.7); text-transform: uppercase; }
+  .ov.tl { top: 12px; left: 14px; } .ov.tr { top: 12px; right: 14px; color: #1473E6; }
+  .ov.bl { bottom: 12px; left: 14px; } .ov.br { bottom: 12px; right: 14px; }
+  .subtitle { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); width: 80%; text-align: center; font: 600 27px "Segoe UI", Arial, sans-serif; color: #fff; -webkit-text-stroke: .7px #000; paint-order: stroke fill; }
+  .transport { height: 56px; flex: 0 0 56px; background: #2C2C2C; border-top: 1px solid rgba(255,255,255,.1); display: flex; flex-direction: column; justify-content: center; gap: 5px; padding: 6px 12px; }
+  .tr-row { display: flex; align-items: center; gap: 6px; }
+  .tr-btn { height: 26px; padding: 0 9px; background: #333; border: 1px solid rgba(255,255,255,.16); font-size: 11px; color: #E8E8E8; }
+  .tr-btn.play { width: 28px; padding: 0; background: #1473E6; color: #fff; border-color: #1473E6; text-align: center; }
+  .tr-btn.wide { min-width: 92px; }
+  .tr-time { margin-left: auto; font: 14px Consolas; color: #F2F2F2; }
+  .tr-time small { font-size: 10px; color: #9A9A9A; }
+  .scrub { height: 10px; position: relative; }
+  .scrub .track { position: absolute; top: 4px; left: 0; right: 0; height: 2px; background: rgba(255,255,255,.18); }
+  .scrub .done { position: absolute; top: 4px; left: 0; height: 2px; width: 52%; background: #1473E6; }
+  .scrub .knob { position: absolute; top: 1px; left: 52%; width: 2px; height: 8px; background: #1473E6; }
+  .inspector { background: #2C2C2C; border-left: 1px solid rgba(255,255,255,.1); display: flex; flex-direction: column; min-height: 0; }
+  .itabs { height: 36px; flex: 0 0 36px; display: flex; border-bottom: 1px solid rgba(255,255,255,.1); }
+  .itab { flex: 1; font-size: 11px; color: #B8B8B8; position: relative; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .itab::after { content: ""; position: absolute; bottom: 0; left: 14%; right: 14%; height: 2px; }
+  .itab[aria-selected="true"] { color: #fff; }
+  .itab[aria-selected="true"]::after { background: #1473E6; }
+  .itab .n { font: 10px Consolas; color: #8C8C8C; }
+  .ipanel { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; overflow: hidden; }
+  .ipanel[hidden] { display: none; }
+  .irow { display: flex; align-items: center; gap: 7px; min-height: 24px; }
+  .lbl { font: 10px Consolas; letter-spacing: .08em; text-transform: uppercase; color: #8C8C8C; }
+  .lbl b { color: #1473E6; font-weight: 600; }
+  .grow { flex: 1; }
+  .ibtn { height: 24px; min-width: 24px; padding: 0 8px; background: #333; border: 1px solid rgba(255,255,255,.16); font-size: 11px; color: #C8C8C8; display: inline-flex; align-items: center; justify-content: center; }
+  .ibtn.primary { background: #1473E6; color: #fff; border-color: #1473E6; }
+  .fields { display: grid; grid-template-columns: 1fr 1fr 84px; gap: 6px; }
+  .field { border: 1px solid rgba(255,255,255,.16); background: #232323; padding: 5px 8px; }
+  .field.focus { border-color: #1473E6; }
+  .field .k { display: block; font: 9px Consolas; color: #8C8C8C; letter-spacing: .08em; text-transform: uppercase; }
+  .field input { width: 100%; border: 0; background: none; outline: none; font: 12px Consolas; color: #E8E8E8; padding: 2px 0 0; }
+  .who { display: flex; align-items: center; gap: 7px; font-size: 11px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border: 1px solid rgba(255,255,255,.18); font: 10px Consolas; }
+  .tarea { height: 86px; border: 1px solid rgba(255,255,255,.16); background: #232323; padding: 8px 10px; position: relative; }
+  .tarea textarea { width: 100%; height: 100%; border: 0; background: none; outline: none; resize: none; color: #E8E8E8; font-size: 13px; }
+  .tarea .count { position: absolute; right: 8px; bottom: 5px; font: 9px Consolas; color: #8C8C8C; }
+  .caps { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+  .cap { display: grid; grid-template-columns: 20px minmax(0,1fr); gap: 7px; padding: 6px 7px; border-left: 2px solid transparent; }
+  .cap:hover { background: #333; }
+  .cap[aria-selected="true"] { background: #35383C; border-left-color: #1473E6; }
+  .cap .n { font: 10px Consolas; color: #8C8C8C; padding-top: 1px; }
+  .cap .time { font: 9.5px Consolas; color: #B8B8B8; }
+  .cap .txt { font-size: 11.5px; color: #E8E8E8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .spkrow { display: grid; grid-template-columns: 6px minmax(0,1fr) 28px 120px 60px 22px; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.07); }
+  .spkrow .sw { height: 22px; width: 6px; }
+  .inp { height: 26px; border: 1px solid rgba(255,255,255,.16); background: #232323; display: flex; align-items: center; padding: 0 7px; font-size: 11px; white-space: nowrap; overflow: hidden; }
+  .presets { display: flex; flex-wrap: wrap; gap: 5px; }
+  .preset { height: 26px; padding: 0 10px; border: 1px solid rgba(255,255,255,.16); font: 10px Consolas; color: #B8B8B8; }
+  .preset[aria-pressed="true"] { background: #1473E6; color: #fff; border-color: #1473E6; }
+  .stgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+  .stgrid .f { display: flex; align-items: center; gap: 8px; }
+  .stgrid .f span { width: 58px; font: 10px Consolas; color: #8C8C8C; text-transform: uppercase; }
+  .stgrid .inp { flex: 1; }
+  .align { display: grid; grid-template-columns: repeat(3,26px); gap: 2px; }
+  .align button { height: 26px; border: 1px solid rgba(255,255,255,.16); color: #B8B8B8; font-size: 11px; }
+  .align button[aria-pressed="true"] { background: #1473E6; color: #fff; border-color: #1473E6; }
+  .styleprev { margin-top: auto; border: 1px solid rgba(255,255,255,.1); background: #1B1B1B; padding: 10px; text-align: center; font-size: 16px; -webkit-text-stroke: .5px #000; paint-order: stroke fill; }
+  .timeline { height: 196px; flex: 0 0 196px; background: #2C2C2C; border-top: 1px solid rgba(255,255,255,.1); display: grid; grid-template-columns: 118px minmax(0,1fr); grid-template-rows: 30px 26px minmax(0,1fr); }
+  .tl-corner { border-right: 1px solid rgba(255,255,255,.1); border-bottom: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; padding: 0 10px; font: 9px Consolas; color: #B8B8B8; text-transform: uppercase; letter-spacing: .1em; }
+  .tl-tools { border-bottom: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; justify-content: flex-end; gap: 5px; padding: 0 8px; }
+  .tl-tools button { height: 22px; padding: 0 8px; border: 1px solid rgba(255,255,255,.16); font-size: 10px; color: #C8C8C8; }
+  .tl-tools button.on { background: #1473E6; color: #fff; border-color: #1473E6; }
+  .gutter { border-right: 1px solid rgba(255,255,255,.1); display: flex; flex-direction: column; }
+  .gutter .h { height: 26px; border-bottom: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; padding: 0 10px; font: 9px Consolas; color: #8C8C8C; text-transform: uppercase; }
+  .lane-label { flex: 1; display: flex; align-items: center; gap: 7px; padding: 0 9px; border-bottom: 1px solid rgba(255,255,255,.06); font: 10px Consolas; color: #B8B8B8; }
+  .lane-label .key { margin-left: auto; border: 1px solid rgba(255,255,255,.16); padding: 0 4px; font-size: 9px; color: #8C8C8C; }
+  .ruler { position: relative; border-bottom: 1px solid rgba(255,255,255,.1); overflow: hidden; }
+  .ruler .tick { position: absolute; bottom: 0; width: 1px; height: 5px; background: rgba(255,255,255,.28); }
+  .ruler .tick.major { height: 8px; background: rgba(255,255,255,.42); }
+  .ruler .t { position: absolute; top: 3px; font: 9px Consolas; color: #B8B8B8; transform: translateX(3px); }
+  .ruler .ph { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: #1473E6; }
+  .ruler .chip { position: absolute; left: 50%; top: 1px; transform: translateX(-50%); background: #1473E6; color: #fff; font: 9px Consolas; padding: 1px 4px; z-index: 2; }
+  .lanes { position: relative; display: flex; flex-direction: column; overflow: hidden; }
+  .lane { position: relative; flex: 1; background: #262626; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .clip { position: absolute; top: 50%; transform: translateY(-50%); height: 24px; border: 1px solid; display: flex; align-items: center; padding: 0 7px; font-size: 10.5px; color: #E8E8E8; white-space: nowrap; overflow: hidden; }
+  .clip.a { background: rgba(76,141,255,.20); border-color: rgba(76,141,255,.70); }
+  .clip.b { background: rgba(217,85,63,.20); border-color: rgba(217,85,63,.70); }
+  .clip.c { background: rgba(63,165,122,.20); border-color: rgba(63,165,122,.70); }
+  .clip[aria-selected="true"] { outline: 1px solid #1473E6; outline-offset: -1px; }
+  .lanes .ph { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: #1473E6; z-index: 2; pointer-events: none; }
+  .status { height: 26px; flex: 0 0 26px; background: #2C2C2C; border-top: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; gap: 16px; padding: 0 12px; font: 10px Consolas; color: #B8B8B8; }
+  .status .brand { color: #E8E8E8; display: flex; gap: 7px; align-items: center; }
+  .status .brand i { width: 6px; height: 6px; background: #1473E6; display: inline-block; }
+  .status .right { margin-left: auto; color: #8C8C8C; }
+  .notes { margin-top: 18px; border-top: 1px solid rgba(255,255,255,.12); padding-top: 14px; display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr); gap: 28px; color: #B8B8B8; font-size: 12px; }
+  .notes .eyebrow2 { font: 10px Consolas, monospace; letter-spacing: .14em; text-transform: uppercase; color: #8C8C8C; margin-bottom: 10px; }
+  .tokens { display: flex; flex-wrap: wrap; gap: 6px; }
+  .token { border: 1px solid rgba(255,255,255,.16); display: flex; align-items: center; gap: 8px; padding: 5px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+  .token i { width: 11px; height: 11px; display: block; border: 1px solid rgba(255,255,255,.18); }
+  .token b { color: #E8E8E8; font: 11px Consolas, monospace; letter-spacing: 0; }
+  .rules { display: flex; flex-direction: column; gap: 8px; line-height: 1.45; }
+  .rules div { display: grid; grid-template-columns: 7px 1fr; gap: 9px; }
+  .rules i { width: 6px; height: 6px; background: #1473E6; margin-top: 6px; }
+  .rules b { color: #E8E8E8; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="page-head">
+    <div class="page-title"><b>Rusty Open Dialogue</b> · dirección corporativa · inicio + editor</div>
+    <div class="oc-segmented" role="group" aria-label="Pantalla">
+      <button type="button" data-screen="inicio" aria-pressed="true">01 Inicio</button>
+      <button type="button" data-screen="editor" aria-pressed="false">02 Editor</button>
+    </div>
+  </div>
+  <div class="stage" id="stage">
+    <div class="screen" data-frame="inicio" role="group" aria-label="Inicio corporativo">
+      <div class="menu">
+        <span class="appmark">R</span>
+        <nav><button>Archivo</button><button>Edición</button><button>Ver</button><button>Exportar</button><button>Estilos</button><button>Ayuda</button></nav>
+        <span class="appname">Rusty Open Dialogue</span>
+        <span class="right"><span class="workspace">Esenciales <span>▾</span></span><span class="win">— □ ×</span></span>
+      </div>
+      <div class="start-body">
+        <aside class="side">
+          <button class="btn-blue" type="button">＋ &nbsp; Nuevo archivo</button>
+          <button class="btn-line" type="button">Abrir...</button>
+          <div class="nav">
+            <button class="on" type="button"><svg class="glyph" viewBox="0 0 16 16"><path d="M2 7.5 8 2l6 5.5V14H2z"/></svg>Inicio</button>
+            <button type="button"><svg class="glyph" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M6.5 6.5a1.5 1.5 0 1 1 2 1.4V10M8 12h.01"/></svg>Atajos</button>
+          </div>
+          <div class="links"><button type="button">↗ &nbsp; Sitio web</button><button type="button">↗ &nbsp; GitHub</button></div>
+        </aside>
+        <main class="main">
+          <div class="head"><span class="idx">01</span><h1>Rusty Open Dialogue</h1><span class="rule"></span><span class="ver">v0.9 · 1600×900</span></div>
+          <div class="recovery">
+            <span class="dot"></span>
+            <span class="txt"><strong>Quedó sin guardar entrevista.cdp. Recupera para seguir donde lo dejaste.</strong><span>38 líneas · 3 hablantes · hace 12 min</span></span>
+            <span class="spacer"></span>
+            <button class="btn-blue" type="button">Recuperar</button>
+            <button class="btn-line" type="button">Descartar</button>
+          </div>
+          <div class="sec-head"><h2>Reciente</h2><span class="count">07</span><button class="all" type="button" data-more>Ver todos</button></div>
+          <div class="grid" id="grid">
+            <button class="card" type="button"><span class="thumb"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14"/><circle cx="8" cy="10" r="2"/><path d="m4 18 6-6 4 4 3-3 3 3"/></svg></span><span class="body"><span class="name">taller-sonido.cdp</span><span class="path">C:\Usuarios\migue\Documentos\</span><span class="meta">52 líneas · 2 hablantes · hace 2 h</span></span></button>
+            <button class="card" type="button"><span class="thumb"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14"/><circle cx="8" cy="10" r="2"/><path d="m4 18 6-6 4 4 3-3 3 3"/></svg></span><span class="body"><span class="name">documental-cafe.cdp</span><span class="path">C:\Usuarios\migue\Videos\</span><span class="meta">118 líneas · 4 hablantes · ayer</span></span></button>
+            <button class="card" type="button"><span class="thumb"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14"/><circle cx="8" cy="10" r="2"/><path d="m4 18 6-6 4 4 3-3 3 3"/></svg></span><span class="body"><span class="name">spot-museo.cdp</span><span class="path">C:\Proyectos\museo\</span><span class="meta">24 líneas · 1 hablante · 18 nov</span></span></button>
+            <button class="card" type="button"><span class="thumb"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14"/><circle cx="8" cy="10" r="2"/><path d="m4 18 6-6 4 4 3-3 3 3"/></svg></span><span class="body"><span class="name">podcast-ep04.cdp</span><span class="path">C:\Usuarios\migue\Descargas\</span><span class="meta">203 líneas · 3 hablantes · 16 nov</span></span></button>
+            <button class="card extra" type="button" hidden><span class="thumb"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14"/><circle cx="8" cy="10" r="2"/><path d="m4 18 6-6 4 4 3-3 3 3"/></svg></span><span class="body"><span class="name">charla-ia.cdp</span><span class="path">C:\Proyectos\charlas\</span><span class="meta">76 líneas · 2 hablantes · 14 nov</span></span></button>
+            <button class="card extra" type="button" hidden><span class="thumb"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14"/><circle cx="8" cy="10" r="2"/><path d="m4 18 6-6 4 4 3-3 3 3"/></svg></span><span class="body"><span class="name">clase-04.cdp</span><span class="path">C:\Usuarios\migue\Clases\</span><span class="meta">61 líneas · 1 hablante · 11 nov</span></span></button>
+            <button class="card extra" type="button" hidden><span class="thumb"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14"/><circle cx="8" cy="10" r="2"/><path d="m4 18 6-6 4 4 3-3 3 3"/></svg></span><span class="body"><span class="name">cortometraje-sal.cdp</span><span class="path">C:\Proyectos\sal\</span><span class="meta">149 líneas · 5 hablantes · 08 nov</span></span></button>
+            <button class="card drop" type="button"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16"/><path d="M12 8v8M8 12h8"/></svg><span>Suelta un video en cualquier lugar para abrirlo</span><span class="mono dim" style="font-size:9px">MP4 · MKV · MOV · WEBM</span></button>
+          </div>
+          <div class="empty-note">Los recientes son rutas .cdp. La miniatura se guarda con el proyecto.</div>
+        </main>
+      </div>
+    </div>
+    <div class="screen" data-frame="editor" role="group" aria-label="Editor corporativo" hidden>
+      <div class="menu">
+        <span class="appmark">R</span>
+        <nav><button>Archivo</button><button>Edición</button><button>Ver</button><button>Exportar</button><button>Estilos</button><button>Ayuda</button></nav>
+        <span class="appname">entrevista.cdp</span>
+        <span class="right"><span class="workspace">Esenciales <span>▾</span></span><span class="win">— □ ×</span></span>
+      </div>
+      <div class="ed-main">
+        <div class="optbar">
+          <button class="tool on" type="button" title="Selección"><svg class="glyph" viewBox="0 0 16 16"><path d="m3 2 9 6-4 1-2 4z"/></svg></button>
+          <button class="tool" type="button" title="Mano"><svg class="glyph" viewBox="0 0 16 16"><path d="M5 8V4a1 1 0 0 1 2 0v3-4a1 1 0 0 1 2 0v4-3a1 1 0 0 1 2 0v4-2a1 1 0 0 1 2 0v5a4 4 0 0 1-4 4H8a4 4 0 0 1-3-1.4L3 10a1 1 0 0 1 1.6-1.2z"/></svg></button>
+          <button class="tool" type="button" title="Zoom"><svg class="glyph" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3 3"/></svg></button>
+          <button class="tool" type="button" title="Cortar"><svg class="glyph" viewBox="0 0 16 16"><circle cx="4" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><path d="M5.5 10.5 12 3M10.5 10.5 4 3"/></svg></button>
+          <span class="sep"></span>
+          <label>Calar <span class="val">0 px</span></label>
+          <label><input type="checkbox" checked> Suavizado</label>
+          <label>Estilo <span class="val">Mozilla Head</span></label>
+          <label>Ancho <span class="val">1</span></label>
+          <span class="tc">00:01:12.480 <small>/ 00:12:40.000</small></span>
+        </div>
+        <div class="docbar"><div class="tab">entrevista.cdp @ 78,7% <span>×</span></div></div>
+        <div class="ed-body">
+          <div class="tools">
+            <button class="on" type="button" title="Seleccionar"><svg class="glyph" viewBox="0 0 16 16"><path d="m3 2 9 6-4 1-2 4z"/></svg></button>
+            <button type="button" title="Mano"><svg class="glyph" viewBox="0 0 16 16"><rect x="3" y="3" width="10" height="10"/></svg></button>
+            <button type="button" title="Zoom"><svg class="glyph" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4"/><path d="m10 10 3 3"/></svg></button>
+            <button type="button" title="Texto"><svg class="glyph" viewBox="0 0 16 16"><path d="M3 4h10M8 4v8M5 12h6"/></svg></button>
+            <button type="button" title="Capturar"><svg class="glyph" viewBox="0 0 16 16"><rect x="2" y="4" width="12" height="9"/><circle cx="8" cy="8.5" r="2.5"/></svg></button>
+          </div>
+          <div class="leftcol">
+            <div class="preview">
+              <svg class="still" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+                <rect width="1600" height="900" fill="#141210"/>
+                <g fill="#191714"><rect x="1010" width="86" height="900"/><rect x="1230" width="44" height="900"/><rect x="1400" width="120" height="900"/></g>
+                <circle cx="1186" cy="220" r="150" fill="#2B2519"/>
+                <circle cx="1310" cy="160" r="60" fill="#302819"/>
+                <circle cx="600" cy="404" r="132" fill="#08080A"/>
+                <path d="M310 900 C330 690 440 606 600 606 C760 606 870 690 890 900 Z" fill="#08080A"/>
+                <circle cx="1196" cy="462" r="104" fill="#0A0A0C"/>
+                <path d="M1016 900 C1031 752 1098 690 1196 690 C1294 690 1361 752 1376 900 Z" fill="#0A0A0C"/>
+              </svg>
+              <span class="ov tl">PREVIEW · 1920 × 1080 · 25 FPS</span>
+              <span class="ov tr">LIBASS · 6 CAPAS</span>
+              <span class="ov bl">MIGUEL · 1</span>
+              <span class="ov br">PREVIEW = .ASS EXPORTADO</span>
+              <div class="subtitle js-subtitle">No, eso es lo que cambia todo.</div>
+            </div>
+            <div class="transport">
+              <div class="tr-row">
+                <button class="tr-btn play" type="button">›</button>
+                <button class="tr-btn" type="button">−5 s</button>
+                <button class="tr-btn" type="button">+5 s</button>
+                <button class="tr-btn wide" type="button">Español ▾</button>
+                <button class="tr-btn" type="button">1.00× ▾</button>
+                <span class="tr-time">00:01:12.480 <small>/ 00:12:40.000</small></span>
+              </div>
+              <div class="scrub"><span class="track"></span><span class="done"></span><span class="knob"></span></div>
+            </div>
+          </div>
+          <div class="inspector">
+            <div class="itabs" role="tablist">
+              <button class="itab" type="button" role="tab" aria-selected="true" data-tab="subs">Subtítulos <span class="n">42</span></button>
+              <button class="itab" type="button" role="tab" aria-selected="false" data-tab="spk">Hablantes <span class="n">3</span></button>
+              <button class="itab" type="button" role="tab" aria-selected="false" data-tab="sty">Estilos <span class="n">4</span></button>
+            </div>
+            <div class="ipanel" data-panel="subs" role="tabpanel">
+              <div class="irow"><span class="lbl">Caption <b>07</b> / 42</span><span class="grow"></span>
+                <button class="ibtn" type="button" title="Deshacer">↶</button><button class="ibtn" type="button" title="Rehacer">↷</button><button class="ibtn" type="button" title="Duplicar">⧉</button><button class="ibtn" type="button" title="Eliminar">×</button></div>
+              <div class="fields">
+                <label class="field focus"><span class="k">Entrada</span><input id="f-in" value="00:01:12.48"></label>
+                <label class="field"><span class="k">Salida</span><input id="f-out" value="00:01:15.96"></label>
+                <label class="field"><span class="k">Duración</span><input id="f-dur" value="3.48 s"></label>
+              </div>
+              <div class="who"><span class="lbl">Hablante</span><span class="chip"><i class="dot" style="background:#4C8DFF"></i>Miguel · 1</span><span class="grow"></span><span class="lbl">1–3 sobre el timeline</span></div>
+              <div class="tarea"><textarea id="f-text">No, eso es lo que cambia todo.</textarea><span class="count">32/180</span></div>
+              <div class="irow"><button class="ibtn primary" type="button">Aplicar <span style="opacity:.7">Enter</span></button><button class="ibtn" type="button">Dividir <span style="opacity:.7">C</span></button></div>
+              <div class="irow"><span class="lbl">Todas las líneas</span><span class="grow"></span><span class="lbl">Orden · tiempo</span></div>
+              <div class="caps">
+                <button class="cap" type="button" data-cap="04" data-in="00:00:48.20" data-out="00:00:51.70" data-dur="3.50 s" data-text="¿Y quién decide qué se queda?"><span class="n">04</span><span><span class="time"><i class="dot" style="background:#D9553F"></i> 00:00:48.20 → 00:00:51.70</span><span class="txt">¿Y quién decide qué se queda?</span></span></button>
+                <button class="cap" type="button" data-cap="05" data-in="00:00:52.00" data-out="00:00:55.40" data-dur="3.40 s" data-text="El audio manda. Siempre."><span class="n">05</span><span><span class="time"><i class="dot" style="background:#4C8DFF"></i> 00:00:52.00 → 00:00:55.40</span><span class="txt">El audio manda. Siempre.</span></span></button>
+                <button class="cap" type="button" data-cap="06" data-in="00:01:08.30" data-out="00:01:11.90" data-dur="3.60 s" data-text="Hay cortes que no se ven venir."><span class="n">06</span><span><span class="time"><i class="dot" style="background:#4C8DFF"></i> 00:01:08.30 → 00:01:11.90</span><span class="txt">Hay cortes que no se ven venir.</span></span></button>
+                <button class="cap" type="button" data-cap="07" data-in="00:01:12.48" data-out="00:01:15.96" data-dur="3.48 s" data-text="No, eso es lo que cambia todo." aria-selected="true"><span class="n">07</span><span><span class="time"><i class="dot" style="background:#4C8DFF"></i> 00:01:12.48 → 00:01:15.96</span><span class="txt">No, eso es lo que cambia todo.</span></span></button>
+                <button class="cap" type="button" data-cap="08" data-in="00:01:16.20" data-out="00:01:19.80" data-dur="3.60 s" data-text="Si el corte respira, se nota."><span class="n">08</span><span><span class="time"><i class="dot" style="background:#3FA57A"></i> 00:01:16.20 → 00:01:19.80</span><span class="txt">Si el corte respira, se nota.</span></span></button>
+              </div>
+            </div>
+            <div class="ipanel" data-panel="spk" role="tabpanel" hidden>
+              <div class="irow"><span class="lbl">Hablantes <b>3</b> de 9</span><span class="grow"></span><button class="ibtn" type="button">＋ Añadir</button></div>
+              <div>
+                <div class="spkrow"><i class="sw" style="background:#4C8DFF"></i><span class="inp">Miguel</span><span class="inp" style="justify-content:center">1</span><span class="inp">Mozilla Head ▾</span><button class="ibtn" type="button">Asignar</button><button class="ibtn" type="button">×</button></div>
+                <div class="spkrow"><i class="sw" style="background:#D9553F"></i><span class="inp">Ana</span><span class="inp" style="justify-content:center">2</span><span class="inp">Cita ▾</span><button class="ibtn" type="button">Asignar</button><button class="ibtn" type="button">×</button></div>
+                <div class="spkrow"><i class="sw" style="background:#3FA57A"></i><span class="inp">Edgar</span><span class="inp" style="justify-content:center">3</span><span class="inp">Default ▾</span><button class="ibtn" type="button">Asignar</button><button class="ibtn" type="button">×</button></div>
+              </div>
+              <div class="irow"><span class="lbl">Sin hablante</span><span class="grow"></span><button class="ibtn" type="button">Quitar a la selección</button></div>
+              <hr class="hair">
+              <p class="lbl" style="line-height:1.6;text-transform:none;letter-spacing:0"><b style="color:#E8E8E8">El color es semántico.</b> Identifica el carril del timeline y el color del .ass; la chrome siempre es azul.</p>
+            </div>
+            <div class="ipanel" data-panel="sty" role="tabpanel" hidden>
+              <div class="irow"><span class="lbl">Estilos <b>4</b> presets</span><span class="grow"></span><button class="ibtn" type="button">＋</button><button class="ibtn" type="button">Borrar</button></div>
+              <div class="presets"><button class="preset" type="button" aria-pressed="true">Mozilla Head</button><button class="preset" type="button">Default</button><button class="preset" type="button">Título</button><button class="preset" type="button">Cita</button></div>
+              <div class="stgrid">
+                <div class="f"><span>Fuente</span><span class="inp">Mozilla Head</span></div><div class="f"><span>Tamaño</span><span class="inp">54</span></div>
+                <div class="f"><span>Contorno</span><span class="inp">2.4</span></div><div class="f"><span>Sombra</span><span class="inp">0.8</span></div>
+                <div class="f"><span>Margen V</span><span class="inp">48</span></div><div class="f"><span>Color</span><span class="inp">#FFFFFF</span></div>
+              </div>
+              <div class="irow"><span class="lbl">Alineación</span><div class="align">
+                <button type="button">↖</button><button type="button">↑</button><button type="button">↗</button>
+                <button type="button">←</button><button type="button">•</button><button type="button">→</button>
+                <button type="button" aria-pressed="true">↙</button><button type="button">↓</button><button type="button">↘</button>
+              </div><span class="lbl" style="line-height:1.6">Alineación 1–3<br>abajo, como libass.</span></div>
+              <div class="irow"><span class="lbl">Peso</span><button class="ibtn" type="button" aria-pressed="true" style="background:#1473E6;color:#fff;border-color:#1473E6"><b>B</b></button><button class="ibtn" type="button"><i>I</i></button></div>
+              <div class="styleprev">No, eso es lo que cambia todo.</div>
+            </div>
+          </div>
+        </div>
+        <div class="timeline">
+          <div class="tl-corner">Timeline <span class="dim" style="margin-left:6px">42</span></div>
+          <div class="tl-tools"><button class="on" type="button">Sigue el playhead</button><button type="button">−</button><button type="button">+</button><button type="button">⤢</button></div>
+          <div class="gutter">
+            <div class="h">Carril</div>
+            <div class="lane-label"><i class="dot" style="background:#4C8DFF"></i>Miguel<span class="key">1</span></div>
+            <div class="lane-label"><i class="dot" style="background:#D9553F"></i>Ana<span class="key">2</span></div>
+            <div class="lane-label"><i class="dot" style="background:#3FA57A"></i>Edgar<span class="key">3</span></div>
+          </div>
+          <div class="ruler">
+            <span class="tick major" style="left:0%"></span><span class="t" style="left:0%">1:00</span>
+            <span class="tick" style="left:4.167%"></span><span class="tick major" style="left:8.333%"></span><span class="t" style="left:8.333%">1:02</span>
+            <span class="tick" style="left:12.5%"></span><span class="tick major" style="left:16.667%"></span><span class="t" style="left:16.667%">1:04</span>
+            <span class="tick" style="left:20.833%"></span><span class="tick major" style="left:25%"></span><span class="t" style="left:25%">1:06</span>
+            <span class="tick" style="left:29.167%"></span><span class="tick major" style="left:33.333%"></span><span class="t" style="left:33.333%">1:08</span>
+            <span class="tick" style="left:37.5%"></span><span class="tick major" style="left:41.667%"></span><span class="t" style="left:41.667%">1:10</span>
+            <span class="tick major" style="left:50%"></span><span class="tick" style="left:54.167%"></span>
+            <span class="tick major" style="left:58.333%"></span><span class="t" style="left:58.333%">1:14</span>
+            <span class="tick major" style="left:66.667%"></span><span class="t" style="left:66.667%">1:16</span>
+            <span class="tick major" style="left:75%"></span><span class="t" style="left:75%">1:18</span>
+            <span class="tick major" style="left:83.333%"></span><span class="t" style="left:83.333%">1:20</span>
+            <span class="tick major" style="left:91.667%"></span><span class="t" style="left:91.667%">1:22</span>
+            <span class="tick major" style="left:100%"></span>
+            <span class="ph"></span><span class="chip">1:12.48</span>
+          </div>
+          <div class="lanes">
+            <div class="lane"><button class="clip a" type="button" data-clip="06" style="left:34.583%;width:15%" aria-selected="false">Hay cortes que no se ven venir.</button><button class="clip a" type="button" data-clip="07" style="left:50%;width:16.5%" aria-selected="true">No, eso es lo que cambia todo.</button></div>
+            <div class="lane"><button class="clip b" type="button" data-clip="09" style="left:16.667%;width:14.167%" aria-selected="false">Ahí está la trampa.</button><button class="clip b" type="button" data-clip="11" style="left:84.167%;width:13.333%" aria-selected="false">Otra toma, misma idea.</button></div>
+            <div class="lane"><button class="clip c" type="button" data-clip="10" style="left:1.667%;width:10%" aria-selected="false">Arranque en frío.</button><button class="clip c" type="button" data-clip="08" style="left:67.5%;width:15%" aria-selected="false">Si el corte respira, se nota.</button></div>
+            <span class="ph"></span>
+          </div>
+        </div>
+        <div class="status"><span class="brand"><i></i>RustyOpenDialogue</span><span>entrevista.cdp</span><span class="dim">C:\Dev\entrevista\entrevista.cdp</span><span class="right">42 captions · 3 hablantes · 6 capas libass · Ventana 24.0 s · zoom 1.00×</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="notes">
+    <div>
+      <div class="eyebrow2">Sistema · tokens</div>
+      <div class="tokens">
+        <span class="token"><i style="background:#4A4A4A"></i>Barra <b>#4A4A4A</b></span>
+        <span class="token"><i style="background:#343434"></i>Lienzo <b>#343434</b></span>
+        <span class="token"><i style="background:#2C2C2C"></i>Panel <b>#2C2C2C</b></span>
+        <span class="token"><i style="background:#0E0E0F"></i>Preview <b>#0E0E0F</b></span>
+        <span class="token"><i style="background:#E8E8E8"></i>Texto <b>#E8E8E8</b></span>
+        <span class="token"><i style="background:#1473E6"></i>Acción <b>#1473E6</b></span>
+        <span class="token"><i style="background:#4C8DFF"></i>Hablante 1 <b>#4C8DFF</b></span>
+        <span class="token"><i style="background:#D9553F"></i>Hablante 2 <b>#D9553F</b></span>
+        <span class="token"><i style="background:#3FA57A"></i>Hablante 3 <b>#3FA57A</b></span>
+      </div>
+    </div>
+    <div>
+      <div class="eyebrow2">Reglas</div>
+      <div class="rules">
+        <div><i></i><span><b>Densidad antes que dramatismo:</b> tipografía de 11–12 px, paneles de 440 px y una sola fila de controles por tarea.</span></div>
+        <div><i></i><span><b>Azul de chrome, color semántico de hablante:</b> el azul solo marca CTA, foco y selección; carriles y .ass conservan su color.</span></div>
+        <div><i></i><span><b>Sin sombras ni gradientes:</b> jerarquía por tono de gris y hairlines de 1 px; radios de 2–3 px.</span></div>
+        <div><i></i><span><b>La estructura explica:</b> el chip 01 y la regla abren el flujo; no son adorno, ordenan abrir → sincronizar → exportar.</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var stage = document.getElementById('stage');
+  var frames = Array.prototype.slice.call(document.querySelectorAll('.screen'));
+  function fit() {
+    var scale = Math.min(1, stage.clientWidth / 1600);
+    frames.forEach(function (frame) { frame.style.transform = 'scale(' + scale + ')'; });
+    stage.style.height = Math.round(900 * scale) + 'px';
+  }
+  window.addEventListener('resize', fit);
+  if (document.fonts && document.fonts.ready) { document.fonts.ready.then(fit); }
+  fit();
+  document.querySelectorAll('[data-screen]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('[data-screen]').forEach(function (o) { o.setAttribute('aria-pressed', String(o === btn)); });
+      frames.forEach(function (f) { f.hidden = f.getAttribute('data-frame') !== btn.getAttribute('data-screen'); });
+    });
+  });
+  var more = document.querySelector('[data-more]');
+  if (more) {
+    more.addEventListener('click', function () {
+      var extras = Array.prototype.slice.call(document.querySelectorAll('.card.extra'));
+      var abrir = extras[0].hidden;
+      extras.forEach(function (c) { c.hidden = !abrir; });
+      more.textContent = abrir ? 'Ver menos' : 'Ver todos';
+    });
+  }
+  document.querySelectorAll('[data-tab]').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      document.querySelectorAll('[data-tab]').forEach(function (o) { o.setAttribute('aria-selected', String(o === tab)); });
+      document.querySelectorAll('[data-panel]').forEach(function (p) { p.hidden = p.getAttribute('data-panel') !== tab.getAttribute('data-tab'); });
+    });
+  });
+  var rows = Array.prototype.slice.call(document.querySelectorAll('[data-cap]'));
+  var clips = Array.prototype.slice.call(document.querySelectorAll('[data-clip]'));
+  var sub = document.querySelector('.js-subtitle');
+  var inEl = document.getElementById('f-in');
+  var outEl = document.getElementById('f-out');
+  var durEl = document.getElementById('f-dur');
+  var textEl = document.getElementById('f-text');
+  function selectCap(id) {
+    var row = rows.filter(function (r) { return r.getAttribute('data-cap') === id; })[0];
+    if (!row) return;
+    rows.forEach(function (r) { r.setAttribute('aria-selected', String(r === row)); });
+    clips.forEach(function (c) { c.setAttribute('aria-selected', String(c.getAttribute('data-clip') === id)); });
+    inEl.value = row.getAttribute('data-in');
+    outEl.value = row.getAttribute('data-out');
+    durEl.value = row.getAttribute('data-dur');
+    textEl.value = row.getAttribute('data-text');
+    sub.textContent = textEl.value;
+  }
+  rows.forEach(function (r) { r.addEventListener('click', function () { selectCap(r.getAttribute('data-cap')); }); });
+  clips.forEach(function (c) { c.addEventListener('click', function () { selectCap(c.getAttribute('data-clip')); }); });
+  textEl.addEventListener('input', function () { sub.textContent = textEl.value || ' '; });
+})();
+</script>
+</body>
+</html>

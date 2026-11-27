@@ -1,153 +1,122 @@
 # OpenDialogue
 
-![Tauri v2](https://img.shields.io/badge/Tauri-v2-24C8DB?logo=tauri)
-![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react)
-![Rust](https://img.shields.io/badge/Rust-stable-CE422B?logo=rust)
+![Rust](https://img.shields.io/badge/Rust-1.88%2B-CE422B?logo=rust)
+![egui](https://img.shields.io/badge/egui-0.33-2D8C6A)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-lightgrey)
 ![License MIT](https://img.shields.io/badge/License-MIT-green)
 
-Visual multi-speaker subtitle editor and color-coding companion for [auto-subs](https://github.com/tmoroney/auto-subs). Import its SRT+TXT, assign each speaker their color on a per-speaker lane timeline, and export clean SRT, styled ASS, or JSON.
+Editor visual de subtítulos multihablante y compañero de
+[auto-subs](https://github.com/tmoroney/auto-subs). Importa su SRT + TXT, asigna
+a cada hablante un color en su carril de la timeline y exporta SRT limpio, ASS
+estilizado o JSON.
 
-> **⚠️ Transparency — heavy AI assistance:** this project was built with **heavy LLM assistance** for architecture, Rust/React implementation and debugging (canvas, waveform, subtitle formats). The author (1st-semester Systems Engineering student) understands the high-level flow, but **large parts of the codebase are not yet fully understood line-by-line by the author**. It is published honestly as a learning project and as a reference that might be useful to others. **Current plan:** deeply study each part (React canvas loop, Tauri IPC, timeline, state handling) and **progressively rewrite/refactor all code with full personal understanding**. Issues and PRs pointing out confusing or improvable code are welcome — they help that learning.
+**Esta rama es la rewrite 100 % Rust.** No hay WebView, React ni Tauri: la
+interfaz es egui/eframe nativa, el video se decodifica con libmpv y los
+subtítulos se rasterizan con libass. El nombre `RustyDialogue` se usó como
+distintivo del experimento; el nombre oficial del producto sigue siendo
+**OpenDialogue**.
 
-## Screenshots
+## Características
 
-![OpenDialogue — per-speaker timeline and color coding](design/screenshot.png)
-
-> See the approved design study in [`design/mockup.html`](design/mockup.html) (tokens, typography, per-speaker timeline).
-
-## Features
-
-- **Per-speaker timeline** - one lane per speaker, HTML clips with real subtitle text, overlapping clips stacked with natural z-index.
-- **Waveform** - drawn per pixel in real time from the RMS analysis (no size cap, accurate at any zoom), time grid and coral playhead with halo.
-- **Multi-selection** - click, Ctrl+click (toggle), Shift+click (time-range), marquee on the track area, virtualized list selection.
-- **Editing** - block body-drag with bidirectional snap and edge auto-pan, edge trim, split at playhead, undo snapshots.
-- **Playback speed** - 0.5x to 2x next to the time input, `+`/`-` shortcuts, persisted in `ajustes.json` and re-applied on every new file.
-- **Find and replace** - `Ctrl+F` or the header icon, `<mark>` highlighting in the list, `Aa` for case-sensitive, Enter/Shift+Enter to walk matches, replace one or all in a single undo step.
-- **ASS export** - styled `.ass` with per-speaker presets (font, size, colors, outline, margins, alignment), system font picker, round-trip import.
-- **auto-subs import** - pick the SRT, the twin TXT is found automatically (same folder/name). Speakers matched by text, accent/punctuation tolerant.
-- **Audio islands** - new fragments snap to the optimal dialogue length (1.5-5s) from RMS vs local background noise.
-- **Persistence** - `.json` projects with playhead, volume cache, atomic writes. Undo history is per document, and unsaved work is warned about on close.
+- **Timeline por hablante** con clips reales, solapes apilados, selección
+  múltiple, arrastre con snap y recorte de bordes.
+- **Waveform** a partir del RMS del audio del video, con zoom y rejilla de tiempo.
+- **Reproductor** con libmpv: play/pausa, salto, velocidad 0.5×–2× y bucle.
+- **Edición** de texto en la barra bajo el video, división en el playhead,
+  deshacer/rehacer y búsqueda/filtro en la lista.
+- **Estilos ASS** por preset con preview real: lo que ves es el mismo `.ass` que
+  se exporta. Fuente, tamaño, color, contorno, sombra, negrita y cursiva.
+- **Colores de identidad** del hablante como tinte de UI (barra y chip); nunca
+  se mezclan con el render ni con el export.
+- **Interfaz en inglés y español**, con atajos configurables y diálogo de
+  preferencias.
+- **Persistencia** del proyecto `.cdp`, del layout y de los atajos.
 
 ## Stack
 
-| Layer | Technology |
-|-------|------------|
-| Desktop | Tauri v2 (Rust + WebView) |
-| Frontend | React 19, TypeScript, Vite 7, Vitest 4 |
-| Styles | CSS design tokens (`:root`), local fonts `Space Grotesk` / `JetBrains Mono` / `Inter` |
-| Backend | Rust, `symphonia` (volume analysis), `tokio` (async commands) |
-| Audio | The video's own audio track (single-track files; pre-edit to dialogue only) |
-| Fonts (ASS picker) | GDI+ via PowerShell on Windows, `fc-list` (fontconfig) on Linux |
+| Capa | Tecnología |
+|---|---|
+| UI | egui 0.33 + eframe 0.33 (wgpu) |
+| Video | libmpv vía `libmpv2`, frame compuesto en GPU |
+| Subtítulos | libass por FFI propio (`rod-subs`) |
+| Audio | `symphonia` para el análisis de waveform |
+| Modelo | `rod-core` (proyecto, hablantes, captions, ASS, recovery) |
 
-> Former AI era (until 2026-09-20): local Whisper (`whisper-rs`/Vulkan) + `polyvoice` diarization, later a `pyannote` external-Python option. Cut on purpose: transcription belongs to auto-subs; this app is its visual companion.
+Los crates del workspace son `rod-core`, `rod-subs`, `rod-player` y `rod-app`.
+Lo general (decodificar, sincronizar, rasterizar ASS) vive en crates reutilizables;
+la semántica propia del editor (solapes, islas de audio, modelo de edición) se
+implementa aquí.
 
-## Prerequisites
+## Requisitos
 
 ### Windows
 
-- **Rust** toolchain (`rustup`)
-- **Node.js** 20+ and npm
-- **Visual Studio Build Tools** with C++ workload (MSVC)
+- Rust 1.88+ con toolchain MSVC y *Visual Studio Build Tools* (carga de C++).
+- libass de vcpkg: `vcpkg install libass:x64-windows` y añadir
+  `%VCPKG_ROOT%\installed\x64-windows\bin` al `PATH`.
+- `third_party/mpv/mpv.lib` y `mpv.def` están versionados. La DLL
+  (`libmpv-2.dll`, ~116 MB) **no** está en el repo: el CI la descarga del
+  release de [shinchiro/mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake/releases).
+  Para trabajar en local, coloca `libmpv-2.dll` en `third_party/mpv/`
+  (paquete `mpv-dev-x86_64-*.7z` del mismo release).
 
-### Linux (verified on Fedora 44 KDE)
-
-- **Rust** toolchain (`rustup`), **Node.js** 20+ and npm
-- WebView build deps (Fedora): `webkit2gtk4.1-devel gtk3-devel libsoup3-devel librsvg2-devel libayatana-appindicator-gtk3-devel`
-- Equivalents on Debian/Ubuntu: `libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev`
-
-## Installation
-
-```bash
-npm install
-```
-
-### Dev
+### Linux (probado en CI Ubuntu)
 
 ```bash
-npm run tauri dev
-# or frontend only (no Tauri IPC):
-npm run dev
+sudo apt-get install libxkbcommon-dev libwayland-dev libx11-dev libxcb1-dev \
+  libxrandr-dev libxi-dev libxcursor-dev libmpv-dev ffmpeg
 ```
 
-Frontend at `http://127.0.0.1:1420`, Rust backend with hot-reload.
-
-### Release build
+## Compilación y uso
 
 ```bash
-# Windows (NSIS installer):
-npm run tauri:build:release
-# Linux (config targets NSIS, override per build):
-npx tauri build --bundles deb
-npx tauri build --bundles appimage
+cargo build --release
+cargo run -p rod-app
 ```
 
-> The AppImage bundles the full GStreamer stack (`bundleMediaFramework: true`) — without it the
-> AppImage ships GStreamer's core with no plugins, video decoding fails and the web process
-> crashes on opening any file. The `.deb` uses system libraries and is unaffected.
-
-## Usage
-
-1. Transcribe in [auto-subs](https://github.com/tmoroney/auto-subs) (any model), export SRT (+TXT to keep speakers).
-2. Open video in OpenDialogue (drag & drop or File menu), wait for volume analysis (waveform).
-3. File → Import auto-subs (SRT+TXT): pick the SRT, the twin TXT loads automatically.
-4. Edit on timeline: block-move, trim edges, assign speaker (`1-9`), split, delete, recolor.
-5. Save project (`.json`) and export `.srt`, styled `.ass`, or combined JSON.
-
-Search and replace across the subtitles with `Ctrl+F` (or the header icon). Playback speed sits next to the time input (`+`/`-`). Full shortcuts: press `?` inside the app. UI in English and Spanish (toggle in status bar).
-
-## File Structure
-
-```
-src/
-  App.tsx / App.css          # layout, canvas loop, keybindings, IPC
-  types.ts                   # Caption, Hablante, Proyecto
-  hooks/
-    useAssEstilos.ts          # .ass presets + export
-    useWaveform.ts           # volume analysis (IPC) + cache
-    useProyecto.ts           # save/load/new, file imports, dirty flags
-    useHablantes.ts          # speaker CRUD
-    useCaptions.ts           # mutations, selection, drag commits, history
-    useTransporte.ts         # playhead, play/pause, speed, caption jumps
-  components/
-    CaptionList.tsx          # virtualized list
-    SpeakersPanel.tsx        # speakers accordion
-    StylesPanel.tsx          # style presets accordion (auto-save)
-    AssExportModal.tsx       # .ass export: presets, per-speaker mapping, font picker
-  utils/
-    srt.ts                   # parseSrt / buildSrt
-    ass.ts                   # buildAss / parseAss (BGR colors, centisecond times)
-    assPresets.ts            # presets in appConfigDir()/presets_ass.json
-    fuentes.ts               # system font list + availability check
-    autosubs.ts              # parseAutosubsTxt / text-match speaker assignment
-    captions.ts              # findSnapTime, BuildOverlapReport
-    time.ts                  # formatTime / parseTimeInput
-    selection.ts             # filtrarPorMarquee, filasDestinoRelativas
-    audioIslands.ts          # buscarFinIslaAudio
-    constants.ts             # PALETA, VENTANAS_POR_SEGUNDO, etc.
-  hooks/useHistory.ts        # pushHistorial / deshacer / rehacer
-  i18n/en.json, es.json      # UI strings (es/en toggle)
-src-tauri/
-  src/lib.rs                 # Tauri commands + menu + IPC
-  Cargo.toml
-  tauri.conf.json
-  capabilities/default.json
-design/
-  mockup.html                # approved design study
-  screenshot.png             # README screenshot
-```
+Abre un video (o arrástralo a la ventana), importa el SRT de auto-subs, edita
+en la timeline y guarda el proyecto. `?` muestra la tabla de atajos dentro de
+la app.
 
 ## Tests
 
 ```bash
-npm test          # vitest run — 211 tests (srt, time, captions, selection, audioIslands,
-                  # autosubs, ass, assPresets, busqueda, ajustes, fuentes, export filenames)
-npm run build     # tsc + vite build (type gate)
+cargo fmt --all -- --check
+cargo clippy --all-targets -- -D warnings
+cargo test --workspace
+# Gate de rendimiento con 543 líneas (objetivo 8 ms/frame):
+cargo test --release -p rod-app --test rendimiento
 ```
 
-Rust: `cargo check` is fast; `cargo clippy --all-targets` and `cargo fmt --check` gate CI.
-`cargo test` covers encoding (UTF-16/Latin-1), project round-trips and the backend filename guard.
+La mayoría de los tests no necesita archivos externos. Los que ejercitan el
+reproductor usan el clip sintético de `testdata/`; en Linux el CI lo genera con
+`ffmpeg` antes de correr.
 
-## License
+## Auditoría visual
 
-MIT — see [LICENSE](LICENSE). Copyright (c) 2026 Migue Echeverri.
+`ui-audit/` contiene el arnés de capturas (`egui_kittest` + wgpu), el plan de
+68 hallazgos y el informe final:
+
+- `ui-audit/HARNESS.md` — cómo regenerar capturas y la desviación de mpv.
+- `ui-audit/PLAN.md` — hallazgos, propiedad de archivos y criterios.
+- `ui-audit/before/` y `ui-audit/after/` — 91 capturas por fase en cuatro
+  resoluciones, con `index.png`.
+- `ui-audit/REPORT.md` — punto → arreglado / pendiente / descartado.
+
+```bash
+cargo run -p rod-app --features test-video --example ui_audit -- before
+cargo run -p rod-app --features test-video --example ui_audit -- after
+```
+
+## Transparencia
+
+Proyecto construido con asistencia intensiva de LLM para arquitectura,
+implementación y depuración. El autor (estudiante de primer semestre de
+Ingeniería de Sistemas e Informática) entiende el flujo general, pero todavía
+está estudiando buena parte del código línea por línea. Se publica con honestidad
+como proyecto de aprendizaje. Issues y PRs que señalen código confuso o
+mejorable son bienvenidos.
+
+## Licencia
+
+MIT — ver [LICENSE](LICENSE). Copyright (c) 2026 Migue Echeverri.
