@@ -864,3 +864,35 @@ cara.
 - **Evidencia:** `docs/checklists/slice-16-inicio-egui.png`, captura real de la
   ventana de arranque a 1600Ã—900. El editor con video y Linux siguen pendientes.
 
+
+## 2026-11-27 - CI del PR de la rewrite: cinco fallos encadenados
+
+- **Intentaba:** que el PR #2 de `Mignite/OpenDialogue` pasara los dos jobs de
+  CI (Windows y Ubuntu) con la rewrite en Rust.
+- ** Qué fallaba, en orden:**
+  1. `dead_code` de `ui/borde.rs` en Linux (`clippy -D warnings`).
+  2. `STATUS_DLL_NOT_FOUND` en el exe de test unitario de Windows.
+  3. mpv colgaba en Ubuntu sin dispositivo de audio (`time-pos` nunca llegaba).
+  4. `combo_box_cambia_la_fuente_del_preset` y
+     `buscar_fuente_no_cierra_el_desplegable` asumían fuentes de Windows.
+  5. El seek de `desde_proyecto_hace_seek_al_playhead_guardado` es asíncrono y
+     se leía antes de que mpv informara.
+- **Alternativas descartadas:** versionar `libmpv-2.dll` (116 MB, supera el
+  límite de 100 MB de GitHub y SourceForge bloquea agentes); saltarse todos los
+  tests de mpv en ambos sistemas; aflojar el gate de release de 8 ms.
+- **Decisión:**
+  - `borde.rs` lleva `cfg_attr(not(windows), allow(dead_code))`.
+  - El CI descarga `mpv-dev-x86_64-*.7z` del release de
+    `shinchiro/mpv-winbuild-cmake` con `Invoke-RestMethod` y `${{ github.token }}`
+    (`gh` no recibe token automáticamente en Actions), extrae la DLL y
+    `crates/app/build.rs` la copia a su propio `OUT_DIR`, donde Cargo coloca el
+    exe de test.
+  - mpv usa `ao=null` en Linux; el test de seek espera hasta 3 s.
+  - Los tests de fuentes toman una opción real del popup en vez de un nombre
+    concreto. El tope de rendimiento en debug es 120 ms (depende del runner);
+    el gate de 8 ms sigue en release.
+- **Evidencia:** PR #2 con ambos checks verdes y merge en `main` el 2026-11-27.
+- **Aprendizaje:** un `STATUS_DLL_NOT_FOUND` sin nombre de DLL en un exe de
+  test de Cargo suele ser un directorio, no un `PATH`: desde Cargo 1.100 los
+  binarios de test de un paquete con build script acaban en
+  `target/debug/build/<paquete>/<hash>/out`.
