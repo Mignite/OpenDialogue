@@ -76,6 +76,10 @@ pub enum MensajeEditor {
     Tick,
     AbrirVideo,
     AudioTrack(AudioTrack),
+    /// Volumen 0..100. Se escribe en mpv, que es la fuente del valor.
+    Volumen(f64),
+    /// Alterna el mute de mpv.
+    Silenciar,
     Velocidad(Velocidad),
     PlayPause,
     /// El usuario mueve el slider pero todavía no suelta: solo se mueve el
@@ -322,6 +326,10 @@ pub struct EditorApp {
     pub(crate) audio_tracks: Vec<AudioTrack>,
     pub(crate) selected_audio: Option<AudioTrack>,
     pub(crate) velocidad: Velocidad,
+    /// Espejo de mpv: consultar `volume`/`mute` en cada frame costaba 4 ms en
+    /// release con 543 líneas. mpv sigue siendo la fuente al abrir y al escribir.
+    pub(crate) volumen: f64,
+    pub(crate) silenciado: bool,
     /// Lo que hay en el `text_input` del caption seleccionado.
     pub(crate) borrador: String,
     /// Fila en edición inline: (id del caption, borrador).
@@ -477,22 +485,48 @@ impl EditorApp {
     }
 
     /// Abre un `.cdp` ya cargado. `posicion` es su `playhead` guardado.
+    /// Usa la salida de audio del sistema: es la ruta de la app real.
     pub fn desde_proyecto(
         proyecto: Proyecto,
         ruta: Option<PathBuf>,
         posicion: f64,
     ) -> Result<Self, String> {
-        Self::desde_proyecto_en(proyecto, ruta, posicion, &thumbnail::carpeta_cache())
+        Self::desde_proyecto_con(
+            proyecto,
+            ruta,
+            posicion,
+            &thumbnail::carpeta_cache(),
+            rod_player::SalidaAudio::Sistema,
+        )
     }
 
+    /// Igual que [`Self::desde_proyecto`] pero con carpeta de miniaturas propia
+    /// y salida de audio nula: es el arnés de tests y capturas, que no debe
+    /// sonar ni depender de una tarjeta de sonido.
     pub fn desde_proyecto_en(
         proyecto: Proyecto,
         ruta: Option<PathBuf>,
         posicion: f64,
         base_thumbs: &Path,
     ) -> Result<Self, String> {
+        Self::desde_proyecto_con(
+            proyecto,
+            ruta,
+            posicion,
+            base_thumbs,
+            rod_player::SalidaAudio::Nula,
+        )
+    }
+
+    fn desde_proyecto_con(
+        proyecto: Proyecto,
+        ruta: Option<PathBuf>,
+        posicion: f64,
+        base_thumbs: &Path,
+        salida: rod_player::SalidaAudio,
+    ) -> Result<Self, String> {
         let video_path = proyecto.ruta_video.clone();
-        let player = rod_player::Player::open(&video_path)
+        let player = rod_player::Player::open_con_salida(&video_path, salida)
             .map_err(|error| format!("no se pudo abrir {video_path}: {error}"))?;
         let documento = Documento {
             proyecto,
@@ -505,6 +539,8 @@ impl EditorApp {
         let audio_tracks = player.audio_tracks();
         let selected_audio = audio_tracks.first().cloned();
         let velocidad = Velocidad(player.speed() as f32);
+        let volumen = player.volume();
+        let silenciado = player.muted();
         // Los presets se leen del archivo que comparte el oráculo. El panel de
         // estilos escribe en esa misma ruta, así que la próxima sesión arranca
         // con lo que el usuario dejó guardado.
@@ -535,6 +571,8 @@ impl EditorApp {
             audio_tracks,
             selected_audio,
             velocidad,
+            volumen,
+            silenciado,
             borrador: String::new(),
             inline: None,
             borrador_inicio: String::new(),
@@ -642,6 +680,8 @@ fn reemplazar_player(
     state.audio_tracks = player.audio_tracks();
     state.selected_audio = state.audio_tracks.first().cloned();
     state.velocidad = Velocidad(player.speed() as f32);
+    state.volumen = player.volume();
+    state.silenciado = player.muted();
     state.player = player;
     state.layers = Arc::new(Vec::new());
     // La waveform del video anterior no sirve para el nuevo.
@@ -1717,6 +1757,20 @@ pub fn update(state: &mut EditorApp, message: MensajeEditor) -> Tarea {
             }
             Err(error) => eprintln!("no se pudo cambiar la pista de audio: {error}"),
         },
+        MensajeEditor::Volumen(volumen) => {
+            let destino = volumen.clamp(0.0, 100.0);
+            state.volumen = destino;
+            if let Err(error) = state.player.set_volume(destino) {
+                eprintln!("no se pudo cambiar el volumen: {error}");
+            }
+        }
+        MensajeEditor::Silenciar => {
+            let destino = !state.silenciado;
+            state.silenciado = destino;
+            if let Err(error) = state.player.set_muted(destino) {
+                eprintln!("no se pudo cambiar el silencio: {error}");
+            }
+        }
         MensajeEditor::Velocidad(velocidad) => match state.player.set_speed(velocidad.0 as f64) {
             // Se relee de mpv, que acota la velocidad a su rango.
             Ok(()) => state.velocidad = Velocidad(state.player.speed() as f32),
@@ -2276,9 +2330,58 @@ mod tests {
             playhead: 0.0,
         };
         let mut app =
-            super::EditorApp::desde_proyecto(proyecto, None, 0.0).expect("abre el video de prueba");
+            super::EditorApp::desde_proyecto_en(proyecto, None, 0.0, &std::env::temp_dir())
+                .expect("abre el video de prueba");
         let _ = super::update(&mut app, MensajeEditor::Seleccionar("c1".into()));
         app
+    }
+
+    fn editor_de_prueba() -> super::EditorApp {
+        let video = format!(
+            "{}/../../testdata/clip-15s-2audio.mp4",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        super::EditorApp::desde_proyecto_en(
+            Proyecto::nuevo(video),
+            None,
+            0.0,
+            &std::env::temp_dir(),
+        )
+        .expect("abre el video de prueba")
+    }
+
+    #[test]
+    fn al_cambiar_de_video_el_espejo_de_audio_vuelve_al_del_player() {
+        let mut app = editor_de_prueba();
+        app.volumen = 12.0;
+        app.silenciado = true;
+        let video = format!(
+            "{}/../../testdata/clip-15s-2audio.mp4",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let player = rod_player::Player::open_sin_audio(&video).expect("abre el video");
+        super::reemplazar_player(&mut app, &video, player, 0.0);
+        assert_eq!(app.volumen, 100.0);
+        assert!(!app.silenciado);
+    }
+
+    #[test]
+    fn el_mensaje_de_volumen_cambia_el_volumen_de_mpv() {
+        let mut app = editor_de_prueba();
+        let _ = super::update(&mut app, MensajeEditor::Volumen(35.0));
+        assert_eq!(app.volumen, 35.0, "el espejo de la UI sigue a mpv");
+        assert_eq!(app.player.volume(), 35.0);
+    }
+
+    #[test]
+    fn el_mensaje_de_silenciar_alterna_el_mute_de_mpv() {
+        let mut app = editor_de_prueba();
+        let _ = super::update(&mut app, MensajeEditor::Silenciar);
+        assert!(app.silenciado, "el espejo de la UI sigue a mpv");
+        assert!(app.player.muted());
+        let _ = super::update(&mut app, MensajeEditor::Silenciar);
+        assert!(!app.silenciado);
+        assert!(!app.player.muted());
     }
 
     #[test]
@@ -2355,7 +2458,13 @@ mod tests {
             "{}/../../testdata/clip-15s-2audio.mp4",
             env!("CARGO_MANIFEST_DIR")
         );
-        let mut editor = super::EditorApp::desde_video(&ruta).expect("abre el video de prueba");
+        let mut editor = super::EditorApp::desde_proyecto_en(
+            Proyecto::nuevo(&ruta),
+            None,
+            0.0,
+            &std::env::temp_dir(),
+        )
+        .expect("abre el video de prueba");
         let antes = editor.editor.proyecto().captions.len();
         editor.portapapeles = "1\n00:00:01,000 --> 00:00:02,000\nHola\n".into();
         let _ = super::pegar(&mut editor);
@@ -2369,7 +2478,13 @@ mod tests {
             "{}/../../testdata/clip-15s-2audio.mp4",
             env!("CARGO_MANIFEST_DIR")
         );
-        let mut editor = super::EditorApp::desde_video(&ruta).expect("abre el video de prueba");
+        let mut editor = super::EditorApp::desde_proyecto_en(
+            Proyecto::nuevo(&ruta),
+            None,
+            0.0,
+            &std::env::temp_dir(),
+        )
+        .expect("abre el video de prueba");
         editor.portapapeles.clear();
         let _ = super::pegar(&mut editor);
         assert!(editor.editor.proyecto().captions.is_empty());
@@ -2418,8 +2533,9 @@ mod tests {
             captions: Vec::new(),
             playhead: 3.25,
         };
-        let editor = super::EditorApp::desde_proyecto(proyecto, None, 3.25)
-            .expect("abre el video de prueba");
+        let editor =
+            super::EditorApp::desde_proyecto_en(proyecto, None, 3.25, &std::env::temp_dir())
+                .expect("abre el video de prueba");
         // `seek` es asíncrono: en equipos lentos `time-pos` sigue en 0 justo
         // después de abrir. Se espera hasta 3 s a que mpv informe del instante.
         let limite = std::time::Instant::now() + std::time::Duration::from_secs(3);
@@ -2533,7 +2649,9 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             "/../../testdata/clip-15s-2audio.mp4"
         );
-        let mut editor = EditorApp::desde_video(video).expect("video de prueba");
+        let mut editor =
+            EditorApp::desde_proyecto_en(Proyecto::nuevo(video), None, 0.0, &std::env::temp_dir())
+                .expect("video de prueba");
         let tarea = update(&mut editor, MensajeEditor::Comando(Comando::GuardarComo));
         assert_eq!(tarea, Tarea::DialogoGuardar);
     }

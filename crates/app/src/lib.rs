@@ -11,6 +11,7 @@ pub mod preview;
 pub mod project_io;
 pub mod recientes;
 pub mod recovery_io;
+pub mod rutas;
 pub mod tarea;
 pub mod textos;
 pub mod thumbnail;

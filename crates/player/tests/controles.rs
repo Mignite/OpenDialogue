@@ -49,7 +49,21 @@ fn abrir() -> Option<rod_player::Player> {
         return None;
     };
     let texto = ruta.to_str().expect("la ruta del clip debe ser UTF-8");
-    Some(rod_player::Player::open(texto).expect("no se pudo abrir el clip"))
+    Some(rod_player::Player::open_sin_audio(texto).expect("no se pudo abrir el clip"))
+}
+
+#[test]
+fn el_volumen_y_el_silencio_se_leen_y_escriben_en_mpv() {
+    let Some(player) = abrir() else { return };
+    assert_eq!(player.volume(), 100.0);
+    assert!(!player.muted());
+
+    player.set_volume(42.0).expect("fija volumen");
+    assert_eq!(player.volume(), 42.0);
+    player.set_muted(true).expect("silencia");
+    assert!(player.muted());
+    player.set_muted(false).expect("reactiva el sonido");
+    assert!(!player.muted());
 }
 
 /// Deja correr el reloj como lo hace la app: bombear eventos y dibujar.

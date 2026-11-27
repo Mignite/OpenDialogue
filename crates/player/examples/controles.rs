@@ -20,7 +20,7 @@ const OBJETIVO: f64 = 7.37;
 const TOLERANCIA: f64 = 0.05;
 
 fn main() {
-    let player = rod_player::Player::open(CLIP).expect("no se pudo abrir el clip");
+    let player = rod_player::Player::open_sin_audio(CLIP).expect("no se pudo abrir el clip");
     let mut fallos = 0;
 
     println!("duracion: {:.3} s", player.duration());

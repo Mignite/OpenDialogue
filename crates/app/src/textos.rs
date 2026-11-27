@@ -145,6 +145,9 @@ pub struct Textos {
     pub cuadro_siguiente: &'static str,
     pub fin_transporte: &'static str,
     pub volumen: &'static str,
+    pub sin_audio: &'static str,
+    pub silenciar: &'static str,
+    pub activar_sonido: &'static str,
 }
 
 pub const ES: Textos = Textos {
@@ -260,6 +263,9 @@ pub const ES: Textos = Textos {
     cuadro_siguiente: "Cuadro siguiente",
     fin_transporte: "Fin",
     volumen: "Volumen",
+    sin_audio: "Sin audio",
+    silenciar: "Silenciar",
+    activar_sonido: "Activar sonido",
 };
 
 pub const EN: Textos = Textos {
@@ -375,6 +381,9 @@ pub const EN: Textos = Textos {
     cuadro_siguiente: "Next frame",
     fin_transporte: "End",
     volumen: "Volume",
+    sin_audio: "No audio",
+    silenciar: "Mute",
+    activar_sonido: "Unmute",
 };
 
 impl Textos {

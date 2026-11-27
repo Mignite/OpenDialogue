@@ -896,3 +896,126 @@ cara.
   test de Cargo suele ser un directorio, no un `PATH`: desde Cargo 1.100 los
   binarios de test de un paquete con build script acaban en
   `target/debug/build/<paquete>/<hash>/out`.
+
+
+## 2026-11-27 - Prueba de campo en Linux: la config caía en /tmp
+
+- **Intentaba:** probar la rewrite en el portátil (CachyOS/Wayland) con un
+  proyecto de ejemplo y ver qué fallaba fuera del CI de Ubuntu.
+- **Qué fallaba:** `recientes`, `recovery`, `presets`, `preferencias` y las
+  miniaturas resolvían la carpeta con `std::env::var_os("APPDATA")`. En Linux
+  no existe, así que todo caía a `/tmp` y se perdía al reiniciar. El CI no lo
+  detectó porque ningún test mira la carpeta, solo el nombre del archivo.
+- **Alternativa descartada:** añadir el crate `dirs` para cinco rutas. Son dos
+  variables de entorno y el workspace evita dependencias nuevas sin justificar.
+- **Decisión:** `crates/app/src/rutas.rs` centraliza la resolución: `%APPDATA%`
+  en Windows (compatible con el oráculo), `$XDG_CONFIG_HOME` o `~/.config` en
+  Linux, y `$XDG_CACHE_HOME` o `~/.cache` para las miniaturas. Las variables
+  entran como parámetros, así que los tests no tocan el entorno.
+- **También:** el tope de cordura del test de rendimiento en debug pasa de
+  120 ms a 500 ms. En este portátil con `powersave` (1 GHz) daba 183 ms y
+  fallaba; el gate real sigue siendo 8 ms en release, que pasa a 1.6 GHz.
+- **Evidencia:** `cargo test --workspace` verde en `powersave` (174 tests en
+  rod-app), clippy y fmt limpios, y el gate de release verde con
+  `powerprofilesctl set performance`.
+
+
+## 2026-11-27 - Sin audio en Linux: `ao=null` para todo el sistema
+
+- **Intentaba:** escuchar el clip del proyecto de prueba en el portatil.
+- **Qué fallaba:** `rod_player::Player::open` ponia `ao=null` en todo build que
+  no fuera Windows. El parche era para el CI headless (mpv espera ALSA/Pulse y
+  `time-pos` se queda en 0), pero tambien silenciaba la app en un escritorio
+  con PipeWire. El clip si tiene audio: dos pistas AAC a -21 dB de media; los
+  tests no lo detectaban porque nadie escuchaba.
+- **Alternativa descartada:** detectar `DISPLAY`/`WAYLAND_DISPLAY` en el
+  player. Es una heuristicas que sigue silenciando sesiones extranas y no
+  distingue tests de app; ademas mezcla la politica del CI con la del producto.
+- **Decision:** `SalidaAudio { Sistema, Nula }` en `rod-player`.
+  `Player::open` usa la salida del sistema; `Player::open_sin_audio` fuerza
+  `ao=null` y la usan tests, capturas y ejemplos.
+  `EditorApp::desde_proyecto_en` (arnes) abre sin audio; `desde_proyecto`,
+  `desde_video`, `cargar_proyecto` y el dialogo de video abren con audio.
+- **Evidencia:** con el player real de la app, `current-ao` es `pipewire`,
+  `audio-out-params` 48 kHz mono float, `aid=1` y `time-pos` avanza; con
+  `open_sin_audio`, `current-ao` es `null`. `cargo test --workspace`: 568
+  tests, 0 fallos, y la suite sigue silenciosa.
+
+
+## 2026-11-27 - Correccion: el arnes seguia silenciando la app real
+
+- **Qué fallaba:** el primer arreglo ponia `open_sin_audio` dentro de
+  `desde_proyecto_en`, pero `desde_proyecto` (la ruta de la app) delegaba en
+  esa misma funcion. La app seguia abriendo con `ao=null`. El usuario vio
+  ademas el tooltip del boton de volumen con el texto `None`: era el hueco de
+  atajo sin asignar que `icon_button` insertaba, no un volumen real.
+- **Decisión:** `desde_proyecto_con(proyecto, ruta, posicion, base_thumbs,
+  salida)` es la unica implementacion. `desde_proyecto` pasa
+  `SalidaAudio::Sistema` y `desde_proyecto_en` pasa `SalidaAudio::Nula`.
+  `Player::open_con_salida` pasa a ser publico para que el editor elija.
+  El boton de volumen deja de mostrar el seudovolumen `None` en el tooltip.
+- **Evidencia:** con `EditorApp::desde_proyecto` (no con el player suelto),
+  `pactl list short sink-inputs` muestra una entrada
+  `PipeWire float32le 1ch 48000Hz` mientras el editor esta abierto. Antes del
+  arreglo la lista estaba vacia. `cargo test --workspace`: 568 tests, 0 fallos;
+  fmt y clippy limpios; release recompilado.
+- **Aprendizaje:** verificar la ruta real del producto, no una funcion vecina.
+  El player suelto sonaba, pero el constructor que usa la app pasaba por el
+  arnes de tests.
+
+
+## 2026-11-27 - Audio completo en el transporte: volumen y pista
+
+- **Qué pedia:** quitar el segundo boton de follow playhead (estaba en la
+  timeline y en el transporte) y poner ahi el selector de pista de audio, que
+  no existia en la UI; ademas el boton de volumen era decorativo.
+- **Alternativa descartada:** dejar el icono de volumen como tooltip con el
+  valor actual. No controlaba nada y por eso el usuario leyo `None` como si
+  fuera el estado del volumen.
+- **Decision:** `rod-player` expone `volume`/`set_volume` y `muted`/`set_muted`
+  sobre propiedades de mpv; la app anade `MensajeEditor::Volumen` y
+  `Silenciar` y lee siempre de mpv. El transporte cambia el segundo follow
+  por un ComboBox con `audio_tracks` y anade un slider de 0 a 100 mas el
+  icono que alterna el mute. `ancho_reservado_derecha` crece a 216 px para
+  que el campo de texto no se pinte debajo. El follow queda solo en la
+  timeline.
+- **Evidencia:** con TDD, el test de volumen de mpv y los dos mensajes
+  fallaron antes de implementarlos; el test del transporte fallo con un solo
+  ComboBox y ahora pasa con dos, un slider y cero botones de follow.
+  `cargo test --workspace`: 572 tests, 0 fallos; clippy y fmt limpios.
+- **Nota:** el test de velocidad de `rod-player` fallo una vez por carga del
+  sistema (1.47x frente a 1.5x) y paso al repetirlo solo.
+
+
+## 2026-11-27 - Gate de 8 ms: no consultar mpv en cada frame
+
+- **Qué fallaba:** con el slider y el selector de pista nuevos, el gate de
+  release subio de menos de 8 ms a 9-12 ms por frame. Al cambiar temporalmente
+  las lecturas por constantes volvio a pasar: el coste era `Player::volume()`
+  y `Player::muted()` (dos propiedades de mpv por frame).
+- **Alternativa descartada:** aflojar el gate de 8 ms; el CI ya lo descarto
+  porque es el objetivo real de rendimiento.
+- **Decisión:** `EditorApp` guarda `volumen` y `silenciado` como espejo. Se
+  inicializan al abrir, se escriben en los mensajes y se refrescan en
+  `reemplazar_player` (cambio de video o de proyecto). La UI lee el espejo;
+  mpv sigue siendo la fuente en los bordes.
+- **Evidencia:** test que fallo al cambiar de video sin refrescar el espejo;
+  `cargo test --workspace`: 573 tests, 0 fallos; gate de release verde de
+  nuevo a 3.4 GHz con `performance`.
+
+
+## 2026-11-27 - Volumen dentro del altavoz: arreglo del solape
+
+- **Qué fallaba:** el slider horizontal de volumen se pintaba encima del
+  campo de texto (`17.0 CPS` quedaba debajo del control) aunque la reserva
+  cuadrara en el calculo. El problema era ocupar una fila que ya va apretada.
+- **Alternativa descartada:** ensanchar la reserva y seguir afinando pixeles;
+  solo desplazaria el solape a resoluciones mas pequenas.
+- **Decisión:** el altavoz es un `MenuButton`; dentro lleva un slider vertical,
+  el porcentaje y el boton de silenciar. Desaparecen de la fila el slider y el
+  icono de mute, y la reserva baja de 216 a 156 px. El audio track queda al
+  lado del altavoz y el follow playhead solo en la timeline.
+- **Evidencia:** capturas del arnes kittest antes y despues de abrir el
+  popup: la fila queda libre y el desplegable muestra el slider vertical.
+  Test que fallo con el slider en la fila y pasa con el popup. 573 tests,
+  0 fallos; gate de release y clippy limpios.

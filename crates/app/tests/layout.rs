@@ -83,7 +83,13 @@ fn alto_extra_no_guarda_altura_hinchada() {
         env!("CARGO_MANIFEST_DIR"),
         "/../../testdata/clip-15s-2audio.mp4"
     );
-    let mut editor = EditorApp::desde_video(video).expect("abre el clip de prueba");
+    let mut editor = EditorApp::desde_proyecto_en(
+        rod_core::Proyecto::nuevo(video),
+        None,
+        0.0,
+        &std::env::temp_dir(),
+    )
+    .expect("abre el clip de prueba");
     editor.texto.lineas = 3;
     let estado = (
         editor,
@@ -124,7 +130,13 @@ fn arrastrar_el_divisor_encoge_el_timeline() {
         env!("CARGO_MANIFEST_DIR"),
         "/../../testdata/clip-15s-2audio.mp4"
     );
-    let editor = EditorApp::desde_video(video).expect("abre el clip de prueba");
+    let editor = EditorApp::desde_proyecto_en(
+        rod_core::Proyecto::nuevo(video),
+        None,
+        0.0,
+        &std::env::temp_dir(),
+    )
+    .expect("abre el clip de prueba");
     let estado = (
         editor,
         MedidasEditor {
@@ -194,7 +206,13 @@ fn buscar_fuente_no_cierra_el_desplegable() {
         env!("CARGO_MANIFEST_DIR"),
         "/../../testdata/clip-15s-2audio.mp4"
     );
-    let editor = EditorApp::desde_video(video).expect("abre el clip de prueba");
+    let editor = EditorApp::desde_proyecto_en(
+        rod_core::Proyecto::nuevo(video),
+        None,
+        0.0,
+        &std::env::temp_dir(),
+    )
+    .expect("abre el clip de prueba");
     let mut h = egui_kittest::Harness::builder()
         .with_size(egui::vec2(320.0, 700.0))
         .build_ui_state(
@@ -236,7 +254,13 @@ fn speakers_no_desborda_a_300px() {
         env!("CARGO_MANIFEST_DIR"),
         "/../../testdata/clip-15s-2audio.mp4"
     );
-    let mut editor = EditorApp::desde_video(video).expect("abre el clip de prueba");
+    let mut editor = EditorApp::desde_proyecto_en(
+        rod_core::Proyecto::nuevo(video),
+        None,
+        0.0,
+        &std::env::temp_dir(),
+    )
+    .expect("abre el clip de prueba");
     editor
         .editor_mut()
         .proyecto_mut()
@@ -289,7 +313,13 @@ fn borrar_caption_no_toca_la_seleccion() {
         env!("CARGO_MANIFEST_DIR"),
         "/../../testdata/clip-15s-2audio.mp4"
     );
-    let mut editor = EditorApp::desde_video(video).expect("abre el clip de prueba");
+    let mut editor = EditorApp::desde_proyecto_en(
+        rod_core::Proyecto::nuevo(video),
+        None,
+        0.0,
+        &std::env::temp_dir(),
+    )
+    .expect("abre el clip de prueba");
     for id in ["c0", "c1"] {
         editor.editor_mut().agregar(rod_core::Caption {
             id: id.into(),
@@ -323,7 +353,13 @@ fn el_picker_de_color_aparece_con_un_solo_clic() {
         env!("CARGO_MANIFEST_DIR"),
         "/../../testdata/clip-15s-2audio.mp4"
     );
-    let mut editor = EditorApp::desde_video(video).expect("abre el clip de prueba");
+    let mut editor = EditorApp::desde_proyecto_en(
+        rod_core::Proyecto::nuevo(video),
+        None,
+        0.0,
+        &std::env::temp_dir(),
+    )
+    .expect("abre el clip de prueba");
     let mut preset = rod_core::preset_por_defecto();
     preset.id = "p-color".into();
     preset.nombre = "Color".into();
@@ -371,7 +407,13 @@ fn ensanchar_y_encoger_el_panel_lateral_no_vuelve_al_inicial() {
         env!("CARGO_MANIFEST_DIR"),
         "/../../testdata/clip-15s-2audio.mp4"
     );
-    let editor = EditorApp::desde_video(video).expect("abre el clip de prueba");
+    let editor = EditorApp::desde_proyecto_en(
+        rod_core::Proyecto::nuevo(video),
+        None,
+        0.0,
+        &std::env::temp_dir(),
+    )
+    .expect("abre el clip de prueba");
     let estado = (editor, MedidasEditor::default(), Arc::new(Mutex::new(None)));
     let mut h = egui_kittest::Harness::builder()
         .with_size(egui::vec2(1200.0, 700.0))
@@ -431,7 +473,13 @@ fn enfocar_el_texto_no_mueve_el_playhead() {
         env!("CARGO_MANIFEST_DIR"),
         "/../../testdata/clip-15s-2audio.mp4"
     );
-    let mut editor = EditorApp::desde_video(video).expect("abre el clip de prueba");
+    let mut editor = EditorApp::desde_proyecto_en(
+        rod_core::Proyecto::nuevo(video),
+        None,
+        0.0,
+        &std::env::temp_dir(),
+    )
+    .expect("abre el clip de prueba");
     editor.editor_mut().agregar(rod_core::Caption {
         id: "cap-texto".into(),
         inicio: 1.0,

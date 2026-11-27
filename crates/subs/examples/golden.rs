@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let fixture = format!("crates/subs/tests/fixtures/{caso}.ass");
     let texto = std::fs::read_to_string(&fixture)?;
 
-    let player = rod_player::Player::open(FONDO)?;
+    let player = rod_player::Player::open_sin_audio(FONDO)?;
     let mpv = player.mpv();
 
     // No dejar que mpv reinterpreta los estilos del `.ass`.

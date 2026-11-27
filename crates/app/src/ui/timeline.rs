@@ -897,7 +897,13 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             "/../../testdata/clip-15s-2audio.mp4"
         );
-        let mut editor = EditorApp::desde_video(video).expect("video de prueba");
+        let mut editor = EditorApp::desde_proyecto_en(
+            rod_core::Proyecto::nuevo(video),
+            None,
+            0.0,
+            &std::env::temp_dir(),
+        )
+        .expect("video de prueba");
         editor.editor.agregar(rod_core::Caption {
             id: "cap-arrastre".into(),
             inicio: 1.0,

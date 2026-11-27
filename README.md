@@ -21,7 +21,8 @@ distintivo del experimento; el nombre oficial del producto sigue siendo
 - **Timeline por hablante** con clips reales, solapes apilados, selección
   múltiple, arrastre con snap y recorte de bordes.
 - **Waveform** a partir del RMS del audio del video, con zoom y rejilla de tiempo.
-- **Reproductor** con libmpv: play/pausa, salto, velocidad 0.5×–2× y bucle.
+- **Reproductor** con libmpv: play/pausa, salto, velocidad 0.5×–2×, bucle,
+  selector de pista de audio y volumen con silencio.
 - **Edición** de texto en la barra bajo el video, división en el playhead,
   deshacer/rehacer y búsqueda/filtro en la lista.
 - **Estilos ASS** por preset con preview real: lo que ves es el mismo `.ass` que
@@ -87,6 +88,11 @@ cargo test --workspace
 # Gate de rendimiento con 543 líneas (objetivo 8 ms/frame):
 cargo test --release -p rod-app --test rendimiento
 ```
+
+El gate de 8 ms mide tiempo de pared: en un portátil con el gobernador en
+`powersave` (1 GHz) da 9–11 ms y falla aunque el código no haya cambiado. Para
+medirlo, pon el CPU a frecuencia alta (`powerprofilesctl set performance`). El
+test en debug es solo una cordura (500 ms) y no mide 60 fps.
 
 La mayoría de los tests no necesita archivos externos. Los que ejercitan el
 reproductor usan el clip sintético de `testdata/`; en Linux el CI lo genera con

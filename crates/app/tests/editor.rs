@@ -1,4 +1,4 @@
-﻿use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex};
 
 use egui_kittest::kittest::Queryable;
 use rod_app::comandos::MapaAtajos;
@@ -13,7 +13,13 @@ fn editor() -> EditorApp {
         env!("CARGO_MANIFEST_DIR"),
         "/../../testdata/clip-15s-2audio.mp4"
     );
-    EditorApp::desde_video(video).expect("abre el clip de prueba")
+    EditorApp::desde_proyecto_en(
+        rod_core::Proyecto::nuevo(video),
+        None,
+        0.0,
+        &std::env::temp_dir(),
+    )
+    .expect("abre el clip de prueba")
 }
 
 #[test]

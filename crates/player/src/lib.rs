@@ -12,6 +12,16 @@ pub struct AudioTrack {
     pub label: String,
 }
 
+/// A dónde va el audio del player.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SalidaAudio {
+    /// La del sistema (WASAPI, PulseAudio/PipeWire, ALSA). Es la del producto.
+    Sistema,
+    /// `ao=null`: decodifica sin dispositivo. Tests, capturas y CI headless,
+    /// donde ALSA/Pulse puede colgar `time-pos` o no existe tarjeta.
+    Nula,
+}
+
 impl fmt::Display for AudioTrack {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.label)
@@ -27,13 +37,26 @@ pub struct Player {
 
 impl Player {
     pub fn open(path: &str) -> libmpv2::Result<Self> {
+        Self::open_con_salida(path, SalidaAudio::Sistema)
+    }
+
+    /// Sin dispositivo de audio: los tests y las capturas no deben sonar ni
+    /// depender de que la máquina tenga tarjeta.
+    pub fn open_sin_audio(path: &str) -> libmpv2::Result<Self> {
+        Self::open_con_salida(path, SalidaAudio::Nula)
+    }
+
+    /// Abre con la salida de audio indicada. La app usa [`SalidaAudio::Sistema`];
+    /// el arnés de tests y capturas usa [`SalidaAudio::Nula`] para no sonar.
+    pub fn open_con_salida(path: &str, salida: SalidaAudio) -> libmpv2::Result<Self> {
         let mpv = Mpv::with_initializer(|init| {
             init.set_option("vo", "libmpv".to_string())?;
-            // En Linux headless no hay dispositivo de audio: sin `ao=null`
-            // mpv se queda esperando ALSA/PulseWire y los tests que consultan
-            // `time-pos` se cuelgan o leen 0. En Windows se deja el default.
-            #[cfg(not(target_os = "windows"))]
-            init.set_option("ao", "null".to_string())?;
+            // `ao=null` en tests/CI: sin él, mpv espera ALSA/PipeWire y los
+            // tests que consultan `time-pos` se cuelgan. La app usa la salida
+            // del sistema, que es lo que oye el usuario.
+            if salida == SalidaAudio::Nula {
+                init.set_option("ao", "null".to_string())?;
+            }
             // Buscar exacto: sin esto mpv aterriza en el keyframe anterior y el
             // playhead no coincide con lo que se pidió.
             init.set_option("hr-seek", "yes".to_string())?;
@@ -181,6 +204,23 @@ impl Player {
             .get_property::<f64>("speed")
             .map(normalizar_velocidad)
             .unwrap_or(1.0)
+    }
+
+    /// Volumen de mpv, de 0 a 100. mpv es la fuente: no hay espejo en la app.
+    pub fn volume(&self) -> f64 {
+        self.mpv.get_property::<f64>("volume").unwrap_or(100.0)
+    }
+
+    pub fn set_volume(&self, volumen: f64) -> libmpv2::Result<()> {
+        self.mpv.set_property("volume", volumen.clamp(0.0, 100.0))
+    }
+
+    pub fn muted(&self) -> bool {
+        self.mpv.get_property::<bool>("mute").unwrap_or(false)
+    }
+
+    pub fn set_muted(&self, silenciado: bool) -> libmpv2::Result<()> {
+        self.mpv.set_property("mute", silenciado)
     }
 
     pub fn seek(&self, seconds: f64) -> libmpv2::Result<()> {

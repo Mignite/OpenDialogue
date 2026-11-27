@@ -131,20 +131,77 @@ pub fn mostrar(
             if velocidad.has_focus() {
                 kit::anillo_foco(ui, &velocidad);
             }
-            let _ = kit::icon_button(
-                ui,
-                Icono::Volumen,
-                false,
-                textos.volumen,
-                Some(textos.sin_atajo),
-            );
-            kit::icon_button(
-                ui,
-                Icono::Objetivo,
-                state.seguir,
-                textos.seguir,
-                Some(textos.sin_atajo),
-            );
+            // Pista de audio: la lista y la activa viven en el editor, pero
+            // mpv manda. El mensaje se reescribe desde mpv al volver.
+            let pista_actual = state
+                .selected_audio
+                .as_ref()
+                .map(|pista| pista.label.clone())
+                .unwrap_or_else(|| textos.sin_audio.to_owned());
+            let audio = egui::ComboBox::from_id_salt("pista-audio")
+                .width(ancho_dropdown())
+                .selected_text(pista_actual)
+                .show_ui(ui, |ui| {
+                    for pista in &state.audio_tracks {
+                        let activa = state
+                            .selected_audio
+                            .as_ref()
+                            .is_some_and(|seleccion| seleccion.id == pista.id);
+                        if ui.selectable_label(activa, &pista.label).clicked() {
+                            mensajes.push(MensajeEditor::AudioTrack(pista.clone()));
+                        }
+                    }
+                })
+                .response;
+            if audio.has_focus() {
+                kit::anillo_foco(ui, &audio);
+            }
+
+            // El volumen vive dentro del altavoz: un desplegable vertical
+            // evita que el slider se pinte encima del campo de texto.
+            let (respuesta, _) = egui::containers::menu::MenuButton::from_button(
+                egui::Button::new(
+                    RichText::new(kit::glifo(Icono::Volumen))
+                        .font(egui::FontId::proportional(tema::TAMANO_ICONO))
+                        .color(if state.silenciado {
+                            tema::TEXTO_3
+                        } else {
+                            tema::TEXTO
+                        }),
+                )
+                .frame(false)
+                .min_size(Vec2::splat(tema::ANCHO_BOTON_28)),
+            )
+            .ui(ui, |ui| {
+                ui.vertical(|ui| {
+                    let mut volumen = state.volumen;
+                    let slider = ui.add_sized(
+                        Vec2::new(24.0, 112.0),
+                        egui::Slider::new(&mut volumen, 0.0..=100.0)
+                            .vertical()
+                            .show_value(false),
+                    );
+                    if slider.changed() {
+                        mensajes.push(MensajeEditor::Volumen(volumen));
+                    }
+                    ui.label(
+                        RichText::new(format!("{}%", volumen as i32))
+                            .font(tema::fuente(Estilo::Pequeno)),
+                    );
+                    let rotulo = if state.silenciado {
+                        textos.activar_sonido
+                    } else {
+                        textos.silenciar
+                    };
+                    if ui.button(rotulo).clicked() {
+                        mensajes.push(MensajeEditor::Silenciar);
+                        ui.close();
+                    }
+                });
+            });
+            if respuesta.has_focus() {
+                kit::anillo_foco(ui, &respuesta);
+            }
         });
     });
     mensajes

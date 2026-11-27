@@ -36,11 +36,12 @@ pub fn duracion(inicio: f64, fin: f64) -> String {
     format!("{}.{:02} s", centesimas / 100, centesimas % 100)
 }
 
-/// Ancho que el transporte pinta a la derecha del campo: bucle, volumen y
-/// velocidad. Se resta **antes** de fijar el ancho del `TextEdit` para que los
-/// controles no se pinten encima del texto (C1).
+/// Ancho que el transporte pinta a la derecha del campo: velocidad, pista de
+/// audio y el botón de volumen (el slider va dentro de su desplegable). Se
+/// resta **antes** de fijar el ancho del `TextEdit` para que los controles no
+/// se pinten encima del texto (C1).
 pub fn ancho_reservado_derecha() -> f32 {
-    tema::ANCHO_DROPDOWN_VELOCIDAD + tema::ANCHO_BOTON_28 * 2.0 + tema::ESP_4 * 2.0 + tema::ESP_8
+    tema::ANCHO_DROPDOWN_VELOCIDAD * 2.0 + tema::ANCHO_BOTON_28 + tema::ESP_4 * 2.0 + tema::ESP_8
 }
 
 /// Una sesión de tipeo se cierra sola tras ~1 s sin teclear.
@@ -359,11 +360,11 @@ mod tests {
     }
 
     #[test]
-    fn la_reserva_deja_hueco_para_bucle_volumen_y_velocidad() {
+    fn la_reserva_deja_hueco_para_audio_volumen_y_velocidad() {
         assert_eq!(
             ancho_reservado_derecha(),
-            tema::ANCHO_DROPDOWN_VELOCIDAD
-                + tema::ANCHO_BOTON_28 * 2.0
+            tema::ANCHO_DROPDOWN_VELOCIDAD * 2.0
+                + tema::ANCHO_BOTON_28
                 + tema::ESP_4 * 2.0
                 + tema::ESP_8
         );

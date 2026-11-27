@@ -18,7 +18,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "testdata/oracle-subs.png"
     };
 
-    let player = rod_player::Player::open("testdata/clip-1080p.mp4")?;
+    let player = rod_player::Player::open_sin_audio("testdata/clip-1080p.mp4")?;
 
     // hr-seek: buscar por tiempo y no por keyframe.
     player.mpv().set_property("hr-seek", "yes")?;

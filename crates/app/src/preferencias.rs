@@ -1,6 +1,7 @@
 //! Preferencias persistentes: distribución, idioma y atajos.
 //!
-//! Se guardan en `%APPDATA%\RustyOpenDialogue\preferencias.json` con
+//! Se guardan en `preferencias.json` dentro de la carpeta de configuración
+//! del sistema (`rutas::carpeta_config`) con
 //! escritura atómica. Un archivo roto o de otra versión cae a los valores de
 //! fábrica sin impedir que la app arranque.
 
@@ -79,10 +80,7 @@ impl Default for Preferencias {
 impl Preferencias {
     /// Ruta canónica. No se cambia: moverla huérfanaría recientes y presets.
     pub fn ruta() -> PathBuf {
-        let base = std::env::var_os("APPDATA")
-            .map(PathBuf::from)
-            .unwrap_or_else(std::env::temp_dir);
-        base.join("RustyOpenDialogue").join("preferencias.json")
+        crate::rutas::archivo_config("preferencias.json")
     }
 
     pub fn cargar() -> Self {

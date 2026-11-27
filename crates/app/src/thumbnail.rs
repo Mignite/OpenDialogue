@@ -12,13 +12,10 @@ use std::path::{Path, PathBuf};
 pub const ANCHO: u32 = 160;
 pub const ALTO: u32 = 90;
 
-/// `%APPDATA%\RustyOpenDialogue\thumbs`, con el mismo respaldo que las demás
-/// rutas de la app.
+/// Carpeta de miniaturas del sistema (`rutas::carpeta_cache`): config en
+/// Windows y `$XDG_CACHE_HOME`/`~/.cache` en Linux.
 pub fn carpeta_cache() -> PathBuf {
-    match std::env::var_os("APPDATA") {
-        Some(appdata) => Path::new(&appdata).join("RustyOpenDialogue").join("thumbs"),
-        None => std::env::temp_dir().join("RustyOpenDialogue-thumbs"),
-    }
+    crate::rutas::carpeta_cache()
 }
 
 /// El hash no es criptográfico ni un contrato entre versiones de Rust: si

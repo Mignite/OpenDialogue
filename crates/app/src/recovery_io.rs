@@ -25,16 +25,10 @@ pub fn ms_ahora() -> f64 {
     }
 }
 
-/// `%APPDATA%\RustyOpenDialogue\recovery.json`, que es el equivalente del
-/// `app_config_dir` del oráculo. Sin `APPDATA` (sesión rara) cae al directorio
-/// temporal: perder el seguro es mejor que no arrancar.
+/// `recovery.json` dentro de la carpeta de configuración del sistema, que es
+/// el equivalente del `app_config_dir` del oráculo (`rutas::carpeta_config`).
 pub fn ruta() -> PathBuf {
-    match std::env::var_os("APPDATA") {
-        Some(appdata) => Path::new(&appdata)
-            .join("RustyOpenDialogue")
-            .join("recovery.json"),
-        None => std::env::temp_dir().join("RustyOpenDialogue-recovery.json"),
-    }
+    crate::rutas::archivo_config("recovery.json")
 }
 
 /// Lee y valida el recovery de `ruta`. Cualquier fallo es `None`: un archivo
@@ -182,8 +176,8 @@ mod tests {
 
     #[test]
     fn la_ruta_es_un_recovery_json() {
-        // Sin `APPDATA` (Linux) la ruta cae al temporal pero conserva el
-        // nombre: el test no puede asumir la carpeta de Windows.
+        // La carpeta depende del sistema (rutas::carpeta_config); el nombre
+        // es el contrato con el oráculo.
         let ruta = ruta();
         assert!(
             ruta.to_string_lossy().ends_with("recovery.json"),

@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let player = rod_player::Player::open("testdata/clip-1080p.mp4")?;
+    let player = rod_player::Player::open_sin_audio("testdata/clip-1080p.mp4")?;
     player.mpv().set_property("loop-file", "inf".to_string())?;
     player.mpv().set_property("untimed", true)?;
 

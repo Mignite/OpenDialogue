@@ -1,5 +1,5 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let player = rod_player::Player::open("testdata/clip-1080p.mp4")?;
+    let player = rod_player::Player::open_sin_audio("testdata/clip-1080p.mp4")?;
     let mut flags = 0;
     for _ in 0..100 {
         flags = player.update();

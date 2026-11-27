@@ -10,17 +10,12 @@ use std::path::{Path, PathBuf};
 
 use rod_core::{PresetAss, presets_a_json, presets_desde_json};
 
-/// `%APPDATA%\RustyOpenDialogue\presets_ass.json`. El nombre del archivo es el
-/// del oráculo (`ASS_PRESETS_ARCHIVO`), para que un usuario pueda copiarlo de
-/// una app a la otra. Sin `APPDATA` (sesión rara) cae al temporal: perder los
-/// presets es mejor que no arrancar.
+/// `presets_ass.json` dentro de la carpeta de configuración del sistema
+/// (`rutas::carpeta_config`). El nombre del archivo es el del oráculo
+/// (`ASS_PRESETS_ARCHIVO`), para que un usuario pueda copiarlo de una app a la
+/// otra.
 pub fn ruta() -> PathBuf {
-    match std::env::var_os("APPDATA") {
-        Some(appdata) => Path::new(&appdata)
-            .join("RustyOpenDialogue")
-            .join("presets_ass.json"),
-        None => std::env::temp_dir().join("RustyOpenDialogue-presets_ass.json"),
-    }
+    crate::rutas::archivo_config("presets_ass.json")
 }
 
 /// Presets del archivo. Cualquier problema (no existe, JSON corrupto, lista
@@ -63,8 +58,8 @@ mod tests {
 
     #[test]
     fn la_ruta_es_el_archivo_del_oraculo() {
-        // Sin `APPDATA` (Linux) la ruta cae al temporal pero conserva el
-        // nombre: el test no puede asumir la carpeta de Windows.
+        // La carpeta depende del sistema (rutas::carpeta_config); el nombre
+        // es el contrato con el oráculo.
         let ruta = ruta();
         assert!(
             ruta.to_string_lossy().ends_with("presets_ass.json"),

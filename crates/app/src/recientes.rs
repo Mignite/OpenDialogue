@@ -26,15 +26,10 @@ pub struct Reciente {
     pub tira: Vec<(String, f32)>,
 }
 
-/// `%APPDATA%\RustyOpenDialogue\recientes.json`, con el mismo respaldo al
-/// directorio temporal que `recovery_io::ruta()`.
+/// `recientes.json` dentro de la carpeta de configuración del sistema
+/// (`rutas::carpeta_config`).
 pub fn ruta_indice() -> PathBuf {
-    match std::env::var_os("APPDATA") {
-        Some(appdata) => Path::new(&appdata)
-            .join("RustyOpenDialogue")
-            .join("recientes.json"),
-        None => std::env::temp_dir().join("RustyOpenDialogue-recientes.json"),
-    }
+    crate::rutas::archivo_config("recientes.json")
 }
 
 /// Un índice roto, vacío o de otra versión da una lista vacía: el menú tiene
