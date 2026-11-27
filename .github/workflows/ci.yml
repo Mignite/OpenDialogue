@@ -15,6 +15,8 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    # Sin tope, un mpv esperando audio en Linux deja el job colgado 6 h.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -80,12 +82,9 @@ jobs:
       - name: clippy
         run: cargo clippy --all-targets -- -D warnings
 
-      # En Linux headless mpv no abre salida de audio y algunos tests de
-      # editor_app se cuelgan esperando `time-pos`; se omiten ahí y corren en
-      # Windows, donde el reproductor sí informa del instante.
       - name: test (Linux)
         if: runner.os == 'Linux'
-        run: cargo test --workspace -- --skip editor_app::tests
+        run: cargo test --workspace
 
       - name: test (Windows)
         if: runner.os == 'Windows'

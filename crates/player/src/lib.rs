@@ -29,6 +29,11 @@ impl Player {
     pub fn open(path: &str) -> libmpv2::Result<Self> {
         let mpv = Mpv::with_initializer(|init| {
             init.set_option("vo", "libmpv".to_string())?;
+            // En Linux headless no hay dispositivo de audio: sin `ao=null`
+            // mpv se queda esperando ALSA/PulseWire y los tests que consultan
+            // `time-pos` se cuelgan o leen 0. En Windows se deja el default.
+            #[cfg(not(target_os = "windows"))]
+            init.set_option("ao", "null".to_string())?;
             // Buscar exacto: sin esto mpv aterriza en el keyframe anterior y el
             // playhead no coincide con lo que se pidió.
             init.set_option("hr-seek", "yes".to_string())?;
