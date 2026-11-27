@@ -19,6 +19,7 @@ static GROSOR_PX: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::n
 static WNDPROC_ANTERIOR: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 enum Borde {
     Izquierdo,
     Derecho,
@@ -48,6 +49,7 @@ impl Borde {
 
 /// Hit-test puro: qué borde está bajo `punto` dentro de `ventana`.
 /// El orden importa: las esquinas ganan a los lados.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 fn borde_en(ventana: Rect, punto: Pos2, grosor: f32) -> Option<Borde> {
     if !ventana.contains(punto) || grosor <= 0.0 {
         return None;
