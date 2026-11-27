@@ -2404,6 +2404,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        not(target_os = "windows"),
+        ignore = "mpv no informa time-pos sin dispositivo de audio en Linux headless"
+    )]
     fn desde_proyecto_hace_seek_al_playhead_guardado() {
         let proyecto = Proyecto {
             ruta_video: format!(

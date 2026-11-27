@@ -65,6 +65,10 @@ jobs:
           # puede copiar las DLLs de libass (su OUT_DIR tiene otro hash). La
           # búsqueda de DLLs de Windows termina en el PATH.
           "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\bin" >> $env:GITHUB_PATH
+          # Los tests de un paquete con build script acaban en
+          # target/debug/build/<paquete>/<hash>/out, donde la copia del
+          # build.rs no llega. La DLL de mpv del repo debe estar en el PATH.
+          "$env:GITHUB_WORKSPACE\third_party\mpv" >> $env:GITHUB_PATH
 
       - name: fmt
         run: cargo fmt --all -- --check
